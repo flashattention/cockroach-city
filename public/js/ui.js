@@ -1090,70 +1090,120 @@ export class UI {
   }
 
   // ---------------- 월드맵 ----------------
+  // 지도: 스크롤로 확대·축소(마우스 위치 기준), 드래그로 이동, 클릭하면 목적지
   openWorldMap(view) {
     const g = this.game;
-    this.mapView = view || this.mapView || 'world';
-    this.openModal(`<h3 class="mh">🗺️ 지도 <small>건물이나 장소를 클릭하면 목적지가 돼요</small></h3>
-      <div class="tabs-row"><button class="btn mini ${this.mapView === 'world' ? '' : 'ghost'}" id="wm-world">🌍 전체 세계</button><button class="btn mini ${this.mapView === 'city' ? '' : 'ghost'}" id="wm-city">🏙️ 바퀴시티 확대</button></div>
-      <canvas id="worldmap" width="1024" height="1024"></canvas>
+    const N = 1024; // 캔버스 해상도
+    const MIN = N / (WORLD_HALF * 2), MAX = 14, CITYS = N / (CITY + 16);
+    const pp0 = () => (g.mode === 'interior' ? g.interior.building.door : g.player.pos);
+    const V = (this.mapCam ||= { cx: pp0().x, cz: pp0().z, s: CITYS });
+    if (view === 'world') Object.assign(V, { cx: 0, cz: 0, s: MIN });
+    else if (view === 'city') Object.assign(V, { cx: 0, cz: 0, s: CITYS });
+    this.openModal(`<h3 class="mh">🗺️ 지도 <small>스크롤: 확대·축소 · 드래그: 이동 · 클릭: 목적지</small></h3>
+      <div class="tabs-row"><button class="btn mini ghost" id="wm-world">🌍 전체 세계</button><button class="btn mini ghost" id="wm-city">🏙️ 바퀴시티</button><button class="btn mini ghost" id="wm-me">📍 내 위치</button><button class="btn mini ghost" id="wm-in">＋</button><button class="btn mini ghost" id="wm-out">－</button></div>
+      <canvas id="worldmap" width="${N}" height="${N}"></canvas>
       <div id="wm-info" class="money-line"></div>
       <div><button class="btn" id="wm-walk">🚶 자동으로 걸어가기 (R)</button> <button class="btn ghost" id="wm-clear">목적지 지우기</button> <button class="btn ghost" id="wm-close">닫기 (M)</button></div>`, 'map');
     $('modal-inner').classList.add('wide');
     const cv = $('worldmap');
-    const half = this.mapView === 'city' ? HALF + 8 : WORLD_HALF;
-    const u = 1024 / (half * 2);
-    const X = (x) => (x + half) * u;
+    const clamp = () => {
+      V.s = Math.min(MAX, Math.max(MIN, V.s));
+      const lim = Math.max(0, WORLD_HALF - N / 2 / V.s);
+      V.cx = Math.min(lim, Math.max(-lim, V.cx)); V.cz = Math.min(lim, Math.max(-lim, V.cz));
+    };
+    const X = (x) => (x - V.cx) * V.s + N / 2;
+    const Z = (z) => (z - V.cz) * V.s + N / 2;
+    const toWorld = (e) => { const r = cv.getBoundingClientRect(); return { x: ((e.clientX - r.left) / r.width * N - N / 2) / V.s + V.cx, z: ((e.clientY - r.top) / r.height * N - N / 2) / V.s + V.cz }; };
     const draw = () => {
+      clamp();
       const ctx = cv.getContext('2d');
-      ctx.fillStyle = '#4fa3d9'; ctx.fillRect(0, 0, 1024, 1024);
-      if (g.worldImage) ctx.drawImage(g.worldImage, X(-WORLD_HALF), X(-WORLD_HALF), WORLD_HALF * 2 * u, WORLD_HALF * 2 * u);
-      ctx.drawImage(g.mapImage, X(-HALF), X(-HALF), CITY * u, CITY * u);
+      ctx.fillStyle = '#4fa3d9'; ctx.fillRect(0, 0, N, N);
+      if (g.worldImage) ctx.drawImage(g.worldImage, X(-WORLD_HALF), Z(-WORLD_HALF), WORLD_HALF * 2 * V.s, WORLD_HALF * 2 * V.s);
+      ctx.drawImage(g.mapImage, X(-HALF), Z(-HALF), CITY * V.s, CITY * V.s);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const big = this.mapView === 'city';
-      ctx.font = `bold ${big ? 13 : 10}px sans-serif`;
+      // 많이 확대하면 도시 건물 이름까지 보인다
+      const cityNames = V.s >= CITYS * 0.75;
+      const fs = Math.round(Math.min(16, Math.max(10, 9 + V.s * 1.4)));
       for (const b of g.city.buildings) {
         if (isHomeType(b) && !g.ownsHome?.(b)) continue;
-        if (!big && !b.outer) continue;
+        if (!cityNames && !b.outer) continue;
+        const bx = X(b.x), bz = Z(b.z);
+        if (bx < -80 || bx > N + 80 || bz < -40 || bz > N + 40) continue;
+        ctx.font = `bold ${fs}px sans-serif`;
         ctx.fillStyle = 'rgba(255,255,255,.85)';
         const w = ctx.measureText(b.name).width + 8;
-        ctx.fillRect(X(b.x) - w / 2, X(b.z) + 9, w, big ? 16 : 13);
-        ctx.fillStyle = '#4a3428'; ctx.fillText(b.name, X(b.x), X(b.z) + (big ? 17 : 15));
-        if (!big) { ctx.font = '14px sans-serif'; ctx.fillText(b.def.emoji, X(b.x), X(b.z)); ctx.font = 'bold 10px sans-serif'; }
+        ctx.fillRect(bx - w / 2, bz + 9, w, fs + 4);
+        ctx.fillStyle = '#4a3428'; ctx.fillText(b.name, bx, bz + 11 + fs / 2);
+        if (b.outer || V.s > CITYS * 2) { ctx.font = `${fs + 4}px sans-serif`; ctx.fillText(b.def.emoji, bx, bz - 2); }
       }
       if (g.route?.length) {
         ctx.strokeStyle = '#2979ff'; ctx.lineWidth = 5; ctx.setLineDash([10, 6]);
-        const from = g.mode === 'interior' ? g.interior.building.door : g.player.pos;
-        ctx.beginPath(); ctx.moveTo(X(from.x), X(from.z));
-        for (const r of g.route) ctx.lineTo(X(r.x), X(r.z));
+        const from = pp0();
+        ctx.beginPath(); ctx.moveTo(X(from.x), Z(from.z));
+        for (const r of g.route) ctx.lineTo(X(r.x), Z(r.z));
         ctx.stroke(); ctx.setLineDash([]);
       }
-      ctx.font = big ? '28px sans-serif' : '20px sans-serif';
+      ctx.font = '26px sans-serif';
       const home = g.homeBuilding();
-      ctx.fillText(g.stats.homeId != null ? '🏡' : '🏨', X(home.x), X(home.z) - 10);
-      if (g.workBuilding()) ctx.fillText('💼', X(g.workBuilding().x), X(g.workBuilding().z) - 10);
-      if (g.waypoint) ctx.fillText('📍', X(g.waypoint.pos.x), X(g.waypoint.pos.z) - 14);
+      ctx.fillText(g.stats.homeId != null ? '🏡' : '🏨', X(home.x), Z(home.z) - 10);
+      if (g.workBuilding()) ctx.fillText('💼', X(g.workBuilding().x), Z(g.workBuilding().z) - 10);
+      if (g.waypoint) ctx.fillText('📍', X(g.waypoint.pos.x), Z(g.waypoint.pos.z) - 14);
       for (const o of g.players.list.values()) {
         const op = o.loc >= 0 ? g.city.buildings[o.loc].door : o.pos;
-        ctx.fillStyle = '#7c4dff'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(X(op.x), X(op.z), 8, 0, 7); ctx.fill(); ctx.stroke();
-        ctx.font = 'bold 14px sans-serif'; ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.strokeText(o.name, X(op.x), X(op.z) - 16); ctx.fillStyle = '#311b92'; ctx.fillText(o.name, X(op.x), X(op.z) - 16);
+        ctx.fillStyle = '#7c4dff'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(X(op.x), Z(op.z), 8, 0, 7); ctx.fill(); ctx.stroke();
+        ctx.font = 'bold 14px sans-serif'; ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.strokeText(o.name, X(op.x), Z(op.z) - 16); ctx.fillStyle = '#311b92'; ctx.fillText(o.name, X(op.x), Z(op.z) - 16);
       }
-      const pp = g.mode === 'interior' ? g.interior.building.door : g.player.pos;
+      const pp = pp0();
       ctx.fillStyle = '#ff1744'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.arc(X(pp.x), X(pp.z), 11, 0, 7); ctx.fill(); ctx.stroke();
-      ctx.font = 'bold 14px sans-serif'; ctx.fillStyle = '#b71c1c'; ctx.fillText('나', X(pp.x), X(pp.z) + 22);
+      ctx.beginPath(); ctx.arc(X(pp.x), Z(pp.z), 11, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.font = 'bold 14px sans-serif'; ctx.fillStyle = '#b71c1c'; ctx.fillText('나', X(pp.x), Z(pp.z) + 22);
+      // 축척 막대
+      const meters = [10, 25, 50, 100, 250, 500, 1000].find((m) => m * V.s >= 70) || 1000;
+      ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(14, N - 54, Math.max(meters * V.s, 60) + 20, 40);
+      ctx.fillStyle = '#263238'; ctx.fillRect(24, N - 24, meters * V.s, 4);
+      ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'left'; ctx.fillText(`${meters}m`, 26, N - 38);
       $('wm-info').innerHTML = g.waypoint ? `📍 목적지: <b>${escapeHtml(g.waypoint.label)}</b> · ${Math.round(g.routeLen || g.waypoint.pos.distanceTo(pp))}m` : '목적지를 클릭하세요';
     };
     draw();
-    cv.onclick = (e) => {
-      const r = cv.getBoundingClientRect();
-      const x = ((e.clientX - r.left) / r.width) * half * 2 - half, z = ((e.clientY - r.top) / r.height) * half * 2 - half;
-      let best = null, bd = this.mapView === 'city' ? 14 : 30;
-      for (const b of g.city.buildings) { if (this.mapView !== 'city' && !b.outer && Math.abs(x) < HALF && Math.abs(z) < HALF) continue; const d = Math.hypot(b.x - x, b.z - z); if (d < bd) { bd = d; best = b; } }
+    // 확대·축소: 마우스가 가리키는 곳을 기준으로
+    const zoomAt = (k, e) => {
+      const before = e ? toWorld(e) : { x: V.cx, z: V.cz };
+      V.s = Math.min(MAX, Math.max(MIN, V.s * k));
+      if (e) { const after = toWorld(e); V.cx += before.x - after.x; V.cz += before.z - after.z; }
+      draw();
+    };
+    cv.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(Math.exp(-e.deltaY * 0.0015), e); }, { passive: false });
+    // 드래그 이동 (조금만 움직이면 클릭으로 본다)
+    let drag = null;
+    cv.onpointerdown = (e) => { drag = { x: e.clientX, y: e.clientY, cx: V.cx, cz: V.cz, moved: false }; try { cv.setPointerCapture(e.pointerId); } catch { /* 무시 */ } cv.style.cursor = 'grabbing'; };
+    cv.onpointermove = (e) => {
+      if (!drag) return;
+      const r = cv.getBoundingClientRect(), k = N / r.width / V.s;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (Math.hypot(dx, dy) > 5) drag.moved = true;
+      if (drag.moved) { V.cx = drag.cx - dx * k; V.cz = drag.cz - dy * k; draw(); }
+    };
+    cv.onpointerup = (e) => {
+      const d = drag; drag = null; cv.style.cursor = '';
+      if (!d || d.moved) return;
+      const { x, z } = toWorld(e);
+      let best = null, bd = 18 / V.s + 2;
+      for (const b of g.city.buildings) {
+        if (isHomeType(b) && !g.ownsHome?.(b)) continue;
+        if (V.s < CITYS * 0.75 && !b.outer && Math.abs(x) < HALF && Math.abs(z) < HALF) continue;
+        const dd = Math.hypot(b.x - x, b.z - z); if (dd < bd) { bd = dd; best = b; }
+      }
       if (best) g.setWaypoint(best); else g.setWaypoint(new THREE.Vector3(x, 0, z), '찍은 위치');
       draw();
     };
-    $('wm-world').onclick = () => this.openWorldMap('world');
-    $('wm-city').onclick = () => this.openWorldMap('city');
+    // 다른 플레이어·내 위치가 움직이니 열려 있는 동안 1초마다 다시 그린다
+    clearInterval(this.mapTimer);
+    this.mapTimer = setInterval(() => { if (this.modalKind !== 'map' || $('modal').classList.contains('hidden') || !document.body.contains(cv)) { clearInterval(this.mapTimer); return; } if (!drag) draw(); }, 1000);
+    $('wm-world').onclick = () => { Object.assign(V, { cx: 0, cz: 0, s: MIN }); draw(); };
+    $('wm-city').onclick = () => { Object.assign(V, { cx: 0, cz: 0, s: CITYS }); draw(); };
+    $('wm-me').onclick = () => { const p = pp0(); Object.assign(V, { cx: p.x, cz: p.z, s: Math.max(V.s, CITYS * 1.5) }); draw(); };
+    $('wm-in').onclick = () => zoomAt(1.5);
+    $('wm-out').onclick = () => zoomAt(1 / 1.5);
     $('wm-walk').onclick = () => { this.closeModal(); if (!g.autoWalk) g.toggleAutoWalk(); };
     $('wm-clear').onclick = () => { g.waypoint = null; g.route = null; g.autoWalk = false; draw(); };
     $('wm-close').onclick = () => this.closeModal();

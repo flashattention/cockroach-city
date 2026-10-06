@@ -200,7 +200,7 @@ button { font-family: 'Jua', sans-serif; cursor: pointer; }
 .hpbar.enemy > div { background: #ff5252; }
 .tag.enemy { color: #ffcdd2; }
 #modal-inner.wide { width: min(900px, calc(100vw - 32px)); }
-#worldmap { width: min(100%, 62vh); height: auto; aspect-ratio: 1; border-radius: 14px; cursor: crosshair; display: block; margin: 6px auto; }
+#worldmap { width: min(100%, 62vh); height: auto; aspect-ratio: 1; border-radius: 14px; cursor: grab; display: block; margin: 6px auto; touch-action: none; }
 .mh { font-family: 'Jua'; margin: 0 0 8px; font-size: 22px; }
 .mh small { font-family: 'Gowun Dodum'; font-size: 13px; color: var(--ink-soft); margin-left: 6px; }
 .money-line { font-size: 14px; margin: 4px 0 10px; }
