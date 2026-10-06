@@ -173,9 +173,10 @@ function buildCar(kind, color, occColors, glassMat) {
     box(body, 0.86, 0.1, 0.43, '#212121', 0, h2 + 0.3, (zB + zC) / 2, { cast: false });
     box(body, W + 0.03, 0.18, L * 0.5, '#212121', 0, c + 0.42, 0, { cast: false });
   }
+  const sirens = [];
   if (kind === 'police') {
-    box(body, 0.45, 0.2, 0.32, toon('#ff1744', { emissive: '#ff1744' }), -0.25, h2 + 0.18, (zB + zC) / 2);
-    box(body, 0.45, 0.2, 0.32, toon('#2979ff', { emissive: '#2979ff' }), 0.25, h2 + 0.18, (zB + zC) / 2);
+    sirens.push(box(body, 0.45, 0.2, 0.32, toon('#ff1744', { emissive: '#ff1744' }), -0.25, h2 + 0.18, (zB + zC) / 2));
+    sirens.push(box(body, 0.45, 0.2, 0.32, toon('#2979ff', { emissive: '#2979ff' }), 0.25, h2 + 0.18, (zB + zC) / 2));
     box(body, W + 0.03, 0.3, L * 0.55, '#23356b', 0, c + 0.45, 0, { cast: false });
   }
   if (kind === 'truck') { const s2 = signMesh('바퀴 택배', '📦', 2.6, '#ffffff', '#e65100'); s2.position.set(W / 2 + 0.08, h1 + 1.2, (zD + B) / 2); s2.rotation.y = Math.PI / 2; body.add(s2); }
@@ -194,7 +195,7 @@ function buildCar(kind, color, occColors, glassMat) {
   }
   const ms = md.open ? 1 : Math.min(1, (roof - sy) / MINI_H);
   for (let i = 0; i < seats.length; i++) { const r = miniRoach(body, occColors[i % 4] || OCC_COLORS[i % 8], seats[i].x, seats[i].y + 0.28 * ms, seats[i].z); r.scale.setScalar(ms); r.visible = false; occ.push(r); }
-  return { g, body, seats, occ, glass: gl, roof: md.open ? 0 : roof, ...vehicleInfo(kind) };
+  return { g, body, seats, occ, sirens, glass: gl, roof: md.open ? 0 : roof, ...vehicleInfo(kind) };
 }
 
 export function makeCarMesh(kind, color, occColors = []) {
@@ -255,12 +256,30 @@ export function makeCarMesh(kind, color, occColors = []) {
   return { g, body, seats, occ, glass: gl, ...info };
 }
 
-function makeWreck() {
-  const g = new THREE.Group();
-  box(g, 2.0, 0.6, 3.8, '#2b2b2b', 0, 0.45, 0);
-  box(g, 1.7, 0.5, 1.8, '#1b1b1b', 0, 1.0, -0.2);
-  for (let i = 0; i < 3; i++) sph(g, 0.5 + i * 0.2, 0.5 + i * 0.2, 0.5 + i * 0.2, new THREE.MeshToonMaterial({ color: '#757575', transparent: true, opacity: 0.6 }), 0.2 * i, 1.6 + i * 0.7, 0, { cast: false });
-  return g;
+// 터진 차: 그 차종 모양 그대로 새까맣게 탄 껍데기 + 연기 (버스는 버스, 트럭은 트럭)
+const BURNT = ['#151515', '#222222', '#303030', '#3d3a38'].map((c) => new THREE.MeshToonMaterial({ color: c }));
+const SMOKE = new THREE.MeshToonMaterial({ color: '#757575', transparent: true, opacity: 0.6 });
+export function makeWreck(mesh) {
+  const occVis = mesh.occ.map((o) => o.visible);
+  mesh.occ.forEach((o) => { o.visible = false; });
+  const g = mesh.g.clone(true);
+  mesh.occ.forEach((o, i) => { o.visible = occVis[i]; });
+  g.position.set(0, 0, 0); g.rotation.set(0, 0, 0); g.visible = true;
+  g.traverse((o) => {
+    if (!o.isMesh && !o.isSprite) return;
+    const m = o.material;
+    if (o.isSprite || (m.transparent && m.opacity < 0.6)) { o.visible = false; return; } // 유리·간판은 깨져 없어짐
+    const c = m.color || new THREE.Color('#888');
+    const lum = c.r * 0.3 + c.g * 0.59 + c.b * 0.11;
+    o.material = BURNT[Math.min(3, Math.floor(lum * 4))];
+  });
+  // 바퀴가 빠진 듯 살짝 내려앉고 기울어짐
+  g.position.y = -0.15; g.rotation.z = 0.04;
+  const box3 = new THREE.Box3().setFromObject(g);
+  const top = box3.max.y, len = box3.max.z - box3.min.z;
+  for (let i = 0; i < 3; i++) sph(g, 0.5 + i * 0.25, 0.5 + i * 0.25, 0.5 + i * 0.25, SMOKE, 0.2 * i, top + 0.4 + i * 0.7, (len > 6 ? len * 0.2 : 0), { cast: false });
+  const w = new THREE.Group(); w.add(g);
+  return w;
 }
 
 export class Traffic {
@@ -365,9 +384,9 @@ export class Traffic {
       const wreck = car.mode === 'wreck';
       m.g.visible = !wreck;
       if (wreck) {
-        if (!car.wreckMesh) { car.wreckMesh = makeWreck(); this.group.add(car.wreckMesh); }
+        if (!car.wreckMesh) { car.wreckMesh = makeWreck(m); this.group.add(car.wreckMesh); }
         car.wreckMesh.visible = true;
-        car.wreckMesh.position.set(car.pos.x, 0, car.pos.z); car.wreckMesh.rotation.y = car.heading;
+        car.wreckMesh.position.set(car.pos.x, car.kind === 'heli' ? 0 : car.pos.y || 0, car.pos.z); car.wreckMesh.rotation.y = car.heading;
         continue;
       } else if (car.wreckMesh) car.wreckMesh.visible = false;
       m.g.position.set(car.pos.x, car.pos.y || 0, car.pos.z);

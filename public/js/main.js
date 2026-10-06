@@ -1134,7 +1134,8 @@ async function goToJail(m) {
   const fake = { mesh: car, pos: p.pos.clone().add(new THREE.Vector3(Math.cos(h) * 2.5, 0, -Math.sin(h) * 2.5)), heading: h, kind: 'police' };
   fake.pos.y = game.city.groundY(fake.pos.x, fake.pos.z);
   scene.add(car.g);
-  const siren = car.body.children.filter((o) => o.material?.emissive);
+  // 경광등만 번갈아 깜빡인다 (재질은 공유되므로 복사해서 바꾼다)
+  const siren = (car.sirens || []).map((o) => { o.material = o.material.clone(); return o; });
   game.cutscene = {
     t: 0,
     update(dt) {
@@ -1142,7 +1143,7 @@ async function goToJail(m) {
       const sp = Math.min(14, this.t * 6);
       if (this.t > 1) { fake.pos.x += Math.sin(fake.heading) * sp * dt; fake.pos.z += Math.cos(fake.heading) * sp * dt; fake.pos.y = game.city.groundY(fake.pos.x, fake.pos.z); }
       car.g.position.copy(fake.pos); car.g.rotation.y = fake.heading;
-      siren.forEach((o, i) => { o.visible = Math.floor(this.t * 6 + i) % 2 === 0; });
+      siren.forEach((o, i) => { o.material.emissiveIntensity = Math.floor(this.t * 6 + i) % 2 === 0 ? 1.4 : 0.08; });
       p.pos.copy(fake.pos);
       seatRoach(p.roach, fake); p.roach.update(dt, 0, {});
     },
