@@ -92,7 +92,7 @@ export const PHONE_APPS = {
       <div>${p.posted ? '' : '<button class="btn" id="pv-post">📸 인스타에 올리기</button>'}<a class="btn ghost" href="/photos/${p.id}.jpg" download="roachcity-${p.id}.jpg">⬇️ 저장</a><button class="btn ghost" id="pv-del">🗑️ 삭제</button><button class="btn ghost" id="pv-back">← 갤러리</button></div></div>`;
     $('pv-cap')?.addEventListener('keydown', (e) => e.stopPropagation());
     $('pv-back').onclick = () => PHONE_APPS.gallery(ui, body, g);
-    $('pv-del').onclick = async () => { if (!(await ui.confirm('이 사진을 지울까요?'))) return; await api(g, `/api/photo/${p.id}?char=${g.char}`, { method: 'DELETE' }); PHONE_APPS.gallery(ui, body, g); };
+    $('pv-del').onclick = async () => { if (!(await ui.confirm('이 사진을 지울까요?', '🗑️ 삭제'))) return; await api(g, `/api/photo/${p.id}?char=${g.char}`, { method: 'DELETE' }); PHONE_APPS.gallery(ui, body, g); };
     if ($('pv-post')) $('pv-post').onclick = async () => {
       try { await api(g, '/api/insta', { method: 'POST', body: { char: g.char, id: p.id, caption: $('pv-cap').value } }); g.questEvent('insta'); ui.toast('📸 인스타그램에 올렸어요!'); ui.openPhone('insta'); } catch (e) { ui.toast(e.message); }
     };

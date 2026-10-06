@@ -89,13 +89,21 @@ export class UI {
   showLoading(text) { $('loading').classList.remove('hidden'); $('loading-text').textContent = text; }
   hideLoading() { $('loading').classList.add('hidden'); }
   showHUD() {
-    for (const id of ['hud', 'minimap-wrap', 'help-hint', 'pchat', 'hotbar-wrap', 'keys-btn', 'topbar']) $(id).classList.remove('hidden');
+    for (const id of ['hud', 'minimap-wrap', 'help-hint', 'pchat', 'hotbar-wrap', 'keys-btn', 'topbar', 'online-bar']) $(id).classList.remove('hidden');
     $('keys-btn').onclick = () => this.openKeys();
     $('tb-phone').onclick = () => this.togglePhone();
     $('tb-feedback').onclick = () => this.openPhone('feedback');
-    $('tb-exit').onclick = async () => { if (await this.confirm('저장하고 캐릭터 선택 화면으로 나갈까요?<br><small>돈·아이템·집은 서버에 저장돼요</small>')) this.game.resetSave(); };
+    $('tb-exit').onclick = async () => { if (await this.confirm('저장하고 캐릭터 선택 화면으로 나갈까요?<br><small>돈·아이템·집은 서버에 저장돼요</small>', '💾 저장하고 나가기', '계속 하기')) this.game.resetSave(); };
     $('bag-btn').onclick = () => this.toggleInventory();
     $('quest-card').onclick = () => this.openPhone('quests');
+    $('online-bar').onclick = (e) => {
+      const c = e.target.closest('[data-pid]'); if (!c) return;
+      const g = this.game, o = g.players.list.get(+c.dataset.pid);
+      if (!o) { this.openOnline(); return; }
+      g.setWaypoint(o.loc >= 0 ? g.city.buildings[o.loc] : o.pos.clone(), `🎮 ${o.name}`);
+      this.toast(`📍 ${o.name}님 위치를 표시했어요`);
+    };
+    $('tb-badges').onclick = () => this.openBadges();
     this.renderQuests();
     let seen = false;
     try { seen = localStorage.getItem('roachcity.keysSeen') === '1'; } catch { /* 무시 */ }
@@ -112,15 +120,15 @@ export class UI {
   openKeys() {
     const K = (k) => k.split('+').map((x) => `<kbd>${x}</kbd>`).join('');
     const groups = [
-      ['🚶 이동', [['W A S D', '걷기 (방향키도 OK)'], ['Shift', '달리기 — 여섯 다리로 바퀴처럼 기어 달려요!'], ['Space', '점프 · 공중에서 한 번 더 2단 점프 (3단은 수련*)'], ['C', '대쉬 (거리 강화는 수련*)'], ['G', '🪽 날기 — Space 위로 · X 아래로 · G 착지'], ['V', '1인칭 ↔ 3인칭'], ['마우스', '화면 클릭 후 움직이면 시점 회전 · 휠로 확대/축소'], ['R', '지도에 찍은 목적지까지 자동으로 걷기']]],
-      ['💬 생활', [['E', '대화하기 · 건물 들어가기/나가기 · 행동하기 · 아이템 줍기'], ['B', '💘 플러팅 — 앞에 있는 상대에게 하트 날리기'], ['P', '📷 사진 찍기 (갤러리·인스타는 휴대폰)'], ['Enter', '전체 채팅 (T도 가능)'], ['I', '가방'], ['M', '도시 전체 지도'], ['Tab', '휴대폰 — 퀘스트·카메라·인스타·연락처·문자·112'], ['Esc', '창 닫기']]],
-      ['⚔️ 전투 · 아이템', [['1 ~ 0', '핫바 칸 선택 (무기, 마법봉, 음식, 차 키)'], ['왼쪽 클릭', '공격 / 마법 / 먹기 · 활은 꾹 눌러 당겼다가 놓기!'], ['오른쪽 클릭', '🔭 조준 줌 (저격총은 스코프)'], ['Q', '선택한 아이템 바닥에 버리기'], ['← →', '차에 치여 뒤집히면 번갈아 연타해서 일어나기']]],
+      ['🚶 이동', [['W A S D', '걷기 (방향키도 OK)'], ['Shift', '달리기 — 여섯 다리로 바퀴처럼 기어 달려요!'], ['Space', '점프 · 공중에서 한 번 더 2단 점프 (3단은 수련*)'], ['C', '대쉬 (거리 강화는 수련*)'], ['Space 두 번', '🪽 날기 — 날면서 Space 꾹 위로 · X 아래로 · Space 두 번 = 날개 접고 떨어지기 (G도 가능)'], ['V', '1인칭 ↔ 3인칭'], ['벽으로 걷기', '🪳 벽에 대고 계속 걸으면 벽을 기어올라요 (W/S 위아래 · A/D 옆 · Space 뛰어내리기) — 옥상도 걸을 수 있어요'], ['마우스', '화면 클릭 후 움직이면 시점 회전 · 휠로 확대/축소'], ['R', '지도에 찍은 목적지까지 자동으로 걷기']]],
+      ['💬 생활', [['E', '대화하기 · 건물 들어가기/나가기 · 행동하기 · 아이템 줍기'], ['B', '💘 플러팅 — 앞에 있는 상대에게 하트 날리기'], ['P', '📷 사진 찍기 (갤러리·인스타는 휴대폰)'], ['Enter', '전체 채팅 (T도 가능)'], ['I', '가방'], ['M', '도시 전체 지도'], ['K / Tab', '📱 휴대폰 열기·닫기 — 퀘스트·카메라·인스타·튄더·연락처·문자·112'], ['Esc', '창 닫기']]],
+      ['⚔️ 전투 · 아이템', [['1 ~ 0', '핫바 칸 선택 (무기, 마법봉, 음식, 차 키)'], ['왼쪽 클릭', '공격 / 마법 / 먹기 · 활은 꾹 눌러 당겼다가 놓기!'], ['오른쪽 클릭', '🔭 1인칭 조준 (총·활) · 저격총은 스코프 · 총마다 반동이 달라요'], ['낚싯대 클릭', '🎣 물을 보고 던지기 → "입질!" 뜨면 바로 클릭'], ['Q', '선택한 아이템 바닥에 버리기'], ['← →', '차에 치여 뒤집히면 번갈아 연타해서 일어나기']]],
       ['🚗 자동차', [['F', '차 타기 · 빼앗기 · 내리기'], ['W / S', '가속 / 후진'], ['A / D', '핸들'], ['Space', '브레이크 (헬기는 상승)'], ['Shift', '부스트 (헬기는 하강)'], ['왼쪽 클릭', '전차 주포 · 헬기 미사일']]],
     ];
-    this.openModal(`<h3 class="mh">⌨️ 조작법 <small>H 키로 언제든 다시 볼 수 있어요</small></h3>
+    this.openModal(`<h3 class="mh">⌨️ 조작법 <small>H 키로 열고 닫아요</small></h3>
       <div class="keys">${groups.map(([t, rows]) => `<div class="keygroup"><b>${t}</b>${rows.map(([k, d]) => `<div class="keyrow"><span class="kk">${K(k)}</span><span>${d}</span></div>`).join('')}</div>`).join('')}</div>
       <div class="keynote">* 3단 점프 · 대쉬 거리 강화 · 점프력 강화는 무릉도장 🥋 수련으로 배워요. 처음 화면을 클릭하면 마우스가 화면에 고정되고, Esc로 풀 수 있어요.</div>
-      <div style="margin-top:12px"><button class="btn" id="keys-ok">알겠어요! 🎮</button></div>`, 'keys');
+      <div style="margin-top:12px"><button class="btn" id="keys-ok">알겠어요! 🎮 <kbd>H</kbd></button></div>`, 'keys');
     $('modal-inner').classList.add('wide');
     $('keys-ok').onclick = () => this.closeModal();
     try { localStorage.setItem('roachcity.keysSeen', '1'); } catch { /* 무시 */ }
@@ -181,7 +189,7 @@ export class UI {
     const g = this.game;
     const S = g.stats;
     $('clock-day').textContent = `${g.day() + 1}일차 · ${DAYS[g.day() % 7]}요일 · ${g.weather}`;
-    $('online').textContent = `👥 ${g.players.list.size + 1}명 접속 중`;
+    this.renderOnlineBar();
     $('clock-time').textContent = fmtTime(g.minutes);
     $('money').textContent = `₩${Math.floor(S.money)}`;
     const job = g.playerJob();
@@ -982,7 +990,7 @@ export class UI {
         const bd = g.city.buildings[+b.dataset.house];
         const unit = bd.type === 'house' ? '단독' : M.querySelector(`[data-unitsel="${bd.id}"]`).value;
         const price = housePrice(bd, unit);
-        if (!(await this.confirm(`${bd.def.emoji} <b>${escapeHtml(homeLabel(bd, unit))}</b><br>₩${price.toLocaleString()}에 살까요?`))) { this.openHouses(tab); return; }
+        if (!(await this.confirm(`${bd.def.emoji} <b>${escapeHtml(homeLabel(bd, unit))}</b><br>₩${price.toLocaleString()}에 살까요?`, '🏠 살게요'))) { this.openHouses(tab); return; }
         g.buyHouse(bd, unit); this.closeModal();
       };
     });
@@ -990,7 +998,7 @@ export class UI {
     M.querySelectorAll('[data-sell]').forEach((b) => {
       b.onclick = async () => {
         const bd = g.city.buildings[+b.dataset.sell];
-        if (!(await this.confirm(`${escapeHtml(homeLabel(bd, b.dataset.unit))}을(를) ₩${Math.round(housePrice(bd, b.dataset.unit) * 0.8).toLocaleString()}에 팔까요?<br><small>열쇠가 사라져요</small>`))) { this.openHouses('mine'); return; }
+        if (!(await this.confirm(`${escapeHtml(homeLabel(bd, b.dataset.unit))}을(를) ₩${Math.round(housePrice(bd, b.dataset.unit) * 0.8).toLocaleString()}에 팔까요?<br><small>열쇠가 사라져요</small>`, '🏷️ 팔기'))) { this.openHouses('mine'); return; }
         g.sellHouse(+b.dataset.sell, b.dataset.unit); setTimeout(() => this.openHouses('mine'), 300);
       };
     });
@@ -1152,8 +1160,10 @@ export class UI {
   }
 
   // ---------------- 확인 창 ----------------
-  confirm(html) {
+  // yes/no 버튼 글자는 상황마다 다르게 (기본: 확인 / 취소)
+  confirm(html, yes = '확인', no = '취소') {
     $('confirm-text').innerHTML = html;
+    $('confirm-yes').textContent = yes; $('confirm-no').textContent = no;
     $('confirm').classList.remove('hidden');
     this.game.releaseMouse();
     return new Promise((res) => { this.confirmResolve = (v) => { $('confirm').classList.add('hidden'); this.confirmResolve = null; res(v); }; });
@@ -1239,6 +1249,57 @@ export class UI {
     $('modal-inner').querySelectorAll('[data-take]').forEach((b) => { b.onclick = () => { g.cookFish(b.dataset.take, kind, false); this.openCookFish(kind); }; });
   }
 
+  // ---------------- 접속 중인 플레이어 ----------------
+  // 화면 상단 칩 줄: 나 → 다른 유저 순서, 넘치면 다음 줄로 (바뀔 때만 다시 그린다)
+  renderOnlineBar() {
+    const g = this.game;
+    const chip = (id, lv, name, stars, me) => `<span class="oc${me ? ' me' : ''}"${me ? '' : ` data-pid="${id}" title="클릭하면 위치 표시"`}><b>Lv.${lv}</b>${escapeHtml(name)}${me ? ' (나)' : ''}${stars ? ` <i>${'★'.repeat(stars)}</i>` : ''}</span>`;
+    const others = [...g.players.list.values()].sort((a, b) => a.id - b.id);
+    const html = `<span class="oc cnt">👥 ${others.length + 1}명</span>` + chip(0, g.stats.level || 1, g.profile.name, g.stars || 0, true) + others.map((o) => chip(o.id, o.profile.level || 1, o.name, o.stars, false)).join('');
+    if (html === this._onlineHtml) return;
+    this._onlineHtml = html;
+    const bar = $('online-bar');
+    bar.innerHTML = html;
+    // 토스트가 칩 줄을 가리지 않게 아래로 내린다
+    $('toasts').style.top = `${bar.offsetTop + bar.offsetHeight + 8}px`;
+  }
+
+  openOnline() {
+    const g = this.game;
+    const me = g.player.pos;
+    const where = (o) => (o.loc >= 0 ? g.city.buildings[o.loc]?.name : g.regionName?.(o.pos) || '바퀴시티 거리');
+    const rows = [...g.players.list.values()].map((o) => {
+      const op = o.loc >= 0 ? g.city.buildings[o.loc].door : o.pos;
+      const d = Math.round(op.distanceTo(me));
+      return `<div class="item"><div class="ic">🎮</div><div class="info"><b><span class="lvb2">Lv.${o.profile.level || 1}</span> ${escapeHtml(o.name)}</b><small>${escapeHtml(o.profile.jobName || '무직')} · 📍 ${escapeHtml(where(o))} · ${d}m${o.stars ? ' · ' + '★'.repeat(o.stars) : ''}</small><div class="bdgline">${(o.profile.badges || []).map((b) => `<span class="bdg2">${escapeHtml(b)}</span>`).join('')}</div></div>
+        <div class="acts"><button class="btn mini" data-goto="${o.id}">📍 위치</button>${d < 15 ? `<button class="btn mini ghost" data-num="${o.id}">📞 번호 교환</button>` : ''}</div></div>`;
+    }).join('');
+    this.openModal(`<h3 class="mh">👥 접속 중인 플레이어 <small>나 포함 ${g.players.list.size + 1}명</small></h3>
+      <div class="item"><div class="ic">🙂</div><div class="info"><b><span class="lvb2">Lv.${g.stats.level || 1}</span> ${escapeHtml(g.profile.name)} (나)</b><small>📍 ${escapeHtml(g.placeText())}</small></div></div>
+      <div class="itemlist">${rows || '<div style="padding:14px">지금은 나 혼자예요. 동료를 불러보세요!</div>'}</div>
+      <div style="margin-top:10px"><button class="btn ghost" id="on-close">닫기</button></div>`, 'online');
+    $('on-close').onclick = () => this.closeModal();
+    $('modal-inner').querySelectorAll('[data-goto]').forEach((b) => { b.onclick = () => { const o = g.players.list.get(+b.dataset.goto); if (!o) return; const pos = o.loc >= 0 ? g.city.buildings[o.loc].door.clone() : o.pos.clone(); g.setWaypoint(o.loc >= 0 ? g.city.buildings[o.loc] : pos, `🎮 ${o.name}`); this.closeModal(); this.toast(`📍 ${o.name}님 위치를 표시했어요`); }; });
+    $('modal-inner').querySelectorAll('[data-num]').forEach((b) => { b.onclick = () => g.net.send({ t: 'numReq', id: +b.dataset.num }); });
+  }
+
+  // ---------------- 훈장 고르기 ----------------
+  openBadges() {
+    const g = this.game, S = g.stats;
+    const all = g.allBadges();
+    const cur = S.badgeSel || null;
+    const shown = new Set(cur || g.profile.badges?.map((t) => all.find((b) => b.text === t)?.key).filter(Boolean));
+    this.openModal(`<h3 class="mh">🏅 내 훈장 <small>이름표 아래에 보여줄 훈장을 골라요 (최대 8개)</small></h3>
+      <div class="badge-pick">${all.map((b) => `<label class="bp ${shown.has(b.key) ? 'on' : ''}"><input type="checkbox" data-k="${b.key}" ${shown.has(b.key) ? 'checked' : ''}> ${escapeHtml(b.text)}</label>`).join('')}</div>
+      <p class="hint">재산 훈장은 지금 가진 돈이 그대로 보여요. 훈장은 집·자동차·전설무기·사냥·수배 기록 등을 모으면 늘어나요.</p>
+      <div><button class="btn" id="bd-ok">저장</button> <button class="btn ghost" id="bd-close">닫기</button></div>`, 'badges');
+    $('modal-inner').querySelectorAll('[data-k]').forEach((c) => { c.onchange = () => c.parentElement.classList.toggle('on', c.checked); });
+    $('bd-close').onclick = () => this.closeModal();
+    $('bd-ok').onclick = () => {
+      S.badgeSel = [...$('modal-inner').querySelectorAll('[data-k]:checked')].map((c) => c.dataset.k).slice(0, 8);
+      g.sendProfile(); this.closeModal(); this.toast('🏅 훈장을 바꿨어요!');
+    };
+  }
 
     jailHud(left) {
     let el = $('jail-hud');
@@ -1262,7 +1323,7 @@ export class UI {
       const M = $('modal-inner');
       $('dl-close').onclick = () => this.closeModal();
       M.querySelectorAll('.cc').forEach((el) => { el.onclick = () => { pick[el.dataset.k] = el.dataset.c; const y = M.querySelector('.itemlist').scrollTop; render(); $('modal-inner').querySelector('.itemlist').scrollTop = y; }; });
-      M.querySelectorAll('[data-buy]').forEach((b) => { b.onclick = async () => { const k = b.dataset.buy; if (await this.confirm(`${escapeHtml(MODELS[k].name)}을(를) ₩${(+b.dataset.p).toLocaleString()}에 살까요?`)) g.buyCar(k, pick[k] || CAR_COLORS[0], +b.dataset.p); else render(); }; });
+      M.querySelectorAll('[data-buy]').forEach((b) => { b.onclick = async () => { const k = b.dataset.buy; if (await this.confirm(`${escapeHtml(MODELS[k].name)}을(를) ₩${(+b.dataset.p).toLocaleString()}에 살까요?`, '🏎️ 살게요')) g.buyCar(k, pick[k] || CAR_COLORS[0], +b.dataset.p); else render(); }; });
     };
     render();
   }

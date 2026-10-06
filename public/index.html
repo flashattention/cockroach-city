@@ -30,7 +30,6 @@
       <div id="clock-time">오전 7:30</div>
       <div id="lv-row"><b id="lv">Lv.1</b><div id="xp-bar"><div id="xp-fill"></div></div><span id="xp-txt">0/80</span></div>
       <div id="money-row"><span id="money">₩100</span> · <span id="job-label">무직</span></div>
-      <div id="online">👥 1명 접속 중</div>
       <div id="charm">✨ 매력 0</div>
       <div id="stars" class="hidden"></div>
     </div>
@@ -38,8 +37,11 @@
     <div class="card" id="quest-card"></div>
   </div>
 
+  <!-- 접속 중인 유저 (화면 상단, 많으면 줄바꿈) -->
+  <div id="online-bar" class="hidden"></div>
   <!-- 상단 버튼 -->
   <div id="topbar" class="hidden">
+    <button id="tb-badges" title="이름표 훈장 고르기">🏅 훈장</button>
     <button id="tb-phone" title="휴대폰 (K 또는 Tab)">📱 휴대폰 <kbd>K</kbd></button>
     <button id="tb-feedback" title="개발자에게 건의하기">💡 건의하기</button>
     <button id="tb-exit" title="저장하고 캐릭터 선택으로">💾 저장하고 나가기</button>

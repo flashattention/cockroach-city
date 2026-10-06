@@ -518,8 +518,12 @@ function setupNet() {
     placeAtHome();
     ui.toast(game.stats.homeId != null ? '🏠 집에서 부활했어요. 체력이 가득 찼어요!' : '🏨 호텔에서 부활했어요');
   });
-  net.on('wanted', (m) => { game.stars = m.stars; });
+  net.on('wanted', (m) => {
+    if (m.stars > 0 && !game.stars) { game.stats.wantedCount = (game.stats.wantedCount || 0) + 1; game.sendProfile(); }
+    game.stars = m.stars;
+  });
   net.on('arrested', (m) => goToJail(m));
+  net.on('released', () => releaseFromJail());
   // 바닥 아이템
   net.on('gdrop', (m) => game.ground.add(m.g));
   net.on('gpick', (m) => game.ground.remove(m.gid));
@@ -564,7 +568,6 @@ function setupNet() {
     ui.toast(`💬 ${who}: ${m.m.text.slice(0, 40)}`);
     refreshPhone('sms');
   });
-  net.on('numReq', async (m) => { if (await ui.confirm(`📞 ${m.name}님이 번호를 교환하고 싶어해요. 수락할까요?`)) net.send({ t: 'numAccept', id: m.id }); });
   // 튄더
   const refreshTd = () => refreshPhone('tinder');
   net.on('tdCards', (m) => { game.tdCards = m.list; game.tdMe = m.me; refreshTd(); });
@@ -576,6 +579,7 @@ function setupNet() {
     else if (m.msg.from !== game.char) { game.tdUnread = (game.tdUnread || 0) + 1; ui.toast(`🔥 튄더 · ${m.name}: ${m.msg.contact ? '📇 연락처를 보냈어요' : m.msg.text.slice(0, 30)}`); }
   });
   net.on('tdMatch', (m) => { ui.lootBanner('💘 매칭 성공!', `${m.other.name}님과 서로 좋아요! 휴대폰 🔥 튄더에서 대화해 보세요`, '#ff2d6f', ''); });
+  net.on('numReq', async (m) => { if (await ui.confirm(`📞 ${m.name}님이 번호를 교환하고 싶어해요. 수락할까요?`, '📞 수락', '거절')) net.send({ t: 'numAccept', id: m.id }); });
   net.on('flirtRes', (m) => ui.toast(m.player ? `💖 ${m.name}님에게 하트를 날렸어요!` : m.ok ? `💗 ${m.name}의 마음이 흔들려요! (친밀도 ↑)` : `💔 ${m.name}에게 안 통했어요...`));
   net.on('flirted', (m) => { ui.toast(`💖 ${m.name}님이 나에게 하트를 날렸어요!`); game.player.roach.setEmotion('love', 3); });
   net.on('slow', (m) => { game.slowT = m.s; ui.toast('❄️ 몸이 얼어서 느려졌어요!'); });
@@ -649,6 +653,8 @@ window.addEventListener('keydown', (e) => {
   // 휴대폰: K 또는 Tab (열려 있으면 닫기)
   if (e.code === 'Tab' || (e.code === 'KeyK' && !e.repeat)) { e.preventDefault(); ui.togglePhone(); return; }
   if (e.code === 'KeyI') { ui.toggleInventory(); return; }
+  // 조작법: H로 열고, 열려 있으면 H로 닫기
+  if (e.code === 'KeyH' && !e.repeat && (ui.modalKind === 'keys' && !document.getElementById('modal').classList.contains('hidden') || !ui.anyPanelOpen())) { ui.toggleHelp(); return; }
   if (ui.anyPanelOpen() || game.busy || game.dead) return;
   if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); clearKeys(); ui.focusPlayerChat(); return; }
   // 차에 치여 뒤집혔을 때: ← → 번갈아 빠르게
@@ -673,7 +679,6 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyC' && !e.repeat) game.input.dashPressed = true;
   if (e.code === 'KeyR' && !e.repeat) toggleAutoWalk();
   if (e.code === 'KeyM' && !e.repeat) ui.openWorldMap();
-  if (e.code === 'KeyH' && !e.repeat) ui.toggleHelp();
   if (e.code === 'KeyG' && !e.repeat) toggleFly();
   if (e.code === 'KeyV' && !e.repeat) toggleView();
   if (e.code === 'KeyB' && !e.repeat) flirt();
@@ -911,7 +916,7 @@ async function dropSelected() {
   if (!it) { ui.toast('선택한 칸이 비어 있어요'); return; }
   const d = itemDef(it.id);
   const value = (d.price || 0) * (it.n || 1);
-  if (value >= 300 && !(await ui.confirm(`${d.emoji} ${d.name}${it.n > 1 ? ` x${it.n}` : ''} (₩${value})<br>정말 버리시겠습니까?<br><small>버린 아이템은 1분 뒤에 사라지고, 다른 사람이 주울 수 있어요.</small>`))) return;
+  if (value >= 300 && !(await ui.confirm(`${d.emoji} ${d.name}${it.n > 1 ? ` x${it.n}` : ''} (₩${value})<br>정말 버리시겠습니까?<br><small>버린 아이템은 1분 뒤에 사라지고, 다른 사람이 주울 수 있어요.</small>`, '🗑️ 버리기'))) return;
   const out = game.inv.remove(it.uid);
   game.net.send({ t: 'drop', item: { id: out.id, n: out.n || 1, gems: out.gems || [], ttlMs: out.expiresAt ? Math.max(0, out.expiresAt - Date.now()) : 0, rarity: out.rarity } });
   ui.toast(`${d.emoji} ${d.name}을(를) 바닥에 버렸어요`);
@@ -1245,25 +1250,40 @@ game.questEvent = (ev, n = 1) => {
   ui.renderQuests?.();
 };
 
-// 훈장: 이름표 아래에 보이는 자랑거리
-function computeBadges() {
+// 훈장: 이름표 아래에 보이는 자랑거리 (유저가 고른 것만 보여준다)
+const won = (v) => (v >= 1e8 ? `${(v / 1e8).toFixed(1)}억` : v >= 1e4 ? `${Math.floor(v / 1e4)}만` : `${Math.floor(v)}`);
+function allBadges() {
   const S = game.stats, out = [];
+  out.push({ key: 'money', text: `💰재산 ₩${won(S.money)}` });
+  if (S.wantedCount) out.push({ key: 'wanted', text: `🚨수배 ${S.wantedCount}번` });
+  if (S.hunted) out.push({ key: 'hunted', text: `🏹사냥 ${S.hunted}마리` });
+  out.push({ key: 'level', text: `⭐레벨 ${S.level || 1}` });
   const legend = new Set(DROP_POOL.legendary || []);
   const legends = S.items.filter((it) => legend.has(it.id) && !it.expiresAt).length;
-  if (legends) out.push(`🌟전설무기 ${legends}개`);
+  if (legends) out.push({ key: 'legend', text: `🌟전설무기 ${legends}개` });
   const keys = S.items.filter((it) => it.id === 'car_key');
   const cnt = (k) => keys.filter((it) => it.car?.kind === k).length;
-  if (cnt('sport_f')) out.push(`🐎풰라리 ${cnt('sport_f')}대`);
-  if (cnt('sport_l')) out.push(`🐂람부르기니${cnt('sport_l') > 1 ? ' ' + cnt('sport_l') + '대' : ''}`);
-  if (cnt('sport_b')) out.push('💎부가디');
-  if (cnt('sport_m') || cnt('sport_p')) out.push(`🏁스포츠카 ${cnt('sport_m') + cnt('sport_p')}대`);
+  if (cnt('sport_f')) out.push({ key: 'ferrari', text: `🐎풰라리 ${cnt('sport_f')}대` });
+  if (cnt('sport_l')) out.push({ key: 'lambo', text: `🐂람부르기니${cnt('sport_l') > 1 ? ' ' + cnt('sport_l') + '대' : ''}` });
+  if (cnt('sport_b')) out.push({ key: 'bugatti', text: '💎부가디' });
+  if (cnt('sport_m') || cnt('sport_p')) out.push({ key: 'sports', text: `🏁스포츠카 ${cnt('sport_m') + cnt('sport_p')}대` });
+  if (keys.length) out.push({ key: 'cars', text: `🚗자동차 ${keys.length}대` });
   const types = new Set(game.myHomes.map((h) => game.city.buildings[h.bid]?.type));
-  if (types.has('house')) out.push('🏡개인주택');
-  if (types.has('apartment')) out.push('🏢아파트');
-  if (types.has('villa')) out.push('🏘️빌라');
-  if (S.skills.includes('jump3')) out.push('🥋무릉고수');
-  if ((S.rangeBest || 0) >= 800) out.push('🎯명사수');
-  return out.slice(0, 6);
+  if (types.has('house')) out.push({ key: 'house', text: '🏡개인주택' });
+  if (types.has('apartment')) out.push({ key: 'apt', text: '🏢아파트' });
+  if (types.has('villa')) out.push({ key: 'villa', text: '🏘️빌라' });
+  if (game.myHomes.length > 1) out.push({ key: 'homes', text: `🏘️집 ${game.myHomes.length}채` });
+  if (S.skills.includes('jump3')) out.push({ key: 'dojang', text: '🥋무릉고수' });
+  if ((S.rangeBest || 0) >= 800) out.push({ key: 'sniper', text: '🎯명사수' });
+  if (S.items.some((it) => it.id === 'deer_trophy')) out.push({ key: 'trophy', text: '🦌사슴 트로피' });
+  return out;
+}
+game.allBadges = allBadges;
+function computeBadges() {
+  const all = allBadges();
+  const sel = game.stats.badgeSel; // 없으면 기본: 재산 빼고 앞에서 5개
+  const list = sel ? all.filter((b) => sel.includes(b.key)) : all.filter((b) => b.key !== 'money' && b.key !== 'level').slice(0, 5);
+  return list.slice(0, 8).map((b) => b.text);
 }
 
 // ------------------------------------------------------------------
@@ -1814,6 +1834,8 @@ function frame() {
   game.secT = (game.secT || 0) - dt;
   if (game.secT <= 0) {
     game.secT = 1;
+    // 재산 훈장이 바뀌면 다시 알린다
+    if (Math.floor(game.stats.money) !== game.lastMoneyBadge && (game.stats.badgeSel || []).includes('money')) { game.lastMoneyBadge = Math.floor(game.stats.money); if ((game.moneyBadgeT = (game.moneyBadgeT || 0) - 1) <= 0) { game.moneyBadgeT = 5; game.sendProfile(); } }
     for (const it of game.inv.expire()) {
       const d = itemDef(it.id);
       if (d.cat === 'ammo') continue;

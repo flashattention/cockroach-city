@@ -143,7 +143,9 @@ export class PlayersView {
     roach.root.visible = false;
     this.scene.add(roach.root);
     roach.setHeld(pr.held || null);
-    this.list.set(meta.id, { id: meta.id, name: meta.name, profile: pr, roach, pos: new THREE.Vector3(), target: null, heading: 0, speed: 0, loc: -1, car: -1, air: 0, sleeping: 0, bubble: null, visible: false, hp: 100, dead: 0, stars: 0 });
+    const beacon = makePlayerBeacon();
+    this.scene.add(beacon);
+    this.list.set(meta.id, { id: meta.id, name: meta.name, profile: pr, roach, beacon, pos: new THREE.Vector3(), target: null, heading: 0, speed: 0, loc: -1, car: -1, air: 0, sleeping: 0, bubble: null, visible: false, hp: 100, dead: 0, stars: 0 });
   }
 
   meta(meta) {
@@ -166,6 +168,7 @@ export class PlayersView {
     const p = this.list.get(id);
     if (!p) return;
     this.scene.remove(p.roach.root);
+    if (p.beacon) this.scene.remove(p.beacon);
     this.list.delete(id);
   }
 
@@ -196,6 +199,18 @@ export class PlayersView {
       const visible = p.loc === myLoc && (!car || myLoc < 0);
       p.visible = visible && !car;
       p.roach.root.visible = visible;
+      // 하늘까지 닿는 플레이어 표시 (바깥에서만)
+      const showBeacon = p.loc === myLoc && myLoc < 0 && !p.dead;
+      p.beacon.visible = showBeacon;
+      if (showBeacon) {
+        const bp = car ? car.pos : p.pos;
+        p.beacon.position.set(bp.x, bp.y || 0, bp.z);
+        const now = performance.now() / 1000;
+        const gem = p.beacon.userData.gem;
+        gem.position.y = (car ? 3.6 : p.roach.height + 1.6) + Math.sin(now * 2.5 + p.id) * 0.2;
+        gem.rotation.y = now * 1.6;
+        for (const [i, r] of p.beacon.userData.rings.entries()) { const u = (now * 0.25 + i / 4) % 1; r.position.y = 3 + u * 60; r.material.opacity = 0.55 * (1 - u); }
+      }
       if (!visible) continue;
       if (car) { seatRoach(p.roach, car); p.roach.update(dt, 0, {}); continue; }
       if (p.roach.seated) unseatRoach(p.roach);
@@ -207,6 +222,27 @@ export class PlayersView {
       if (p.sleeping && !p.bubble) p.bubble = { text: '💤', t: 2 };
     }
   }
+}
+
+// 다른 플레이어 위치 표시: 보라색 빛기둥 + 떠오르는 고리 + 머리 위 다이아 (아이템 빛기둥과 다른 모양)
+const beaconGeo = { beam: new THREE.CylinderGeometry(0.4, 0.4, 160, 8, 1, true), ring: new THREE.TorusGeometry(0.9, 0.08, 6, 24), gem: new THREE.OctahedronGeometry(0.42) };
+function makePlayerBeacon() {
+  const g = new THREE.Group();
+  const beam = new THREE.Mesh(beaconGeo.beam, new THREE.MeshBasicMaterial({ color: '#d500f9', transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false }));
+  beam.position.y = 82; g.add(beam);
+  const core = new THREE.Mesh(beaconGeo.beam, new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+  core.scale.set(0.3, 1, 0.3); core.position.y = 82; g.add(core);
+  const rings = [];
+  for (let i = 0; i < 4; i++) {
+    const r = new THREE.Mesh(beaconGeo.ring, new THREE.MeshBasicMaterial({ color: '#ea80fc', transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+    r.rotation.x = Math.PI / 2; g.add(r); rings.push(r);
+  }
+  const gem = new THREE.Mesh(beaconGeo.gem, new THREE.MeshBasicMaterial({ color: '#e040fb' }));
+  gem.scale.set(1, 1.4, 1); g.add(gem);
+  g.userData = { rings, gem };
+  g.visible = false;
+  g.traverse((o) => { o.frustumCulled = false; o.renderOrder = 5; });
+  return g;
 }
 
 // ---------------- 차에 앉히기 ----------------

@@ -32,7 +32,6 @@ button { font-family: 'Jua', sans-serif; cursor: pointer; }
 #clock-time { font-family: 'Jua'; font-size: 28px; line-height: 1.1; }
 #money-row { font-size: 14px; margin-top: 2px; }
 #money { font-family: 'Jua'; color: #e67e22; font-size: 16px; }
-#online { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
 .need { display: grid; grid-template-columns: 22px 46px 1fr; align-items: center; gap: 4px; font-size: 12px; margin: 3px 0; }
 .need .bar { height: 9px; background: var(--line); border-radius: 6px; overflow: hidden; }
 .need .bar > div { height: 100%; border-radius: 6px; transition: width .3s; }
@@ -474,6 +473,13 @@ kbd { background: #fff; color: #4a3428; border-radius: 5px; padding: 0 6px; bord
 #tv-remote button:hover { background: #ff8a65; }
 #tv-remote small { opacity: .7; font-size: 11px; }
 
+#clock-card { pointer-events: auto; }
+.lvb2 { background: #ffb300; color: #3e2723; border-radius: 6px; padding: 0 5px; font-size: 11px; }
+.bdgline { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+.bdg2 { background: rgba(126,87,194,.85); color: #fff; border-radius: 8px; padding: 1px 6px; font-size: 11px; }
+.badge-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; margin: 8px 0; }
+.bp { background: rgba(255,255,255,.6); color: #4a3428; border-radius: 12px; padding: 8px 10px; cursor: pointer; border: 2px solid transparent; font-size: 14px; }
+.bp.on { border-color: #7e57c2; background: #ede7f6; }
 
 /* ---------- 아이폰 (GTA5처럼 오른쪽 아래) ---------- */
 #phone { position: fixed; inset: auto 22px 18px auto; background: none; display: block; z-index: 42; }
@@ -538,3 +544,13 @@ kbd { background: #fff; color: #4a3428; border-radius: 5px; padding: 0 6px; bord
 .td-match .unread { background: #ff2d6f; color: #fff; border-radius: 10px; padding: 0 7px; font-size: 12px; margin-left: auto; }
 .td-contact { background: #fff7e6; border: 1px solid #ffd180; border-radius: 12px; padding: 8px; color: #4a3428; }
 #phone-body .gallery .ph.on { outline: 3px solid #ff2d6f; }
+
+/* 접속 중인 유저 칩 (상단, flex-wrap) */
+#online-bar { position: fixed; top: 62px; left: 258px; right: 236px; display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; z-index: 13; pointer-events: none; }
+#online-bar.hidden { display: none; }
+#online-bar .oc { pointer-events: auto; background: var(--panel); color: var(--ink); border-radius: 999px; padding: 4px 10px; font-size: 13px; box-shadow: var(--shadow); white-space: nowrap; cursor: pointer; }
+#online-bar .oc b { color: #7e57c2; margin-right: 4px; font-size: 11px; }
+#online-bar .oc i { color: #e53935; font-style: normal; }
+#online-bar .oc.me { background: #fff3c4; color: #4e342e; cursor: default; }
+#online-bar .oc.cnt { background: #5c6bc0; color: #fff; cursor: default; }
+@media (max-width: 900px) { #online-bar { top: 14px; left: 14px; right: 150px; } }
