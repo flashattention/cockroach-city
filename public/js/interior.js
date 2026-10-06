@@ -105,7 +105,7 @@ class Kit {
   constructor(g, W, D, rng) {
     this.g = g; this.W = W; this.D = D; this.rng = rng;
     this.cols = []; this.work = []; this.visit = []; this.acts = []; this.anim = [];
-    this.platforms = []; this.courses = []; this.lava = []; this.seats = [];
+    this.platforms = []; this.courses = []; this.lava = []; this.seats = []; this.screens = [];
   }
   // 올라설 수 있는 발판
   plat(x, z, w, d, top, color = '#a1887f') {
@@ -241,10 +241,11 @@ class Kit {
   }
   tv(x, z, ry = 0) {
     const c = new THREE.Group(); c.position.set(x, 0, z); c.rotation.y = ry; this.g.add(c);
-    box(c, 2.4, 0.7, 0.7, '#8d6e63', 0, 0.35, 0);
-    box(c, 2.2, 1.3, 0.1, '#212121', 0, 1.5, 0);
+    box(c, 2.6, 0.7, 0.7, '#8d6e63', 0, 0.35, 0);
+    box(c, 3.0, 1.8, 0.12, '#212121', 0, 1.75, 0);
     const s = new THREE.Mesh(G.plane(), new THREE.MeshBasicMaterial({ color: '#4fc3f7' }));
-    s.scale.set(2, 1.1, 1); s.position.set(0, 1.5, 0.06); c.add(s);
+    s.scale.set(2.8, 1.575, 1); s.position.set(0, 1.75, 0.07); c.add(s);
+    s.userData.tv = true; this.screens.push(s); // 브라우저에서 방송 화면으로 바뀐다
     this.col(x, z, 1.2, 0.4);
   }
   label(text, emoji, x, y, z, w = 4, bg = '#ffffff', fg = '#4a3428', ry = 0) {
@@ -1023,7 +1024,8 @@ const LAYOUTS = {
     const { W, D } = k;
     const scr = new THREE.Mesh(G.plane(), new THREE.MeshBasicMaterial({ color: '#e3f2fd' }));
     scr.scale.set(W - 6, 3.6, 1); scr.position.set(0, 3, -D / 2 + 0.2); k.g.add(scr);
-    k.label('상영 중: 슬리퍼의 습격 3', '🎬', 0, 3, -D / 2 + 0.25, 6, '#212121', '#ffeb3b');
+    scr.userData.tv = 'cartoon'; k.screens.push(scr);
+    k.label('상영 중: 꼬물이 대모험', '🎬', 0, 5.2, -D / 2 + 0.25, 6, '#212121', '#ffeb3b');
     for (let r = 0; r < 3; r++) for (let c = 0; c < 6; c++) {
       const x = -W / 2 + 4 + c * ((W - 8) / 5), z = -1 + r * 1.9;
       k.chair(x, z, Math.PI, '#c62828');
@@ -1445,6 +1447,7 @@ export function buildInterior(b, opts = {}) {
     actions: acts,
     seats: k.seats.map((st) => ({ p: new THREE.Vector3(st.x, 0.1, st.z).add(O), face: st.face })),
     targets: k.targets || [],
+    screens: k.screens,
     entry: new THREE.Vector3(0, 0.1, D / 2 - 2).add(O),
     exit: new THREE.Vector3(0, 0.1, D / 2 - 1).add(O),
     bounds: { minX: O.x - W / 2 + 0.6, maxX: O.x + W / 2 - 0.6, minZ: O.z - D / 2 + 0.6, maxZ: O.z + D / 2 - 0.6 },

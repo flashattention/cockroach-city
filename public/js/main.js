@@ -22,6 +22,7 @@ import { SPORT_KINDS, vehicleName, CAR_KINDS } from './traffic.js';
 import { DROP_POOL, FISH } from './items.js';
 import { buildWilds, renderWorldImage } from './wilds.js';
 import { AnimalsView } from './animals.js';
+import { TVScreen, CHANNELS } from './tv.js';
 import { WORLD_HALF, WATER_Y, regionAt } from './terrain.js';
 
 // ------------------------------------------------------------------
@@ -463,7 +464,7 @@ function setupNet() {
     if (m.id === game.myId) game.myBubble = { text: m.text, t: 5 };
     else game.players.say(m.id, m.text);
   });
-  net.on('sys', (m) => { ui.addChatLine('sys', m.text); ui.toast(m.text); });
+  net.on('sys', (m) => { ui.addChatLine('sys', m.text); ui.toast(m.text); (game.news ||= []).unshift(m.text.replace(/^[^\s]+\s/, '')); game.news.length = Math.min(game.news.length, 6); });
   net.on('talk', (m) => ui.onTalkReply(m));
   net.on('talkCut', () => { if (ui.chatOpen()) { ui.addMsg('sys', '😱 대화가 중단됐어요!'); setTimeout(() => ui.closeChat(), 800); } });
   net.on('mem', (m) => { const c = game.sim.citizens[m.npc]; if (c) c.memories = m.list; });
@@ -638,6 +639,7 @@ window.addEventListener('keydown', (e) => {
   if (ui.anyPanelOpen() || game.busy || game.dead) return;
   if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); clearKeys(); ui.focusPlayerChat(); return; }
   // 차에 치여 뒤집혔을 때: ← → 번갈아 빠르게
+  if (game.watchingTV && (e.code === 'ArrowLeft' || e.code === 'ArrowRight' || e.code === 'BracketLeft' || e.code === 'BracketRight')) { switchTV(e.code === 'ArrowLeft' || e.code === 'BracketLeft' ? -1 : 1); e.preventDefault(); return; }
   if (game.flip && (e.code === 'ArrowLeft' || e.code === 'ArrowRight' || e.code === 'KeyA' || e.code === 'KeyD') && !e.repeat) { mashFlip(e.code === 'ArrowLeft' || e.code === 'KeyA' ? 'L' : 'R'); e.preventDefault(); return; }
   const k = KEYMAP[e.code];
   if (k) {
@@ -838,6 +840,8 @@ async function enterBuilding(b) {
   const isWork = job && b.id === game.stats.workId;
   const I = buildInterior(b, { isHome, unit, workJob: isWork ? job : null });
   scene.add(I.group);
+  // TV·영화관 스크린에 방송을 튼다
+  game.tvs = I.screens.map((m) => { const tv = new TVScreen(m, tvInfo); if (typeof m.userData.tv === 'string') tv.setChannel(CHANNELS.findIndex((c) => c.id === m.userData.tv)); else tv.setChannel(game.tvChannel || 0); tv.switchT = 0; return tv; });
   game.interior = I;
   game.mode = 'interior';
   game.city.root.visible = false;
@@ -862,6 +866,7 @@ async function exitBuilding(silent) {
   if (game.course) endCourse(false, null);
   game.interior.dispose();
   game.interior = null;
+  game.tvs = null; stopTV();
   game.mode = 'city';
   game.city.root.visible = true;
   game.wild.root.visible = true;
@@ -909,6 +914,7 @@ async function doAction(a) {
   if (a.enchant) { ui.openEnchant(); return; }
   if (a.houses) { ui.openHouses(); return; }
   if (a.restyle) { ui.openStyle(a.cost); return; }
+  if (a.id === 'tv') { watchTV(); return; }
   if (a.sell) { ui.openSell(); return; }
   if (a.cookFish) { ui.openCookFish(a.cookFish); return; }
   if (a.dealer) { ui.openDealer(); return; }
@@ -1078,6 +1084,38 @@ function summonCar(it) {
   game.net.send({ t: 'summonCar', kind: it.car.kind, color: it.car.color, x: pos.x, z: pos.z, h: p.heading });
   ui.toast(`🔑 ${vehicleName(it.car.kind)}을(를) 불렀어요! F로 타세요`);
 }
+
+// ------------------------------------------------------------------
+// TV 보기 (채널 바꾸기)
+// ------------------------------------------------------------------
+function tvInfo() {
+  const h = game.hour();
+  return {
+    headline: game.news?.[0] ? `속보: ${game.news[0].slice(0, 34)}` : `${game.players.list.size + 1}명이 바퀴시티에서 생활 중`,
+    ticker: [`오늘 날씨 ${game.weather}`, ...(game.news || []).slice(1, 5), '살충제 회사 주가 폭락 🎉', '무릉도장 신규 수련생 모집 🥋'].join('   ·   '),
+    weather: game.weather, temp: Math.round(18 + Math.sin(((h - 9) / 24) * Math.PI * 2) * 6), newsEmoji: game.stars ? '🚓' : '🏙️',
+  };
+}
+function watchTV() {
+  const tv = game.tvs?.[0];
+  if (!tv) return;
+  game.watchingTV = true;
+  const p = game.player;
+  const sp = tv.mesh.getWorldPosition(new THREE.Vector3());
+  p.heading = Math.atan2(sp.x - p.pos.x, sp.z - p.pos.z);
+  p.cam.yaw = p.heading + Math.PI; p.cam.dist = 4.5; p.cam.pitch = 0.18;
+  ui.tvRemote(CHANNELS[tv.ch], { prev: () => switchTV(-1), next: () => switchTV(1), power: () => { tv.on = !tv.on; }, close: stopTV });
+}
+function switchTV(d) {
+  const tv = game.tvs?.[0];
+  if (!tv) return;
+  tv.setChannel(tv.ch + d); game.tvChannel = tv.ch; tv.on = true;
+  for (const o of game.tvs.slice(1)) if (!o.mesh.userData.tv || o.mesh.userData.tv === true) o.setChannel(tv.ch);
+  ui.tvRemote(CHANNELS[tv.ch]);
+}
+function stopTV() { if (!game.watchingTV) return; game.watchingTV = false; ui.tvRemote(null); }
+game.switchTV = switchTV;
+game.useSelected = (down) => useSelected(down); // 테스트용
 
 // 차로 들이받은 가로등·나무 (c: 도시, w: 야생)
 function smashProp(key, dir, broken) {
@@ -1699,6 +1737,8 @@ function frame() {
   game.city.update(dt, t, night);
   windowGlow(night);
   if (game.interior) game.interior.update(dt, t, camera.position);
+  if (game.tvs) for (const tv of game.tvs) tv.draw(t, dt);
+  if (game.watchingTV) { addNeeds({ fun: dt * 1.6, social: dt * 0.2 }); if (input.forward || input.back || input.left || input.right) stopTV(); }
   p.updateCamera(camera, dt, world);
   if (game.shakeT > 0) {
     game.shakeT -= dt;

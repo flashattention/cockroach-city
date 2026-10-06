@@ -1179,7 +1179,15 @@ export class UI {
     el.textContent = text; el.style.color = color || '#fff';
     el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
   }
-  rangeHud(text) { $('range-hud').classList.toggle('hidden', !text); if (text) $('range-hud').innerHTML = text; }
+  tvRemote(ch, handlers) {
+    let el = $('tv-remote');
+    if (!el) { el = document.createElement('div'); el.id = 'tv-remote'; document.body.appendChild(el); }
+    if (!ch) { el.style.display = 'none'; return; }
+    if (handlers) this.tvH = handlers;
+    el.style.display = '';
+    el.innerHTML = `<div class="tvr-ch">📺 ${ch.emoji} ${escapeHtml(ch.name)}</div><div class="tvr-btns"><button id="tvr-prev">◀ 이전</button><button id="tvr-power">⏻</button><button id="tvr-next">다음 ▶</button><button id="tvr-close">그만 보기</button></div><small>← → 키로도 채널을 바꿀 수 있어요 · 보는 동안 재미가 올라가요</small>`;
+    $('tvr-prev').onclick = () => this.tvH.prev(); $('tvr-next').onclick = () => this.tvH.next(); $('tvr-power').onclick = () => this.tvH.power(); $('tvr-close').onclick = () => this.tvH.close();
+  }
     // ---------------- 전리품 팔기 ----------------
   openSell() {
     const g = this.game;
@@ -1206,6 +1214,7 @@ export class UI {
     $('modal-inner').querySelectorAll('[data-take]').forEach((b) => { b.onclick = () => { g.cookFish(b.dataset.take, kind, false); this.openCookFish(kind); }; });
   }
 
+    rangeHud(text) { $('range-hud').classList.toggle('hidden', !text); if (text) $('range-hud').innerHTML = text; }
   shutter() { const f = $('shutter'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
 
   // ---------------- 자동차 쇼룸 ----------------
