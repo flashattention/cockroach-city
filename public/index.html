@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>바퀴시티 Roach City</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- 이름표 & 말풍선 -->
+  <div id="labels"></div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="card" id="clock-card">
+      <div id="clock-day">1일차 · 월요일</div>
+      <div id="clock-time">오전 7:30</div>
+      <div id="money-row"><span id="money">₩100</span> · <span id="job-label">무직</span></div>
+      <div id="online">👥 1명 접속 중</div>
+      <div id="charm">✨ 매력 0</div>
+      <div id="stars" class="hidden"></div>
+    </div>
+    <div class="card" id="needs-card"></div>
+  </div>
+
+  <div id="minimap-wrap" class="hidden">
+    <canvas id="minimap" width="200" height="200"></canvas>
+    <div id="location-label">바퀴시티</div>
+  </div>
+
+  <div id="prompt" class="hidden"></div>
+  <div id="crosshair" class="hidden">＋</div>
+  <div id="hurt"></div>
+  <div id="course" class="hidden"></div>
+  <div id="celebrate" class="hidden"></div>
+  <div id="death" class="hidden"><div id="death-text"></div></div>
+  <div id="hotbar-wrap" class="hidden"><div id="weapon-name"></div><div id="hotbar"></div></div>
+  <div id="confirm" class="hidden"><div id="confirm-inner"><div id="confirm-text"></div><div><button class="btn" id="confirm-yes">버리기</button> <button class="btn ghost" id="confirm-no">취소</button></div></div></div>
+  <div id="toasts"></div>
+  <div id="help-hint" class="hidden">
+    <b>WASD</b> 이동 · <b>Space</b> 점프 · <b>클릭</b> 공격/사용 · <b>1~0</b> 핫바 · <b>E</b> 대화/입장/줍기 · <b>F</b> 차 · <b>Q</b> 버리기 · <b>I</b> 가방 · <b>M</b> 지도 · <b>R</b> 자동이동 · <b>C</b> 대쉬 · <b>Enter</b> 채팅
+  </div>
+
+  <!-- 플레이어 채팅 -->
+  <div id="pchat" class="hidden">
+    <div id="pchat-log"></div>
+    <input id="pchat-input" placeholder="모두에게 말하기... (Enter)" maxlength="120" autocomplete="off" />
+  </div>
+
+  <!-- 잠 -->
+  <div id="sleep" class="hidden"><div id="sleep-text"></div><button id="sleep-wake">☀️ 일어나기</button></div>
+
+  <!-- 대화창 -->
+  <div id="chat" class="hidden">
+    <div id="chat-head">
+      <div id="chat-avatar"></div>
+      <div id="chat-info">
+        <div id="chat-name"></div>
+        <div id="chat-sub"></div>
+        <div id="chat-affinity"><div id="chat-affinity-bar"></div></div>
+      </div>
+      <button id="chat-close" title="닫기 (Esc)">✕</button>
+    </div>
+    <div id="chat-profile"></div>
+    <div id="chat-log"></div>
+    <div id="chat-foot">
+      <select id="chat-gift" title="선물하기"><option value="">🎁 선물</option></select>
+      <input id="chat-input" placeholder="말을 걸어보세요... (Enter)" autocomplete="off" maxlength="200" />
+      <button id="chat-send">전송</button>
+    </div>
+  </div>
+
+  <!-- 휴대폰 메뉴 -->
+  <div id="phone" class="hidden">
+    <div id="phone-inner">
+      <div id="phone-tabs">
+        <button data-tab="citizens" class="active">👥 시민 도감</button>
+        <button data-tab="me">🪳 내 정보</button>
+        <button data-tab="map">🗺️ 지도</button>
+        <button data-tab="settings">⚙️ 설정</button>
+        <button data-tab="help">❓ 도움말</button>
+        <button id="phone-close">✕</button>
+      </div>
+      <div id="phone-body"></div>
+    </div>
+  </div>
+
+  <!-- 범용 모달 -->
+  <div id="modal" class="hidden"><div id="modal-inner"></div></div>
+
+  <!-- 시간 건너뛰기 연출 -->
+  <div id="fade" class="hidden"><div id="fade-text"></div><div id="fade-bar"><div></div></div></div>
+
+  <!-- 로딩 -->
+  <div id="loading" class="hidden"><div class="spinner">🪳</div><div id="loading-text">도시를 짓는 중...</div></div>
+
+  <!-- 시작 화면 -->
+  <div id="start">
+    <div id="start-card">
+      <div id="title">🪳 바퀴시티 <small>Roach City</small></div>
+      <p class="tagline">인간 도시와 똑같이 살아가는 바퀴벌레들의 도시에 새로 이사 온 당신!<br />동료들과 함께 일하고, 먹고, 이웃을 사귀며 바퀴 인생을 살아보세요.</p>
+      <div id="start-preview"></div>
+      <div class="form">
+        <label>이름 <input id="p-name" value="바퀴" maxlength="8" /></label>
+        <label>성별
+          <select id="p-gender"><option>여</option><option>남</option></select>
+        </label>
+        <label>나이 <input id="p-age" type="number" min="18" max="80" value="25" /></label>
+        <label>성격 <select id="p-personality"></select></label>
+        <div class="colors-label">몸 색깔</div>
+        <div id="p-colors"></div>
+        <label id="pw-row" class="hidden" style="grid-column: 1 / -1">🔒 입장 비밀번호 <input id="p-password" type="password" autocomplete="current-password" /></label>
+      </div>
+      <div id="start-error" class="hidden"></div>
+      <div id="llm-status"></div>
+      <button id="start-btn">바퀴시티로 이사하기 🏠</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

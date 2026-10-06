@@ -1,0 +1,232 @@
+:root {
+  --bg: #fff8ef;
+  --panel: rgba(255, 251, 245, 0.94);
+  --ink: #4a3428;
+  --ink-soft: #8a6f5f;
+  --accent: #ff8a65;
+  --accent-2: #7ec8a9;
+  --pink: #ff9fb2;
+  --line: rgba(74, 52, 40, 0.12);
+  --shadow: 0 8px 24px rgba(74, 52, 40, 0.18);
+  --radius: 18px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --panel: rgba(46, 36, 44, 0.94);
+    --ink: #fbeee4;
+    --ink-soft: #cdb7a8;
+    --line: rgba(255, 255, 255, 0.12);
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #bfe6ff; font-family: 'Gowun Dodum', 'Apple SD Gothic Neo', sans-serif; color: var(--ink); }
+canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+.hidden { display: none !important; }
+button { font-family: 'Jua', sans-serif; cursor: pointer; }
+.card { background: var(--panel); border-radius: var(--radius); box-shadow: var(--shadow); padding: 10px 14px; }
+
+/* HUD */
+#hud { position: fixed; top: 14px; left: 14px; display: flex; flex-direction: column; gap: 8px; width: 230px; pointer-events: none; }
+#clock-day { font-family: 'Jua'; font-size: 14px; color: var(--ink-soft); }
+#clock-time { font-family: 'Jua'; font-size: 28px; line-height: 1.1; }
+#money-row { font-size: 14px; margin-top: 2px; }
+#money { font-family: 'Jua'; color: #e67e22; font-size: 16px; }
+#online { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+.need { display: grid; grid-template-columns: 22px 46px 1fr; align-items: center; gap: 4px; font-size: 12px; margin: 3px 0; }
+.need .bar { height: 9px; background: var(--line); border-radius: 6px; overflow: hidden; }
+.need .bar > div { height: 100%; border-radius: 6px; transition: width .3s; }
+
+#minimap-wrap { position: fixed; top: 14px; right: 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+#minimap { width: 200px; height: 200px; border-radius: 50%; border: 5px solid #fff; box-shadow: var(--shadow); background: #9fd38a; }
+#location-label { background: var(--panel); padding: 4px 12px; border-radius: 12px; font-family: 'Jua'; font-size: 14px; box-shadow: var(--shadow); max-width: 220px; text-align: center; }
+
+#prompt { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); background: var(--panel); padding: 10px 18px; border-radius: 16px; box-shadow: var(--shadow); font-family: 'Jua'; font-size: 17px; display: flex; flex-direction: column; gap: 4px; align-items: center; }
+#prompt .key { display: inline-block; background: var(--accent); color: #fff; border-radius: 6px; padding: 0 7px; margin-right: 6px; }
+#prompt .row { display: flex; align-items: center; }
+#help-hint { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.35); color: #fff; padding: 6px 14px; border-radius: 12px; font-size: 13px; white-space: nowrap; }
+
+#toasts { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; z-index: 30; }
+.toast { background: var(--panel); padding: 8px 16px; border-radius: 14px; box-shadow: var(--shadow); font-family: 'Jua'; animation: pop .25s ease-out; }
+@keyframes pop { from { transform: scale(.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* 이름표 & 말풍선 */
+#labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.tag { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font-family: 'Jua'; font-size: 13px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.6); text-align: center; }
+.tag small { display: block; font-family: 'Gowun Dodum'; font-size: 11px; opacity: .9; }
+.bubble { position: absolute; transform: translate(-50%, -100%); background: #fff; color: #4a3428; padding: 6px 11px; border-radius: 14px; font-size: 13px; max-width: 220px; box-shadow: 0 3px 8px rgba(0,0,0,.2); animation: pop .2s ease-out; text-align: center; }
+.bubble::after { content: ''; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: #fff; border-bottom: 0; }
+
+/* 대화창 */
+#chat { position: fixed; right: 14px; bottom: 14px; top: 260px; width: min(400px, calc(100vw - 28px)); background: var(--panel); border-radius: 22px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; z-index: 20; }
+#chat-head { display: flex; gap: 10px; padding: 12px; align-items: center; border-bottom: 1px solid var(--line); }
+#chat-avatar { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; font-size: 30px; flex-shrink: 0; border: 3px solid #fff; box-shadow: var(--shadow); }
+#chat-info { flex: 1; min-width: 0; }
+#chat-name { font-family: 'Jua'; font-size: 19px; }
+#chat-sub { font-size: 12px; color: var(--ink-soft); }
+#chat-affinity { height: 7px; background: var(--line); border-radius: 5px; margin-top: 5px; overflow: hidden; }
+#chat-affinity-bar { height: 100%; background: linear-gradient(90deg, #ffb3c1, #ff4f81); width: 30%; transition: width .4s; }
+#chat-close { background: none; border: 0; font-size: 20px; color: var(--ink-soft); }
+#chat-profile { font-size: 12px; padding: 8px 14px; color: var(--ink-soft); border-bottom: 1px solid var(--line); line-height: 1.55; max-height: 120px; overflow: auto; }
+#chat-profile b { color: var(--ink); }
+#chat-log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.msg { max-width: 82%; padding: 8px 12px; border-radius: 16px; font-size: 14px; line-height: 1.45; }
+.msg.npc { background: #fff; color: #4a3428; align-self: flex-start; border-bottom-left-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+.msg.me { background: var(--accent); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+.msg.sys { align-self: center; font-size: 12px; color: var(--ink-soft); background: none; padding: 2px; }
+.msg.typing { opacity: .7; }
+#chat-foot { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--line); }
+#chat-input { flex: 1; min-width: 0; border: 2px solid var(--line); border-radius: 14px; padding: 8px 12px; font-family: inherit; font-size: 14px; background: #fff; color: #4a3428; }
+#chat-send { background: var(--accent); color: #fff; border: 0; border-radius: 14px; padding: 0 14px; font-size: 15px; }
+#chat-gift { border: 2px solid var(--line); border-radius: 14px; font-family: inherit; max-width: 84px; background: #fff; color: #4a3428; }
+
+/* 휴대폰 */
+#phone, #modal { position: fixed; inset: 0; background: rgba(40, 25, 20, .35); display: grid; place-items: center; z-index: 40; }
+#phone-inner, #modal-inner { background: var(--panel); border-radius: 26px; box-shadow: var(--shadow); width: min(860px, calc(100vw - 32px)); height: min(640px, calc(100vh - 32px)); display: flex; flex-direction: column; overflow: hidden; }
+#modal-inner { height: auto; max-height: calc(100vh - 32px); width: min(560px, calc(100vw - 32px)); padding: 20px; overflow: auto; }
+#phone-tabs { display: flex; gap: 6px; padding: 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+#phone-tabs button { border: 0; background: var(--line); color: var(--ink); padding: 8px 14px; border-radius: 12px; font-size: 15px; }
+#phone-tabs button.active { background: var(--accent); color: #fff; }
+#phone-close { margin-left: auto; }
+#phone-body { flex: 1; overflow: auto; padding: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.cit { background: rgba(255,255,255,.6); border-radius: 14px; padding: 10px; display: flex; gap: 10px; align-items: center; cursor: pointer; border: 2px solid transparent; }
+.cit:hover { border-color: var(--accent); }
+.cit .av { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; flex-shrink: 0; }
+.cit .nm { font-family: 'Jua'; font-size: 15px; }
+.cit .sb { font-size: 12px; color: var(--ink-soft); }
+.search { width: 100%; padding: 10px 14px; border-radius: 14px; border: 2px solid var(--line); font-family: inherit; font-size: 15px; margin-bottom: 10px; background: #fff; color: #4a3428; }
+.profile-big { line-height: 1.8; }
+.profile-big h3 { font-family: 'Jua'; margin: 0 0 6px; font-size: 22px; }
+.btn { background: var(--accent); color: #fff; border: 0; border-radius: 12px; padding: 8px 14px; font-size: 15px; margin: 4px 4px 0 0; }
+.btn.ghost { background: var(--line); color: var(--ink); }
+.set-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.set-row input[type=text], .set-row input[type=password], .set-row select { padding: 9px 12px; border-radius: 12px; border: 2px solid var(--line); font-family: inherit; font-size: 14px; background: #fff; color: #4a3428; }
+.job-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; }
+.job { background: rgba(255,255,255,.6); border-radius: 12px; padding: 8px; cursor: pointer; border: 2px solid transparent; font-size: 13px; }
+.job:hover { border-color: var(--accent); }
+.job b { font-family: 'Jua'; font-size: 15px; display: block; }
+#bigmap { width: 100%; max-width: 560px; aspect-ratio: 1; border-radius: 16px; display: block; margin: 0 auto; }
+
+/* 시간 건너뛰기 */
+#fade { position: fixed; inset: 0; background: rgba(30, 20, 40, .82); display: grid; place-content: center; gap: 14px; z-index: 50; color: #fff; text-align: center; }
+#fade-text { font-family: 'Jua'; font-size: 28px; }
+#fade-bar { width: 260px; height: 10px; background: rgba(255,255,255,.2); border-radius: 6px; overflow: hidden; margin: 0 auto; }
+#fade-bar > div { height: 100%; width: 0; background: var(--pink); }
+
+/* 로딩 */
+#loading { position: fixed; inset: 0; background: #ffe9d6; display: grid; place-content: center; text-align: center; z-index: 60; font-family: 'Jua'; font-size: 20px; color: #4a3428; }
+.spinner { font-size: 64px; animation: wiggle .6s infinite alternate ease-in-out; }
+@keyframes wiggle { from { transform: rotate(-12deg) translateX(-8px); } to { transform: rotate(12deg) translateX(8px); } }
+
+/* 시작 화면 */
+#start { position: fixed; inset: 0; background: radial-gradient(circle at 30% 20%, #ffe0ec, #ffd8b8 50%, #c9ecff); display: grid; place-items: center; z-index: 70; overflow: auto; padding: 16px; }
+#start-card { background: rgba(255, 252, 248, .95); color: #4a3428; border-radius: 30px; box-shadow: 0 20px 50px rgba(120, 60, 40, .25); padding: 26px 30px; width: min(520px, 100%); text-align: center; }
+#title { font-family: 'Jua'; font-size: 44px; }
+#title small { font-size: 18px; color: #b0806a; display: block; margin-top: -4px; }
+.tagline { font-size: 14px; color: #8a6f5f; line-height: 1.6; }
+#start-preview { height: 160px; }
+.form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; text-align: left; margin: 10px 0; }
+.form label { display: flex; flex-direction: column; font-family: 'Jua'; font-size: 14px; gap: 4px; }
+.form input, .form select { padding: 8px 10px; border-radius: 12px; border: 2px solid rgba(74,52,40,.15); font-family: 'Gowun Dodum'; font-size: 15px; background: #fff; color: #4a3428; }
+.colors-label { grid-column: 1 / -1; font-family: 'Jua'; font-size: 14px; }
+#p-colors { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
+.swatch { width: 32px; height: 32px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.2); cursor: pointer; }
+.swatch.sel { outline: 3px solid #ff8a65; }
+#llm-status { font-size: 13px; margin: 8px 0 12px; padding: 8px; border-radius: 12px; background: #fff3e0; }
+#start-btn { background: linear-gradient(135deg, #ff8a65, #ff6f91); color: #fff; border: 0; border-radius: 18px; padding: 14px 26px; font-size: 21px; box-shadow: 0 6px 16px rgba(255, 111, 145, .4); }
+#start-btn:hover { transform: translateY(-1px); }
+
+@media (max-width: 700px) {
+  #hud { width: 180px; }
+  #minimap { width: 130px; height: 130px; }
+  #help-hint { display: none; }
+  #chat { top: auto; height: 60vh; }
+}
+
+/* 멀티플레이 */
+.tag.player { color: #e1d4ff; }
+.bubble.player { background: #ede4ff; }
+.bubble.player::after { border-top-color: #ede4ff; }
+#pchat { position: fixed; left: 14px; bottom: 54px; width: min(360px, calc(100vw - 28px)); display: flex; flex-direction: column; gap: 6px; pointer-events: none; z-index: 15; }
+#pchat:not(.hidden) { display: flex; }
+#pchat-log { max-height: 180px; overflow: hidden; display: flex; flex-direction: column; gap: 3px; }
+.pline { background: rgba(30, 20, 40, .55); color: #fff; padding: 4px 10px; border-radius: 10px; font-size: 13px; align-self: flex-start; max-width: 100%; word-break: break-all; animation: pop .2s ease-out; }
+.pline.me { background: rgba(255, 111, 145, .7); }
+.pline.sys { background: rgba(0, 0, 0, .35); font-size: 12px; opacity: .85; }
+#pchat-input { display: none; pointer-events: auto; border: 2px solid var(--accent); border-radius: 12px; padding: 8px 12px; font-family: inherit; font-size: 14px; background: #fff; color: #4a3428; }
+#pchat.open #pchat-input { display: block; }
+#sleep { position: fixed; inset: 0; background: rgba(20, 15, 45, .78); color: #fff; display: grid; place-content: center; gap: 16px; text-align: center; z-index: 45; font-family: 'Jua'; font-size: 24px; }
+#sleep.hidden { display: none; }
+#sleep small { font-family: 'Gowun Dodum'; font-size: 15px; opacity: .85; }
+#sleep-wake { background: #ffd54f; color: #4a3428; border: 0; border-radius: 14px; padding: 10px 20px; font-size: 18px; margin: 0 auto; }
+#start-error { margin: 0 0 10px; padding: 8px; border-radius: 12px; background: #ffe0e0; color: #c62828; font-size: 14px; }
+
+/* 전투 · 인벤토리 */
+#charm { font-size: 12px; color: #c2185b; margin-top: 2px; }
+#stars { font-size: 20px; color: #ffd600; text-shadow: 0 1px 2px rgba(0,0,0,.5); letter-spacing: 1px; }
+.need.hp b { font-family: 'Jua'; }
+#hotbar-wrap { position: fixed; bottom: 46px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 12; }
+#hotbar-wrap.hidden { display: none; }
+#weapon-name { font-family: 'Jua'; font-size: 14px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+#hotbar { display: flex; gap: 4px; }
+#hotbar .slot { width: 46px; height: 46px; border-radius: 12px; background: rgba(30, 20, 40, .55); border: 2px solid rgba(255,255,255,.25); position: relative; display: grid; place-items: center; cursor: pointer; }
+#hotbar .slot.sel { border-color: #ffd54f; background: rgba(255, 213, 79, .3); transform: translateY(-3px); }
+#hotbar .ic { font-size: 24px; }
+#hotbar .num { position: absolute; top: 1px; left: 4px; font-size: 10px; color: #fff; opacity: .8; }
+#hotbar .cnt { position: absolute; bottom: 1px; right: 4px; font-size: 11px; color: #fff; font-weight: bold; }
+#hotbar .gem { position: absolute; top: 1px; right: 4px; font-size: 10px; color: #e040fb; }
+#prompt { bottom: 112px; }
+#crosshair { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 26px; text-shadow: 0 0 3px #000; pointer-events: none; z-index: 11; }
+#hurt { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px rgba(255, 0, 0, 0); z-index: 9; }
+#hurt.on { animation: hurt .5s ease-out; }
+@keyframes hurt { from { box-shadow: inset 0 0 140px rgba(255, 0, 0, .75); } to { box-shadow: inset 0 0 140px rgba(255, 0, 0, 0); } }
+#death { position: fixed; inset: 0; background: rgba(60, 0, 10, .55); display: grid; place-content: center; text-align: center; color: #fff; font-family: 'Jua'; font-size: 34px; z-index: 44; }
+#death.hidden { display: none; }
+#death small { font-family: 'Gowun Dodum'; font-size: 16px; }
+#course { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); background: rgba(30, 20, 40, .75); color: #ffd54f; padding: 8px 18px; border-radius: 14px; font-family: 'Jua'; font-size: 18px; z-index: 12; }
+#celebrate { position: fixed; top: 30%; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #ffd54f, #ff8a65); color: #4a3428; padding: 18px 30px; border-radius: 24px; text-align: center; font-family: 'Jua'; font-size: 30px; box-shadow: var(--shadow); z-index: 46; animation: pop .3s ease-out; }
+#celebrate small { display: block; font-family: 'Gowun Dodum'; font-size: 15px; }
+#confirm { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: grid; place-items: center; z-index: 80; }
+#confirm.hidden { display: none; }
+#confirm-inner { background: var(--panel); padding: 20px 26px; border-radius: 20px; text-align: center; font-family: 'Jua'; font-size: 18px; box-shadow: var(--shadow); line-height: 1.6; }
+#confirm-inner small { font-family: 'Gowun Dodum'; font-size: 13px; color: var(--ink-soft); }
+.floatnum { position: absolute; transform: translate(-50%, -100%); font-family: 'Jua'; font-size: 20px; text-shadow: 0 1px 3px #000; animation: floatup .9s ease-out forwards; pointer-events: none; }
+@keyframes floatup { from { opacity: 1; margin-top: 0; } to { opacity: 0; margin-top: -40px; } }
+.hpbar { width: 50px; height: 5px; background: rgba(0,0,0,.4); border-radius: 3px; margin: 2px auto 0; overflow: hidden; }
+.hpbar > div { height: 100%; background: #69f0ae; }
+.hpbar.enemy > div { background: #ff5252; }
+.tag.enemy { color: #ffcdd2; }
+#modal-inner.wide { width: min(900px, calc(100vw - 32px)); }
+#worldmap { width: 100%; max-height: 62vh; aspect-ratio: 1; object-fit: contain; border-radius: 14px; cursor: crosshair; display: block; margin: 6px auto; }
+.mh { font-family: 'Jua'; margin: 0 0 8px; font-size: 22px; }
+.mh small { font-family: 'Gowun Dodum'; font-size: 13px; color: var(--ink-soft); margin-left: 6px; }
+.money-line { font-size: 14px; margin: 4px 0 10px; }
+.shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.shop-item { background: rgba(255,255,255,.6); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 4px; align-items: center; text-align: center; }
+.shop-item .ic { font-size: 32px; }
+.shop-item b { font-family: 'Jua'; font-size: 15px; }
+.shop-item small { font-size: 11px; color: var(--ink-soft); min-height: 28px; }
+.btn.mini { padding: 5px 10px; font-size: 13px; margin: 0; }
+select.mini { padding: 4px; border-radius: 8px; border: 2px solid var(--line); font-family: inherit; font-size: 12px; background: #fff; color: #4a3428; }
+.itemlist { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; }
+.item { display: flex; gap: 10px; align-items: center; background: rgba(255,255,255,.55); border-radius: 12px; padding: 8px 10px; }
+.item .ic { font-size: 28px; width: 36px; text-align: center; }
+.item .info { flex: 1; min-width: 0; }
+.item .info b { font-family: 'Jua'; font-size: 15px; display: block; }
+.item .info small { font-size: 12px; color: var(--ink-soft); }
+.item .acts { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.badge { background: #ffd54f; color: #4a3428; border-radius: 6px; padding: 0 5px; font-size: 11px; }
+.eqrow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+.eq { background: rgba(255,255,255,.55); border-radius: 12px; padding: 6px 8px; font-size: 12px; color: var(--ink-soft); }
+.eq b { display: block; font-family: 'Jua'; color: var(--ink); font-size: 13px; }
+.skills { font-size: 13px; margin-bottom: 8px; }
+.ench { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pick { background: rgba(255,255,255,.55); border-radius: 10px; padding: 6px 8px; margin-top: 6px; cursor: pointer; border: 2px solid transparent; font-size: 14px; }
+.pick.on { border-color: var(--accent); }
+.pick small { display: block; font-size: 11px; color: var(--ink-soft); }
+.npc-needs { margin-top: 6px; }
+@media (max-width: 700px) { #hotbar .slot { width: 32px; height: 32px; } #hotbar .ic { font-size: 18px; } .ench, .eqrow { grid-template-columns: 1fr 1fr; } }
+.shop-item, .item, .eq, .pick, .cit { color: #4a3428; }
+.shop-item small, .item .info small, .pick small, .eq { color: #7a5f50; }
+.eq b { color: #4a3428; }

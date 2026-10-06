@@ -1,0 +1,26 @@
+# 비밀 값 (API 키, 비밀번호) — 절대 커밋하지 않기
+.env
+.env.*
+!.env.example
+
+# 의존성
+node_modules/
+
+# 게임 세계 저장 데이터 (플레이어 계정, 친밀도, 대화 기억)
+data/
+*.tmp
+
+# 로그
+*.log
+npm-debug.log*
+
+# OS / 에디터
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# 배포 도구가 만드는 로컬 파일
+.fly/
+.render/

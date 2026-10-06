@@ -1,0 +1,40 @@
+# main 브랜치에 push 하면: 검사 → Fly.io 실서버에 자동 배포
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 문법 검사
+        run: for f in server/*.js public/js/*.js; do node --check "$f"; done
+      - name: 서버 기동 테스트
+        run: |
+          PORT=8123 DATA_DIR=/tmp/rc node server/index.js &
+          for i in $(seq 1 30); do curl -sf localhost:8123/healthz && break; sleep 1; done
+          curl -sf localhost:8123/api/status
+          curl -sf localhost:8123/ > /dev/null
+
+  deploy:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

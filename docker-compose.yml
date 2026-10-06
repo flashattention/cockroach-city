@@ -1,0 +1,16 @@
+# 로컬 실행: docker compose up --build  →  http://localhost:8000
+services:
+  roach-city:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # 셸에 설정된 값이 있으면 그대로 넘김 (.env 파일 값도 사용)
+      - OPENAI_API_KEY
+      - GAME_PASSWORD
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

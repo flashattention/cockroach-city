@@ -1,0 +1,22 @@
+# Render 블루프린트 (GitHub 저장소를 연결해서 사용)
+services:
+  - type: web
+    name: roach-city
+    runtime: docker
+    plan: starter        # free 플랜은 15분 동안 접속이 없으면 잠들고, 디스크가 없어 저장이 초기화돼요
+    healthCheckPath: /healthz
+    autoDeploy: true     # GitHub main 브랜치에 push 하면 자동 배포
+    numInstances: 1
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GAME_PASSWORD
+        sync: false
+      - key: DATA_DIR
+        value: /data
+      - key: STREET_CHAT_PER_MIN
+        value: "6"
+    disk:
+      name: roach-data
+      mountPath: /data
+      sizeGB: 1

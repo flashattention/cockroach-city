@@ -1,0 +1,15 @@
+{
+  "name": "roach-city",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "바퀴시티 - 바퀴벌레들의 3D 멀티플레이 라이프 시뮬레이션",
+  "scripts": {
+    "start": "node server/index.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "three": "0.169.0",
+    "ws": "^8.18.0"
+  }
+}
