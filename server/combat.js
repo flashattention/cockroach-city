@@ -1,9 +1,11 @@
 // 전투 · 현상수배 · 경찰/군대 · 바닥 아이템
 import * as THREE from 'three';
 import { HALF } from '../public/js/config.js';
-import { weaponStats, damageTaken, itemDef } from '../public/js/items.js';
+import { weaponStats, damageTaken, itemDef, RARITY, DROP_POOL, TEMP_MINUTES } from '../public/js/items.js';
 import { randomStreetPoint } from '../public/js/citizens.js';
 import { RNG } from '../public/js/utils.js';
+import { levelStats } from '../public/js/level.js';
+import { AI_CARS } from '../public/js/traffic.js';
 
 export const UNIT = {
   cop: { name: '경찰', hp: 120, speed: 6.5, range: 22, rate: 1.1, dmg: 7, acc: 0.65, def: 10 },
@@ -33,7 +35,7 @@ export class Combat {
     this.nextGround = 1;
     this.rng = new RNG(4242);
     // 서버용 건물 충돌 박스 (유닛 이동)
-    this.boxes = world.buildings.filter((b) => b.type !== 'park').map((b) => ({ minX: b.x - b.w / 2, maxX: b.x + b.w / 2, minZ: b.z - b.d / 2, maxZ: b.z + b.d / 2 }));
+    this.boxes = world.buildings.filter((b) => b.type !== 'park').map((b) => ({ minX: b.x - b.w / 2, maxX: b.x + b.w / 2, minZ: b.z - b.d / 2, maxZ: b.z + b.d / 2, h: b.floors * 3.4 + 4 }));
     world.sim.onNpcAttack = (c, pid, dmg) => {
       const p = world.players.get(pid);
       if (p) this.damagePlayer(p, dmg, { name: c.name }, this.npcPos(c));
@@ -47,8 +49,11 @@ export class Combat {
     const stats = weaponStats(msg.w, Array.isArray(msg.gems) ? msg.gems.slice(0, 3) : []);
     if (!stats.dmg) return;
     const pellets = Math.max(1, Math.min(10, msg.n || 1));
-    let dmg = stats.dmg * pellets;
-    const crit = this.rng.chance(stats.crit);
+    const lv = levelStats(p.profile.level || 1);
+    // 활은 당긴 만큼 세게, 레벨이 높을수록 강하게
+    const pw = stats.kind === 'arrow' && !stats.auto ? Math.max(0.25, Math.min(1.2, +msg.pw || 1)) : 1;
+    let dmg = stats.dmg * pellets * pw * lv.dmg;
+    const crit = this.rng.chance(stats.crit + lv.crit);
     if (crit) dmg *= 2;
     const maxDist = stats.range + 4;
     if (msg.tt === 'npc') {
@@ -57,11 +62,12 @@ export class Combat {
       const src = this.npcPos(c);
       if (!src || src.distanceTo(p.pos) > maxDist) return;
       this.damageNpc(c, dmg, p, crit, stats);
+      this.elementOnNpc(c, stats, p);
     } else if (msg.tt === 'player') {
       const v = this.w.players.get(msg.id);
       if (!v || v === p || v.dead || v.loc !== p.loc || v.pos.distanceTo(p.pos) > maxDist) return;
       this.damagePlayer(v, damageTaken(dmg, v.profile.def || 0, stats.pierce), p, p.pos, crit);
-      this.addHeat(p, HEAT.hitPlayer);
+      this.elementOnPlayer(v, stats, p);
       this.lifesteal(p, dmg, stats);
     } else if (msg.tt === 'unit') {
       const u = this.units.find((x) => x.id === msg.id);
@@ -74,6 +80,34 @@ export class Combat {
     }
   }
 
+  // 마법 속성 효과
+  elementOnNpc(c, stats, p) {
+    if (c.mode === 'dead') return;
+    if (stats.element === 'ice') c.slowT = 2.5;
+    if (stats.element === 'poison' && stats.poisonDmg) this.poison(c, stats.poisonDmg, p);
+    if (stats.element === 'wind') {
+      const pos = this.npcPos(c);
+      const dx = pos.x - p.pos.x, dz = pos.z - p.pos.z, d = Math.hypot(dx, dz) || 1;
+      pos.x += (dx / d) * 4; pos.z += (dz / d) * 4;
+      if (pos === c.pos) this.w.sim.pushOut(c.pos);
+    }
+  }
+  elementOnPlayer(v, stats, p) {
+    if (stats.element === 'ice') this.w.send(v, { t: 'slow', s: 2.5 });
+    if (stats.element === 'wind') { const dx = v.pos.x - p.pos.x, dz = v.pos.z - p.pos.z, d = Math.hypot(dx, dz) || 1; this.w.send(v, { t: 'knock', x: (dx / d) * 9, z: (dz / d) * 9, up: 6, wind: true }); }
+    if (stats.element === 'poison' && stats.poisonDmg) {
+      let n = 0;
+      const iv = setInterval(() => { if (++n > 4 || v.dead || !this.w.players.has(v.id)) { clearInterval(iv); return; } this.damagePlayer(v, stats.poisonDmg, p, null); }, 1000);
+    }
+  }
+  // 빛의 지팡이: 나와 주변 플레이어 회복
+  holy(p, msg) {
+    const d = itemDef(msg.w);
+    if (d.element !== 'holy' || Date.now() - (p.lastHoly || 0) < 1500) return;
+    p.lastHoly = Date.now();
+    for (const v of this.w.players.values()) if (v.loc === p.loc && v.pos.distanceTo(p.pos) < d.range) this.healPlayer(v, d.heal);
+  }
+
   lifesteal(p, dmg, stats) {
     if (stats.lifesteal > 0) this.healPlayer(p, dmg * stats.lifesteal);
   }
@@ -83,7 +117,7 @@ export class Combat {
     return c.pos;
   }
 
-  damageNpc(c, dmg, attacker, crit = false, stats = null) {
+  damageNpc(c, dmg, attacker, crit = false, stats = null, reason = null) {
     const r = this.w.sim.damage(c, dmg, attacker ? { id: attacker.id, name: attacker.name, pos: attacker.pos, loc: attacker.loc, token: attacker.token } : null);
     if (r.ignored) return;
     const pos = this.npcPos(c);
@@ -94,7 +128,7 @@ export class Combat {
     const tok = attacker.token;
     this.w.setAff(c, tok, this.w.aff(c, tok) - (r.died ? 30 : 8));
     this.w.send(attacker, { t: 'aff', npc: c.id, v: this.w.aff(c, tok) });
-    this.addHeat(attacker, r.died ? HEAT.killNpc : HEAT.hitNpc);
+    // 경찰은 시민이 신고해야만 온다 (피해자 원한 → 112 신고). 죽으면 목격자가 신고
     if (r.died) {
       this.w.addMemory(c, attacker, `${attacker.name}에게 공격당해 쓰러진 적이 있다. 무섭고 화가 난다`);
       // 쓰러진 시민은 현금을 떨어뜨린다
@@ -105,7 +139,10 @@ export class Combat {
     for (const o of this.w.sim.citizens) {
       if (o === c || o.mode === 'dead' || o.mode === 'fight') continue;
       if (this.locOf(o) !== this.locOf(c)) continue;
-      if (this.npcPos(o).distanceTo(pos) < 12 && this.rng.chance(0.7)) this.w.sim.flee(o, attacker.pos, this.rng.chance(0.4));
+      if (this.npcPos(o).distanceTo(pos) < 12 && this.rng.chance(0.7)) {
+        this.w.sim.flee(o, attacker.pos, this.rng.chance(0.4));
+        if (r.died) this.w.sim.addGrudge(o, { token: attacker.token, name: attacker.name }, 60, '살인 목격');
+      }
     }
   }
 
@@ -126,6 +163,8 @@ export class Combat {
     if (v.dead || dmg <= 0) return;
     v.hp -= dmg;
     v.lastHurt = Date.now();
+    // 플레이어에게 당하면 112 신고할 수 있도록 기록
+    if (attacker?.token && attacker !== v) { (v.attackers ||= new Map()).set(attacker.token, { name: attacker.name, t: Date.now(), reason: v.hp <= 0 ? '살인' : '폭행' }); this.w.send(v, { t: 'canReport', list: this.reportable(v) }); }
     this.w.send(v, { t: 'dmg', v: Math.round(dmg), hp: Math.max(0, Math.round(v.hp)), from: fromPos ? [fromPos.x, fromPos.y, fromPos.z] : null, by: attacker?.name || '' });
     this.w.broadcast({ t: 'fx', k: 'dmgnum', p: [v.pos.x, v.pos.y + 2.2, v.pos.z], v: Math.round(dmg), crit, loc: v.loc, pid: v.id });
     if (v.hp <= 0) this.killPlayer(v, attacker);
@@ -144,7 +183,13 @@ export class Combat {
     this.units = this.units.filter((u) => u.target !== v.id);
     this.w.send(v, { t: 'dead', by: attacker?.name || '', wanted: 0 });
     this.w.broadcast({ t: 'sys', text: `💀 ${v.name}님이 ${attacker?.name ? attacker.name + '에게 ' : ''}쓰러졌어요` });
-    if (attacker && attacker.token && attacker !== v) this.addHeat(attacker, HEAT.killPlayer);
+    if (attacker?.token && attacker !== v) {
+      v.attackers?.set(attacker.token, { name: attacker.name, t: Date.now(), reason: '살인' });
+      this.w.send(v, { t: 'canReport', list: this.reportable(v) });
+      // 플레이어를 쓰러뜨리면 경험치 (상대 레벨이 높을수록 많이)
+      const killer = this.w.players.get(attacker.id);
+      if (killer) this.w.send(killer, { t: 'xp', v: 80 + 15 * (v.profile.level || 1), reason: `${v.name} 쓰러뜨림` });
+    }
     setTimeout(() => {
       v.dead = false; v.hp = v.maxHp;
       this.w.send(v, { t: 'respawn', hp: v.hp, homeId: this.w.accounts[v.token]?.homeId ?? null });
@@ -154,11 +199,11 @@ export class Combat {
   damageUnit(u, dmg, attacker, crit = false) {
     u.hp -= dmg;
     this.w.broadcast({ t: 'fx', k: 'dmgnum', p: [u.pos.x, u.pos.y + 2.5, u.pos.z], v: Math.round(dmg), crit, loc: u.loc });
-    if (attacker) this.addHeat(attacker, HEAT.hitUnit);
+    if (attacker) this.addHeat(attacker, HEAT.hitUnit, '공무집행 방해');
     if (u.hp <= 0) {
       this.units = this.units.filter((x) => x !== u);
       this.w.broadcast({ t: 'fx', k: 'boom', p: [u.pos.x, u.pos.y + 1, u.pos.z], r: u.kind === 'tank' || u.kind === 'heli' ? 6 : 1.5, loc: u.loc, small: u.kind === 'cop' || u.kind === 'soldier' });
-      if (attacker) this.addHeat(attacker, HEAT.killUnit);
+      if (attacker) this.addHeat(attacker, HEAT.killUnit, '경찰·군인 공격');
     }
   }
 
@@ -171,7 +216,6 @@ export class Combat {
     for (const p of this.w.players.values()) {
       if (p.car === car.id) { p.car = -1; car.owner = null; this.w.send(p, { t: 'carGone' }); this.damagePlayer(p, 45, attacker, car.pos); }
     }
-    if (car.occ > 0 && attacker?.token) this.addHeat(attacker, HEAT.killNpc);
     car.occ = 0;
   }
 
@@ -183,11 +227,11 @@ export class Combat {
     const center = new THREE.Vector3(+msg.x, +msg.y, +msg.z);
     if (p && center.distanceTo(p.pos) > (stats.range || 60) + 20) return;
     const R = msg.vehicle ? (msg.vehicle === 'tank' ? 5 : 4.5) : def.radius;
-    const base = msg.vehicle ? (msg.vehicle === 'tank' ? 85 : 70) : stats.dmg;
+    const base = (msg.vehicle ? (msg.vehicle === 'tank' ? 85 : 70) : stats.dmg) * (p ? levelStats(p.profile.level || 1).dmg : 1);
     this.explodeAt(center, Number.isInteger(msg.loc) ? msg.loc : -1, R, base, p, stats);
   }
 
-  explodeAt(center, loc, R, base, attacker, stats = {}) {
+  explodeAt(center, loc, R, base, attacker, stats = {}, onlyPlayer = null) {
     this.w.broadcast({ t: 'fx', k: 'boom', p: [center.x, center.y, center.z], r: R, loc });
     const fall = (d) => Math.max(0, 1 - d / R);
     for (const c of this.w.sim.citizens) {
@@ -196,11 +240,11 @@ export class Combat {
       if (d < R) this.damageNpc(c, base * (0.4 + 0.6 * fall(d)), attacker, false, stats);
     }
     for (const v of this.w.players.values()) {
-      if (v.dead || v.loc !== loc) continue;
+      if (v.dead || v.loc !== loc || (onlyPlayer && v !== onlyPlayer)) continue;
+      if (v === attacker && stats.kind === 'magic') continue; // 내 마법에 나는 안 다친다
       const d = v.pos.distanceTo(center);
       if (d < R) {
         this.damagePlayer(v, damageTaken(base * (0.4 + 0.6 * fall(d)), v.profile.def || 0, stats.pierce || 0), attacker, center);
-        if (attacker && v !== attacker && attacker.token) this.addHeat(attacker, HEAT.hitPlayer);
       }
     }
     for (const u of [...this.units]) {
@@ -214,11 +258,25 @@ export class Combat {
     }
   }
 
+  // 최근 10분 동안 나를 공격한 플레이어 (112 신고 대상)
+  reportable(v) {
+    const now = Date.now(), out = [];
+    for (const [token, a] of v.attackers || []) if (now - a.t < 600000) out.push({ token, name: a.name, reason: a.reason });
+    return out;
+  }
+  report112(v, token) {
+    const a = v.attackers?.get(token);
+    if (!a || Date.now() - a.t > 600000) return;
+    v.attackers.delete(token);
+    this.w.handlePlayerReport(v, { token, name: a.name, reason: a.reason });
+  }
+
   // ---------------- 현상수배 ----------------
-  addHeat(p, v) {
+  addHeat(p, v, reason = '') {
     if (!p || !p.token || p.dead) return;
     p.heat = Math.min(420, (p.heat || 0) + v);
     p.lastCrime = Date.now();
+    if (reason) p.crimeReason = reason;
     this.updateStars(p);
   }
   updateStars(p) {
@@ -227,9 +285,10 @@ export class Combat {
     if (s !== p.stars) {
       const up = s > (p.stars || 0);
       p.stars = s;
-      this.w.send(p, { t: 'wanted', stars: s });
+      this.w.send(p, { t: 'wanted', stars: s, reason: up ? p.crimeReason || '' : '' });
       if (up && s >= 4) this.w.broadcast({ t: 'sys', text: `🚨 ${p.name}님을 진압하기 위해 군대가 출동했습니다!` });
-      else if (up && s === 1) this.w.send(p, { t: 'sys', text: '🚓 경찰에 신고가 들어갔어요!' });
+      else if (up) this.w.send(p, { t: 'sys', text: `🚓 수배 ★${s} — 사유: ${p.crimeReason || '범죄'}` });
+      else if (s === 0) this.w.send(p, { t: 'sys', text: '😮‍💨 수배가 풀렸어요' });
     }
   }
 
@@ -250,6 +309,23 @@ export class Combat {
 
   blocked(pos, r) {
     for (const b of this.boxes) if (pos.x > b.minX - r && pos.x < b.maxX + r && pos.z > b.minZ - r && pos.z < b.maxZ + r) return true;
+    return false;
+  }
+
+  // 두 점 사이를 건물이 막는지 (선분-상자 교차)
+  segBlocked(a, b) {
+    const d = b.clone().sub(a);
+    for (const box of this.boxes) {
+      let t0 = 0, t1 = 1, hit = true;
+      for (const [k, mn, mx] of [['x', box.minX, box.maxX], ['y', -1, box.h], ['z', box.minZ, box.maxZ]]) {
+        if (Math.abs(d[k]) < 1e-9) { if (a[k] < mn || a[k] > mx) { hit = false; break; } continue; }
+        let u0 = (mn - a[k]) / d[k], u1 = (mx - a[k]) / d[k];
+        if (u0 > u1) [u0, u1] = [u1, u0];
+        t0 = Math.max(t0, u0); t1 = Math.min(t1, u1);
+        if (t0 > t1) { hit = false; break; }
+      }
+      if (hit) return true;
+    }
     return false;
   }
 
@@ -285,6 +361,8 @@ export class Combat {
       for (const k of Object.keys(have)) if ((need[k] || 0) < have[k]) { const u = this.units.find((x) => x.target === p.id && x.kind === k); this.units = this.units.filter((x) => x !== u); break; }
     }
     for (const u of [...this.units]) this.updateUnit(u, dt);
+    this.tickDrops(dt);
+    this.carHits(dt);
     // 바닥 아이템 소멸
     for (const [id, g] of this.ground) if (now > g.expire) { this.ground.delete(id); this.w.broadcast({ t: 'gpick', gid: id }); }
     // 부서진 차
@@ -292,7 +370,7 @@ export class Combat {
       if (car.mode !== 'wreck') continue;
       car.wreckT -= dt;
       if (car.wreckT <= 0) {
-        if (car.id < 24) this.w.traffic.resetAI(car);
+        if (car.id < AI_CARS) this.w.traffic.resetAI(car);
         else car.mode = 'gone';
       }
     }
@@ -321,6 +399,10 @@ export class Combat {
     u.h = Math.atan2(dx, dz);
     if (d > info.range * 0.6) this.moveUnit(u, tp, info, dt);
     u.fireT -= dt;
+    // 건물에 가려 있으면 쏘지 않고 다가간다 (총알이 벽을 뚫지 않게)
+    const eye = new THREE.Vector3(u.pos.x, u.pos.y + (info.fly ? 0 : 1.3), u.pos.z);
+    const blockedLos = u.loc < 0 && this.segBlocked(eye, new THREE.Vector3(tp.x, tp.y + 1, tp.z));
+    if (blockedLos) { if (u.fireT < 0.3) u.fireT = 0.3; if (d > 3) this.moveUnit(u, tp, info, dt); return; }
     if (u.fireT <= 0 && d < info.range) {
       u.fireT = info.rate * this.rng.range(0.85, 1.2);
       const muzzle = new THREE.Vector3(u.pos.x, u.pos.y + (info.fly ? 0 : u.kind === 'tank' ? 2.2 : 1.3), u.pos.z);
@@ -329,7 +411,7 @@ export class Combat {
       const aim = new THREE.Vector3(tp.x + (hit ? 0 : this.rng.range(-3, 3)), tp.y + 1, tp.z + (hit ? 0 : this.rng.range(-3, 3)));
       if (info.radius) {
         this.w.broadcast({ t: 'fx', k: 'tracer', a: [muzzle.x, muzzle.y, muzzle.z], b: [aim.x, aim.y, aim.z], c: '#ff9100', w: 3, loc: u.loc });
-        this.explodeAt(aim, u.loc, info.radius, info.dmg, null);
+        this.explodeAt(aim, u.loc, info.radius, info.dmg, null, {}, p);
       } else {
         this.w.broadcast({ t: 'fx', k: 'tracer', a: [muzzle.x, muzzle.y, muzzle.z], b: [aim.x, aim.y, aim.z], c: '#fff59d', loc: u.loc });
         if (hit) this.damagePlayer(p, damageTaken(info.dmg, p.profile.def || 0), { name: info.name }, muzzle);
@@ -352,8 +434,8 @@ export class Combat {
   }
 
   // ---------------- 바닥 아이템 ----------------
-  dropItem(item, x, y, z, loc, life = 60) {
-    const g = { id: this.nextGround++, item, x, y, z, loc, expire: Date.now() + life * 1000 };
+  dropItem(item, x, y, z, loc, life = 60, extra = {}) {
+    const g = { id: this.nextGround++, item, x, y, z, loc, expire: Date.now() + life * 1000, ...extra };
     this.ground.set(g.id, g);
     this.w.broadcast({ t: 'gdrop', g: groundMsg(g) });
     return g;
@@ -363,13 +445,80 @@ export class Combat {
     if (!g || g.loc !== p.loc || Math.hypot(g.x - p.pos.x, g.z - p.pos.z) > 4) return;
     this.ground.delete(gid);
     this.w.broadcast({ t: 'gpick', gid });
-    this.w.send(p, { t: 'gotItem', item: g.item });
+    if (g.world) {
+      // 맵에서 주운 무기는 30분 동안만 쓸 수 있다
+      const item = { ...g.item, ttlMs: TEMP_MINUTES * 60 * 1000 };
+      this.w.send(p, { t: 'gotItem', item, bonus: g.bonus || null, world: true });
+      const r = RARITY[g.item.rarity] || RARITY.common;
+      const d = itemDef(g.item.id);
+      this.w.broadcast({ t: 'loot', who: p.name, id: g.item.id, rarity: g.item.rarity, text: `🎉 ${p.name}님이 [${r.name}] ${d.emoji} ${d.name}을(를) 획득했습니다!` });
+    } else this.w.send(p, { t: 'gotItem', item: g.item });
+  }
+
+  // 거리 곳곳에 무기를 무작위로 떨어뜨린다
+  spawnWorldDrop() {
+    const tiers = Object.keys(RARITY);
+    const tier = this.rng.weighted(tiers, (t) => RARITY[t].weight);
+    const id = this.rng.pick(DROP_POOL[tier]);
+    const d = itemDef(id);
+    const item = { id, n: d.stack ? 3 : 1, gems: [], rarity: tier };
+    // 총은 그 총의 탄약, 활은 화살을 함께
+    const bonus = d.ammo ? { id: d.ammo, n: Math.max(2, Math.round((itemDef(d.ammo).pack || 10) * 0.5)) } : null;
+    const sp = randomStreetPoint(this.rng).point;
+    return this.dropItem(item, sp.x, 0.12, sp.z, -1, 600, { world: true, bonus });
   }
   groundList() { return [...this.ground.values()].map(groundMsg); }
+
+  tickDrops(dt) {
+    const target = Number(process.env.WORLD_DROPS) || 14;
+    if (this.dropT === undefined) { for (let i = 0; i < target; i++) this.spawnWorldDrop(); this.dropT = 15; return; } // 서버 시작 시 바로 채움
+    this.dropT -= dt;
+    if (this.dropT > 0) return;
+    this.dropT = 15;
+    const n = [...this.ground.values()].filter((g) => g.world).length;
+    if (n < target) this.spawnWorldDrop();
+  }
+
+  // 차에 치이기: 속도가 빠를수록 크게 다친다
+  carHits(dt) {
+    const now = Date.now();
+    for (const car of this.w.traffic.cars) {
+      const sp = Math.abs(car.speed || 0);
+      if (sp < 4 || car.mode === 'wreck' || car.mode === 'gone' || car.mode === 'parked' || (car.pos.y || 0) > 1.5) continue;
+      const driver = car.owner != null ? this.w.players.get(car.owner) : null;
+      const r = car.mesh.radius + 0.6;
+      const mult = car.kind === 'tank' ? 1.6 : car.kind === 'bus' ? 1.3 : 1;
+      const dmg = Math.round((sp - 3) * 5 * mult);
+      for (const v of this.w.players.values()) {
+        if (v === driver || v.dead || v.loc !== -1 || v.car >= 0) continue;
+        const dx = v.pos.x - car.pos.x, dz = v.pos.z - car.pos.z, d = Math.hypot(dx, dz);
+        if (d > r || now - (v.lastCarHit || 0) < 1200) continue;
+        v.lastCarHit = now;
+        const k = sp * 0.7;
+        this.w.send(v, { t: 'knock', x: (dx / (d || 1)) * k, z: (dz / (d || 1)) * k, up: Math.min(9, 3 + sp * 0.3) });
+        this.damagePlayer(v, dmg, driver ? { name: driver.name, token: driver.token, id: driver.id } : { name: '자동차' }, car.pos);
+      }
+      // 플레이어가 모는 차에 치인 시민: 빠를수록 피하기 어렵다
+      if (!driver) continue;
+      for (const c of this.w.sim.citizens) {
+        if (c.mode === 'dead' || (c.location && c.location.type !== 'park')) continue;
+        const dx = c.pos.x - car.pos.x, dz = c.pos.z - car.pos.z, d = Math.hypot(dx, dz);
+        if (d > r || now - (c.lastCarHit || 0) < 1200) continue;
+        c.lastCarHit = now;
+        const dodgeChance = sp < 7 ? 1 : Math.max(0.15, 1 - (sp - 7) / 14);
+        if (this.rng.chance(dodgeChance)) this.w.sim.dodge(c, car.pos, sp > 16 ? { token: driver.token, name: driver.name } : null);
+        else {
+          c.pos.x += (dx / (d || 1)) * 3; c.pos.z += (dz / (d || 1)) * 3;
+          this.w.sim.pushOut(c.pos);
+          this.damageNpc(c, dmg, driver, false, null, '교통사고');
+        }
+      }
+    }
+  }
 
   unitSnap() {
     return this.units.map((u) => [u.id, UNIT_KINDS.indexOf(u.kind), q(u.pos.x), q(u.pos.y), q(u.pos.z), q(u.h, 100), u.loc, u.moving, Math.round((u.hp / UNIT[u.kind].hp) * 100)]);
   }
 }
 
-function groundMsg(g) { return { id: g.id, item: g.item, x: g.x, y: g.y, z: g.z, loc: g.loc, ttl: Math.round((g.expire - Date.now()) / 1000) }; }
+function groundMsg(g) { return { id: g.id, item: g.item, x: g.x, y: g.y, z: g.z, loc: g.loc, ttl: Math.round((g.expire - Date.now()) / 1000), world: !!g.world, bonus: g.bonus || null }; }

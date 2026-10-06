@@ -3,6 +3,7 @@ import { INTERIOR_ORIGIN } from './config.js';
 import { ACTIONS } from './data.js';
 import { toon, box, cyl, sph, G, windowPlane, signMesh, RNG, roundRect, toonGradient } from './utils.js';
 import { Roach } from './roach.js';
+import { makeCarMesh } from './traffic.js';
 
 const WALL_H = 5.5;
 
@@ -50,7 +51,15 @@ const STYLE = {
   court: ['wood', '#8d6e63', '#795548', '#efebe9'],
   cityhall: ['tile', '#f5f5f5', '#e0e0e0', '#f1f8e9'],
   postoffice: ['tile', '#ffccbc', '#ffffff', '#fff3e0'],
-  restaurant: ['tile', '#ffffff', '#ffcdd2', '#fff3e0'],
+  restaurant: ['wood', '#d7b98e', '#caa979', '#fff3e0'],
+  pizza: ['tile', '#fafafa', '#ef9a9a', '#fff3e0'],
+  chicken: ['tile', '#fff8e1', '#ffe082', '#fffde7'],
+  chinese: ['tile', '#ffebee', '#ef9a9a', '#fff8e1'],
+  gukbap: ['wood', '#bcaaa4', '#a1887f', '#efebe9'],
+  burger: ['tile', '#ffffff', '#ffcdd2', '#fffde7'],
+  bunsik: ['tile', '#fce4ec', '#ffffff', '#fff0f5'],
+  villa: ['tile', '#eceff1', '#cfd8dc', '#fafafa'],
+  unit: ['wood', '#e6c9a8', '#d9b893', '#fffaf3'],
   cafe: ['wood', '#bcaaa4', '#a1887f', '#efebe9'],
   bakery: ['tile', '#fff3e0', '#ffe0b2', '#fff8e1'],
   supermarket: ['tile', '#f5f5f5', '#e0e0e0', '#e8f5e9'],
@@ -82,6 +91,9 @@ const STYLE = {
   eyewear: ['tile', '#ffffff', '#e1f5fe', '#e1f5fe'],
   club: ['tile', '#1a1030', '#120a24', '#1a1030'],
   dojang: ['wood', '#d7b98e', '#caa979', '#fff3e0'],
+  range: ['concrete', '#9e9e9e', '#8d8d8d', '#cfd8c4'],
+  magicshop: ['wood', '#4527a0', '#311b92', '#ede7f6'],
+  dealer: ['tile', '#fafafa', '#e0e0e0', '#eceff1'],
 };
 
 // ---------- 키트 ----------
@@ -89,7 +101,7 @@ class Kit {
   constructor(g, W, D, rng) {
     this.g = g; this.W = W; this.D = D; this.rng = rng;
     this.cols = []; this.work = []; this.visit = []; this.acts = []; this.anim = [];
-    this.platforms = []; this.courses = []; this.lava = [];
+    this.platforms = []; this.courses = []; this.lava = []; this.seats = [];
   }
   // 올라설 수 있는 발판
   plat(x, z, w, d, top, color = '#a1887f') {
@@ -126,6 +138,20 @@ class Kit {
   }
   col(x, z, hw, hd) { this.cols.push({ minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd }); }
   w(x, z, face = 0) { this.work.push({ x, z, face }); }
+  // 먹고 가기 자리 (테이블 옆에 서서 먹는 위치와 바라볼 방향)
+  seat(x, z, face) { this.seats.push({ x, z, face }); }
+  // 식당 테이블 + 좌석 + 손님 자리
+  dinerTable(x, z, top, chair, round = true) {
+    if (round) this.table(x, z, top, 2, chair);
+    else {
+      box(this.g, 2.2, 0.12, 1.2, top, x, 0.95, z);
+      for (const sx of [-0.9, 0.9]) for (const sz of [-0.45, 0.45]) box(this.g, 0.1, 0.9, 0.1, '#5d4037', x + sx, 0.45, z + sz, { cast: false });
+      for (const s of [-1, 1]) this.chair(x + s * 1.6, z, s > 0 ? -Math.PI / 2 : Math.PI / 2, chair);
+      this.col(x, z, 1.15, 0.65);
+    }
+    this.seat(x - 1.35, z, Math.PI / 2); this.seat(x + 1.35, z, -Math.PI / 2);
+    this.v(x - 1.4, z, Math.PI / 2); this.v(x + 1.4, z, -Math.PI / 2);
+  }
   v(x, z, face = Math.PI) { this.visit.push({ x, z, face }); }
   act(id, x, z) { this.acts.push({ id, x, z }); }
   counter(x, z, w, color = '#8d6e63', top = '#efebe9', depth = 1) {
@@ -246,6 +272,10 @@ const LAYOUTS = {
     k.table(-W / 2 + 2, 2.4, '#ffffff', 2, '#ffcc80');
     k.plant(W / 2 - 0.8, D / 2 - 0.8, 0.8);
     k.frame(-1, 3, -D / 2 + 0.2, 1.6, 1.1);
+    // 전신 거울 (몸 색깔 바꾸기)
+    box(k.g, 0.15, 2.6, 1.3, '#8d6e63', -W / 2 + 0.25, 1.4, -0.6);
+    box(k.g, 0.05, 2.3, 1.05, toon('#e1f5fe', { emissive: '#b3e5fc', emissiveIntensity: 0.3 }), -W / 2 + 0.35, 1.4, -0.6, { cast: false });
+    k.act('recolor', -W / 2 + 1.4, -0.6);
     k.v(-W / 2 + 2, 1.0, 0); k.v(1.6, 1.0, Math.PI); k.v(W / 2 - 2.3, -1.5, Math.PI / 2); k.v(-1, -1, 0);
     k.w(-1.5, 0.5, 0); k.w(1.5, -0.5, Math.PI);
   },
@@ -471,21 +501,227 @@ const LAYOUTS = {
     k.w(W / 2 - 3, 0, Math.PI / 2);
     k.v(-2, 3, Math.PI); k.v(2, 4, Math.PI);
   },
+  // ---------------- 음식점 ----------------
+  // 공통 틀: 뒤쪽 주방 + 주문 카운터 + 앞쪽 테이블
+  diner(k, o) {
+    const { W, D } = k;
+    k.counter(0, -D / 2 + 3, W - 5, o.counter, o.counterTop);
+    // 메뉴판
+    box(k.g, Math.min(W - 6, 9), 1.6, 0.12, o.board || '#3e2723', 0, 3.6, -D / 2 + 0.22, { cast: false });
+    k.label(o.menuText, o.emoji, 0, 3.6, -D / 2 + 0.32, Math.min(W - 6.5, 8.5), o.board || '#3e2723', o.boardInk || '#fff8e1');
+    k.w(-1.5, -D / 2 + 1.8, 0); k.w(1.8, -D / 2 + 1.8, 0);
+    k.act('order', 0, -D / 2 + 4.3);
+    o.kitchen?.(k, W, D);
+    const cols = Math.max(2, Math.floor((W - 2) / 6));
+    for (let i = 0; i < cols; i++) for (let r = 0; r < 2; r++) {
+      const x = -W / 2 + W / (cols * 2) + i * (W / cols), z = 0.6 + r * 3.0;
+      if (Math.abs(x) < 1.5 && r === 1) continue; // 출구 통로
+      k.dinerTable(x, z, o.table, o.chair, o.round !== false);
+    }
+    k.plant(-W / 2 + 0.8, D / 2 - 0.8, 0.7); k.plant(W / 2 - 0.8, D / 2 - 0.8, 0.7);
+  },
   restaurant(k) {
     const { W, D } = k;
-    k.counter(0, -D / 2 + 2.4, W - 4, '#ffffff', '#ffcdd2');
-    box(k.g, 2, 1, 1, '#9e9e9e', -W / 2 + 3, 0.5, -D / 2 + 0.7);
-    for (let i = 0; i < 3; i++) cyl(k.g, 0.35, 0.4, '#424242', -W / 2 + 2.4 + i * 0.6, 1.2, -D / 2 + 0.7, { low: true });
-    k.label('오늘의 메뉴: 부스러기 정식', '🍜', 2, 3, -D / 2 + 0.2, 5, '#fff3e0', '#c0392b');
-    k.w(-2, -D / 2 + 1.2, 0);
-    k.act('eat', 0, -D / 2 + 3.6);
-    const tc = ['#ff8a80', '#ffd180', '#a7ffeb'];
-    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
-      const x = -W / 4 + j * W / 2, z = 0.2 + i * 2.8;
-      k.table(x, z, '#ffffff', 2, tc[(i + j) % 3]);
-      k.v(x - 1.2, z, Math.PI / 2); k.v(x + 1.2, z, -Math.PI / 2);
+    LAYOUTS.diner(k, { counter: '#8d6e63', counterTop: '#efebe9', table: '#d7b98e', chair: '#a1887f', round: false, emoji: '🍚', menuText: '비빔밥 · 불고기 정식 · 김치찌개', kitchen: (k2) => {
+      for (let i = 0; i < 3; i++) { cyl(k2.g, 0.45, 0.5, '#37474f', -W / 2 + 2 + i * 1.2, 1.4, -D / 2 + 1.2); bubbles(k2, -W / 2 + 2 + i * 1.2, 1.7, -D / 2 + 1.2, '#d84315'); }
+      for (let i = 0; i < 6; i++) sph(k2.g, 0.18, 0.08, 0.18, ['#43a047', '#e53935', '#ffb300'][i % 3], W / 2 - 4 + (i % 3) * 0.5, 1.28, -D / 2 + 3 + (i < 3 ? -0.2 : 0.2), { low: true });
+    } });
+  },
+  pizza(k) {
+    const { W, D } = k;
+    LAYOUTS.diner(k, { counter: '#c62828', counterTop: '#fafafa', table: '#fafafa', chair: '#ef5350', emoji: '🍕', menuText: '페퍼로니 · 치즈 · 포테이토 · 불고기', board: '#2e7d32', kitchen: (k2) => {
+      // 화덕
+      const x = -W / 2 + 2.6, z = -D / 2 + 1.4;
+      sph(k2.g, 1.5, 1.3, 1.1, '#bf6d4a', x, 0.8, z, { hemi: true });
+      box(k2.g, 3.2, 0.8, 2.4, '#8d6e63', x, 0.4, z);
+      const fire = new THREE.Mesh(G.sphereLow(), new THREE.MeshToonMaterial({ color: '#ff6d00', emissive: '#ff3d00', emissiveIntensity: 1 }));
+      fire.scale.set(0.55, 0.35, 0.2); fire.position.set(x, 1.15, z + 1.0); k2.g.add(fire);
+      k2.anim.push({ type: 'lava', obj: fire });
+      k2.col(x, z, 1.6, 1.2);
+      // 반죽대 & 피자
+      for (let i = 0; i < 3; i++) { cyl(k2.g, 0.45, 0.05, '#ffca28', W / 2 - 4 + i * 1.1, 1.25, -D / 2 + 3); sph(k2.g, 0.08, 0.03, 0.08, '#d32f2f', W / 2 - 4 + i * 1.1, 1.3, -D / 2 + 3, { low: true }); }
+      box(k2.g, 1.8, 0.8, 1.2, '#efebe9', W / 2 - 1.6, 0.4, D / 2 - 2.2);
+      for (let i = 0; i < 4; i++) box(k2.g, 1.1, 0.12, 1.1, '#f5deb3', W / 2 - 1.6, 0.86 + i * 0.13, D / 2 - 2.2, { cast: false });
+      k2.col(W / 2 - 1.6, D / 2 - 2.2, 0.9, 0.6);
+    } });
+  },
+  chicken(k) {
+    const { W, D } = k;
+    LAYOUTS.diner(k, { counter: '#ffb300', counterTop: '#fffde7', table: '#ffffff', chair: '#ffca28', emoji: '🍗', menuText: '후라이드 · 양념 · 반반 · 간장 + 치킨무', board: '#4e342e', kitchen: (k2) => {
+      for (let i = 0; i < 2; i++) {
+        const x = -W / 2 + 2 + i * 1.6, z = -D / 2 + 1.2;
+        box(k2.g, 1.3, 1.1, 1.0, '#b0bec5', x, 0.55, z);
+        box(k2.g, 1.1, 0.04, 0.8, '#ffb300', x, 1.12, z, { cast: false });
+        bubbles(k2, x, 1.15, z, '#ffe082');
+        k2.col(x, z, 0.7, 0.55);
+      }
+      for (let i = 0; i < 5; i++) box(k2.g, 0.8, 0.45, 0.6, '#ffffff', W / 2 - 1.2, 0.25 + i * 0.47, -D / 2 + 1.0);
+      box(k2.g, 0.82, 0.08, 0.62, '#ff8f00', W / 2 - 1.2, 2.6, -D / 2 + 1.0, { cast: false });
+      // 맥주 냉장고
+      box(k2.g, 1.2, 2.4, 0.8, '#e3f2fd', W / 2 - 0.8, 1.2, 0); k2.col(W / 2 - 0.8, 0, 0.6, 0.4);
+    } });
+  },
+  chinese(k) {
+    const { W, D } = k;
+    LAYOUTS.diner(k, { counter: '#b71c1c', counterTop: '#ffd54f', table: '#fafafa', chair: '#c62828', emoji: '🥡', menuText: '짜장면 · 짬뽕 · 탕수육 · 볶음밥 · 군만두', board: '#b71c1c', boardInk: '#ffd54f', kitchen: (k2) => {
+      const x = -W / 2 + 2.4, z = -D / 2 + 1.2;
+      box(k2.g, 2.6, 1.0, 1.2, '#90a4ae', x, 0.5, z);
+      const wok = new THREE.Mesh(new THREE.SphereGeometry(0.6, 14, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), toon('#263238'));
+      wok.position.set(x - 0.5, 1.6, z); k2.g.add(wok);
+      const fire = new THREE.Mesh(G.cone(), new THREE.MeshToonMaterial({ color: '#ff9100', emissive: '#ff3d00', emissiveIntensity: 1 }));
+      fire.scale.set(0.35, 0.5, 0.35); fire.position.set(x - 0.5, 1.1, z); k2.g.add(fire);
+      k2.anim.push({ type: 'lava', obj: fire });
+      k2.col(x, z, 1.35, 0.65);
+      // 홍등
+      for (let i = 0; i < 4; i++) {
+        const lx = -W / 2 + 3 + i * (W - 6) / 3;
+        sph(k2.g, 0.4, 0.5, 0.4, new THREE.MeshToonMaterial({ color: '#ff1744', emissive: '#ff1744', emissiveIntensity: 0.4 }), lx, 4.4, 1.5, { low: true, cast: false });
+        cyl(k2.g, 0.02, 0.8, '#333333', lx, 5.1, 1.5, { low: true });
+      }
+      // 배달통
+      box(k2.g, 0.9, 0.7, 0.6, '#c0c0c0', W / 2 - 1.2, 0.35, D / 2 - 2.0); k2.col(W / 2 - 1.2, D / 2 - 2.0, 0.5, 0.35);
+    } });
+  },
+  gukbap(k) {
+    const { W, D } = k;
+    LAYOUTS.diner(k, { counter: '#6d4c41', counterTop: '#d7ccc8', table: '#8d6e63', chair: '#a1887f', round: false, emoji: '🍲', menuText: '돼지국밥 · 순대국밥 · 해장국 · 콩나물국밥', board: '#4e342e', kitchen: (k2) => {
+      for (let i = 0; i < 3; i++) {
+        const x = -W / 2 + 2 + i * 1.7, z = -D / 2 + 1.3;
+        cyl(k2.g, 0.75, 0.9, '#263238', x, 0.75, z);
+        cyl(k2.g, 0.68, 0.05, '#efebe9', x, 1.2, z, { cast: false });
+        bubbles(k2, x, 1.22, z, '#ffffff');
+        k2.col(x, z, 0.8, 0.8);
+      }
+      // 깍두기 항아리
+      for (let i = 0; i < 3; i++) sph(k2.g, 0.45, 0.6, 0.45, '#6d4c41', W / 2 - 1 - i * 1.0, 0.6, -D / 2 + 1.0);
+      k2.label('24시간 영업 · 국밥은 사랑입니다', '❤️', W / 2 - 0.25, 3.0, 1, 4, '#fff8e1', '#4e342e', -Math.PI / 2);
+    } });
+  },
+  burger(k) {
+    const { W, D } = k;
+    LAYOUTS.diner(k, { counter: '#e53935', counterTop: '#ffffff', table: '#ffd54f', chair: '#e53935', round: false, emoji: '🍔', menuText: '바퀴버거 · 더블치즈 · 감튀 · 쉐이크 · 콜라', board: '#212121', boardInk: '#ffd54f', kitchen: (k2) => {
+      box(k2.g, 3.0, 1.0, 1.1, '#9e9e9e', -W / 2 + 2.4, 0.5, -D / 2 + 1.2);
+      box(k2.g, 2.8, 0.05, 0.9, '#424242', -W / 2 + 2.4, 1.03, -D / 2 + 1.2, { cast: false });
+      for (let i = 0; i < 4; i++) cyl(k2.g, 0.22, 0.06, '#6d4c41', -W / 2 + 1.4 + i * 0.65, 1.08, -D / 2 + 1.2);
+      k2.col(-W / 2 + 2.4, -D / 2 + 1.2, 1.55, 0.6);
+      // 키오스크
+      for (const s2 of [-1, 1]) {
+        const x = s2 * (W / 2 - 1.2), z = -D / 2 + 5.5;
+        box(k2.g, 0.8, 2.0, 0.4, '#212121', x, 1.0, z);
+        const scr = new THREE.Mesh(G.plane(), new THREE.MeshBasicMaterial({ color: '#80d8ff' }));
+        scr.scale.set(0.6, 0.9, 1); scr.position.set(x, 1.4, z + 0.21); k2.g.add(scr);
+        k2.col(x, z, 0.45, 0.25);
+      }
+    } });
+  },
+  bunsik(k) {
+    const { W, D } = k;
+    LAYOUTS.diner(k, { counter: '#f06292', counterTop: '#ffffff', table: '#ffffff', chair: '#f48fb1', round: false, emoji: '🍢', menuText: '떡볶이 · 라면 · 김밥 · 어묵 · 튀김', board: '#ad1457', kitchen: (k2) => {
+      // 떡볶이 철판
+      box(k2.g, 2.4, 1.0, 1.2, '#b0bec5', -W / 2 + 2.2, 0.5, -D / 2 + 1.2);
+      box(k2.g, 2.2, 0.08, 1.0, '#d32f2f', -W / 2 + 2.2, 1.05, -D / 2 + 1.2);
+      for (let i = 0; i < 10; i++) box(k2.g, 0.25, 0.08, 0.08, '#ff7043', -W / 2 + 1.3 + (i % 5) * 0.4, 1.12, -D / 2 + 0.9 + Math.floor(i / 5) * 0.5, { cast: false });
+      bubbles(k2, -W / 2 + 2.2, 1.1, -D / 2 + 1.2, '#ef5350');
+      k2.col(-W / 2 + 2.2, -D / 2 + 1.2, 1.25, 0.65);
+      // 어묵 국물통
+      box(k2.g, 1.4, 1.0, 0.9, '#b0bec5', W / 2 - 2, 0.5, -D / 2 + 1.2);
+      for (let i = 0; i < 6; i++) { cyl(k2.g, 0.01, 0.7, '#d7ccc8', W / 2 - 2.5 + i * 0.2, 1.25, -D / 2 + 1.2, { low: true }); box(k2.g, 0.12, 0.25, 0.05, '#ffcc80', W / 2 - 2.5 + i * 0.2, 1.05, -D / 2 + 1.2, { cast: false }); }
+      k2.col(W / 2 - 2, -D / 2 + 1.2, 0.75, 0.5);
+    } });
+  },
+  // ---------------- 사격 연습장: 움직이는 과녁 ----------------
+  range(k) {
+    const { W, D } = k;
+    // 사대 (총 쏘는 자리) 칸막이
+    box(k.g, W - 2, 1.1, 0.6, '#795548', 0, 0.55, D / 2 - 8);
+    box(k.g, W - 2, 0.1, 0.9, '#a1887f', 0, 1.15, D / 2 - 8);
+    k.col(0, D / 2 - 8, (W - 2) / 2, 0.35);
+    for (let i = 0; i <= 5; i++) box(k.g, 0.12, 2.2, 1.6, '#5d4037', -W / 2 + 1 + i * (W - 2) / 5, 1.1, D / 2 - 7.5, { cast: false });
+    k.label('🎯 클릭으로 쏘고, 우클릭으로 조준! 가운데일수록 고득점', '', 0, 3.6, D / 2 - 8.2, 9, '#33691e', '#ffffff');
+    k.act('range_start', -3, D / 2 - 5.5);
+    k.act('range_rent', 3, D / 2 - 5.5);
+    k.w(W / 2 - 2, D / 2 - 5, -Math.PI / 2);
+    for (let i = 0; i < 4; i++) k.v(-W / 2 + 3 + i * 4, D / 2 - 6.6, Math.PI);
+    // 뒤쪽 흙벽 + 레일
+    box(k.g, W, 3.5, 1, '#8d6e63', 0, 1.75, -D / 2 + 0.6, { cast: false });
+    for (const z of [-6, -12, -16]) box(k.g, W - 2, 0.06, 0.12, '#616161', 0, 0.12, z, { cast: false });
+    // 과녁 (링 텍스처)
+    const ringMat = targetMaterial();
+    k.targets = [];
+    const defs = [[-6, 1.4, 0.75, 0.7, 7], [-12, 1.7, 0.6, 1.1, 9], [-16, 2.0, 0.5, 1.6, 10], [-9, 2.6, 0.45, 2.0, 8], [-14, 1.2, 0.7, 0.9, 9], [-18, 2.8, 0.4, 2.4, 10]];
+    defs.forEach(([z, y, r, speed, amp], i) => {
+      const grp = new THREE.Group(); grp.position.set(0, 0, z); k.g.add(grp);
+      const pole = box(grp, 0.08, y, 0.08, '#424242', 0, y / 2, 0);
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.08, 28), [toon('#fafafa'), ringMat, toon('#fafafa')]);
+      disc.rotation.x = Math.PI / 2; disc.position.y = y; disc.castShadow = true;
+      grp.add(disc);
+      k.targets.push({ id: i, obj: grp, disc, pole, r, y0: y, speed, amp, phase: i * 1.7, up: 1, downT: 0, z });
+    });
+  },
+  // ---------------- 마법봉 공방 ----------------
+  magicshop(k) {
+    const { W, D } = k;
+    k.counter(0, -D / 2 + 3, W - 6, '#4527a0', '#b39ddb');
+    k.w(0, -D / 2 + 1.8, 0);
+    k.act('shop', 0, -D / 2 + 4.3);
+    // 마법 물약 선반
+    k.shelf(-W / 2 + 0.6, 0, 5, Math.PI / 2, ['#e040fb', '#18ffff', '#ffeb3b', '#ff5722', '#76ff03', '#7c4dff']);
+    k.shelf(W / 2 - 0.6, 0, 5, -Math.PI / 2, ['#e040fb', '#18ffff', '#ffeb3b', '#ff5722', '#76ff03', '#7c4dff']);
+    // 보글보글 가마솥
+    sph(k.g, 0.9, 0.7, 0.9, '#263238', 0, 0.75, 1.5);
+    cyl(k.g, 0.85, 0.06, '#7c4dff', 0, 1.3, 1.5, { cast: false });
+    bubbles(k, 0, 1.32, 1.5, '#b388ff');
+    k.col(0, 1.5, 1, 1);
+    // 떠다니는 지팡이
+    ['#ff5722', '#4fc3f7', '#ffeb3b', '#a5d6a7', '#9ccc65', '#fff59d', '#7e57c2'].forEach((c, i) => {
+      const x = -W / 2 + 2 + i * ((W - 4) / 6);
+      const st = new THREE.Group(); st.position.set(x, 2.8, -D / 2 + 0.6); k.g.add(st);
+      cyl(st, 0.04, 1.0, '#5d4037', 0, 0, 0, { low: true });
+      sph(st, 0.12, 0.12, 0.12, toon(c, { emissive: c, emissiveIntensity: 0.9 }), 0, 0.55, 0, { low: true });
+      k.anim.push({ type: 'bob', obj: st, base: 2.8 + (i % 2) * 0.3 });
+    });
+    k.label('반짝 마법봉 공방 · 속성 지팡이 전문', '🪄', 0, 4.2, -D / 2 + 0.2, 7, '#311b92', '#ffeb3b');
+    k.v(-3, 3, Math.PI); k.v(3, 0, Math.PI); k.v(-2, -1, 0);
+  },
+  // ---------------- 자동차 쇼룸 ----------------
+  dealer(k) {
+    const { W, D } = k;
+    const show = [['sport_l', '#c0ca33', -8, -3, 0.6], ['sport_b', '#1e88e5', 0, -4, 0], ['sport_f', '#e53935', 8, -3, -0.6], ['ev', '#eceff1', -7, 3, 0.9], ['jeep', '#ff7043', 7, 3, -0.9]];
+    for (const [kind, color, x, z, ry] of show) {
+      const m = makeCarMesh(kind, color);
+      m.g.position.set(x, 0.1, z); m.g.rotation.y = ry;
+      cyl(k.g, 3, 0.1, '#bdbdbd', x, 0.12, z, { cast: false });
+      k.g.add(m.g);
+      k.anim.push({ type: 'spin', obj: m.g, axis: 'y', speed: 0.3 });
+      k.col(x, z, 2.2, 2.2);
     }
-    k.w(0, 1.5, Math.PI);
+    k.counter(0, D / 2 - 4, 5, '#212121', '#eceff1');
+    k.w(0, D / 2 - 5, Math.PI);
+    k.act('dealer', 0, D / 2 - 2.8);
+    k.label('BAKWI MOTORS · 드림카를 만나보세요', '🏎️', 0, 4.2, -D / 2 + 0.2, 8, '#212121', '#ff1744');
+    k.v(-3, 0, 0); k.v(3, 1, Math.PI); k.v(-10, 0, Math.PI / 2);
+  },
+  // 아파트·빌라 우리 집 (호수)
+  unit(k, ctx) {
+    const { W, D } = k;
+    LAYOUTS.house(k, ctx);
+    // 현관 신발장 & 베란다
+    box(k.g, 2.4, 1.2, 0.6, '#d7ccc8', -W / 2 + 1.6, 0.6, D / 2 - 0.5); k.col(-W / 2 + 1.6, D / 2 - 0.5, 1.2, 0.35);
+    box(k.g, W - 4, 0.12, 0.12, '#ffffff', 0, 1.1, -D / 2 + 0.3, { cast: false });
+    k.label(`${ctx.unit || ''} 우리 집`, '🔑', 3.5, 3.8, -D / 2 + 0.2, 3, '#fffaf3', '#5d4037');
+  },
+  villa(k) {
+    const { W, D } = k;
+    // 우편함
+    for (let i = 0; i < 8; i++) box(k.g, 0.6, 0.5, 0.35, '#b0bec5', -W / 2 + 1.2 + (i % 4) * 0.65, 1.4 + Math.floor(i / 4) * 0.55, -D / 2 + 0.35);
+    k.col(-W / 2 + 2.2, -D / 2 + 0.35, 1.4, 0.3);
+    // 계단
+    for (let i = 0; i < 6; i++) box(k.g, 2.4, 0.3 * (i + 1), 0.6, '#cfd8dc', W / 2 - 2, 0.15 * (i + 1), -D / 2 + 1 + i * 0.6);
+    k.col(W / 2 - 2, -D / 2 + 2.5, 1.25, 1.8);
+    k.label('계단은 각 층 호수로 · 열쇠가 있으면 우리 집으로!', '🏘️', -1, 3.6, -D / 2 + 0.2, 5, '#ffffff', '#455a64');
+    k.plant(-W / 2 + 0.8, D / 2 - 0.8, 0.8);
+    k.sofa(-2, 2, 0, '#b0bec5');
+    k.v(-2, 3.2, Math.PI); k.v(1, 0, 0); k.v(-W / 2 + 2, 1, Math.PI / 2);
   },
   cafe(k) {
     const { W, D } = k;
@@ -542,7 +778,14 @@ const LAYOUTS = {
     k.col(-W / 2 + 3, -D / 2 + 0.6, 2.3, 0.5);
     k.counter(W / 2 - 2, D / 2 - 3.4, 2.6, '#1e88e5', '#ffffff');
     k.w(W / 2 - 2, D / 2 - 4.5, Math.PI);
-    k.act('kimbap', W / 2 - 3.2, D / 2 - 2.2); k.act('energy', W / 2 - 1.2, D / 2 - 2.2); k.act('buy_snack', -W / 2 + 2, D / 2 - 2.5);
+    k.act('order', W / 2 - 2, D / 2 - 2.2); k.act('shop', -W / 2 + 2, D / 2 - 2.5);
+    // 전자레인지 & 먹고 가는 창가 테이블
+    box(k.g, 1.6, 1.0, 0.8, '#eceff1', W / 2 - 1.0, 0.5, -1.5); box(k.g, 0.9, 0.55, 0.6, '#cfd8dc', W / 2 - 1.0, 1.28, -1.5);
+    const mw = new THREE.Mesh(G.plane(), new THREE.MeshBasicMaterial({ color: '#263238' })); mw.scale.set(0.55, 0.35, 1); mw.rotation.y = -Math.PI / 2; mw.position.set(W / 2 - 1.31, 1.28, -1.5); k.g.add(mw);
+    k.col(W / 2 - 1.0, -1.5, 0.85, 0.45);
+    k.act('microwave', W / 2 - 2.3, -1.5);
+    box(k.g, 4.0, 0.12, 0.7, '#ffffff', -W / 2 + 2.5, 1.1, D / 2 - 1.0); k.col(-W / 2 + 2.5, D / 2 - 1.0, 2.0, 0.4);
+    k.seat(-W / 2 + 1.6, D / 2 - 2.0, 0); k.seat(-W / 2 + 3.4, D / 2 - 2.0, 0);
     k.v(0, -2, Math.PI); k.v(-3, 2, -Math.PI / 2); k.v(3, 1, Math.PI / 2);
   },
   bank(k) {
@@ -1016,7 +1259,7 @@ const LAYOUTS = {
     const p1 = [[0, 13], [3, 9], [-1.5, 5], [-4.5, 1], [-1, -3], [3, -6.5], [0, -10.5], [-3.5, -14]];
     p1.forEach(([x, z], i) => k.plat(L1 + x, z, 2.4, 2.4, 0.8 * (i + 1), ['#ffcc80', '#ffab91', '#ce93d8', '#90caf9'][i % 4]));
     k.plat(L1, -19, 4, 3, 7.4, '#ffd54f');
-    k.courses.push({ id: 'jump2', name: '점프맵', reward: 'jump2', rewardName: '2단 점프', time: 70, start: { x: L1, z: 18.5 }, goal: { x: L1, z: -19, y: 7.4 }, safeZ: 15.5 });
+    k.courses.push({ id: 'jump2', name: '점프맵', reward: 'jumpboost', rewardName: '점프력 강화', time: 70, start: { x: L1, z: 18.5 }, goal: { x: L1, z: -19, y: 7.4 }, safeZ: 15.5 });
     k.act('course_jump2', L1, 18.5);
     k.label('① 점프맵 → 2단 점프', '🥋', L1, 3, D / 2 - 0.3, 5, '#ffffff', '#4a3428', Math.PI);
     // ② 고급 점프맵 (보상: 3단 점프) — 2단 점프가 필요한 1.8씩 높아지는 발판
@@ -1024,7 +1267,7 @@ const LAYOUTS = {
     const p2 = [[0, 12.5], [3.5, 8], [-0.5, 3.5], [-4, -1], [0, -5.5], [4, -10]];
     p2.forEach(([x, z], i) => k.plat(L2 + x, z, 2.2, 2.2, 1.8 * (i + 1), ['#80cbc4', '#9fa8da', '#f48fb1'][i % 3]));
     k.plat(L2, -16, 4, 3, 12.6, '#ffd54f');
-    k.courses.push({ id: 'jump3', name: '고급 점프맵', reward: 'jump3', rewardName: '3단 점프', require: 'jump2', time: 60, start: { x: L2, z: 18.5 }, goal: { x: L2, z: -16, y: 12.6 }, safeZ: 15.5 });
+    k.courses.push({ id: 'jump3', name: '고급 점프맵', reward: 'jump3', rewardName: '3단 점프', time: 60, start: { x: L2, z: 18.5 }, goal: { x: L2, z: -16, y: 12.6 }, safeZ: 15.5 });
     k.act('course_jump3', L2, 18.5);
     k.label('② 고급 점프맵 → 3단 점프', '🥋', L2, 3, D / 2 - 0.3, 5, '#ffffff', '#4a3428', Math.PI);
     // ③ 용암 징검다리 (보상: 대쉬)
@@ -1040,7 +1283,7 @@ const LAYOUTS = {
     const stones = [[0, 10.5], [2.5, 6], [-1.5, 1.5], [2, -3], [-1, -7.5], [2.5, -12]];
     for (const [x, z] of stones) k.plat(L3 + x, z, 1.6, 1.6, 0.6, '#5d4037');
     k.plat(L3, -18.5, 6, 4, 0.6, '#ffd54f');
-    k.courses.push({ id: 'dash', name: '용암 징검다리', reward: 'dash', rewardName: '대쉬 (C키)', time: 50, start: { x: L3, z: 18.5 }, goal: { x: L3, z: -18.5, y: 0.6 }, safeZ: 15, lavaCourse: true });
+    k.courses.push({ id: 'dash', name: '용암 징검다리', reward: 'dashlong', rewardName: '대쉬 거리 강화', time: 50, start: { x: L3, z: 18.5 }, goal: { x: L3, z: -18.5, y: 0.6 }, safeZ: 15, lavaCourse: true });
     k.act('course_dash', L3, 18.5);
     k.label('③ 용암 징검다리 → 대쉬', '🔥', L3, 3, D / 2 - 0.3, 5, '#ffffff', '#4a3428', Math.PI);
     // 목표 깃발
@@ -1078,7 +1321,11 @@ const LAYOUTS = {
 
 function W2(k) { return k.W / 2; }
 
-function roomSize(b) {
+function roomSize(b, key) {
+  if (key === 'range') return [26, 40];
+  if (key === 'dealer') return [26, 18];
+  if (key === 'unit') return [15, 11];
+  if (key === 'villa') return [14, 11];
   if (b.type === 'dojang') return [72, 48];
   if (b.type === 'club') return [22, 16];
   if (b.type === 'house') return [14, 11];
@@ -1090,12 +1337,13 @@ function roomSize(b) {
 
 // ------------------------------------------------------------------
 export function buildInterior(b, opts = {}) {
-  const [W, D] = roomSize(b);
+  const layoutKey = (b.type === 'apartment' || b.type === 'villa') && opts.isHome ? 'unit' : b.type;
+  const [W, D] = roomSize(b, layoutKey);
   const O = new THREE.Vector3(INTERIOR_ORIGIN.x, 0, INTERIOR_ORIGIN.z);
   const group = new THREE.Group();
   group.position.copy(O);
   const rng = new RNG(b.seed);
-  const [fk, f1, f2, wallColor] = STYLE[b.type] || STYLE.house;
+  const [fk, f1, f2, wallColor] = STYLE[layoutKey] || STYLE.house;
 
   // 바닥
   const floor = new THREE.Mesh(G.box(), floorMat(fk, f1, f2));
@@ -1148,11 +1396,10 @@ export function buildInterior(b, opts = {}) {
   group.add(ambient);
 
   const k = new Kit(group, W, D, rng);
-  const layoutKey = b.type === 'house' ? 'house' : b.type;
-  (LAYOUTS[layoutKey] || LAYOUTS.house)(k, { rng, b });
+  (LAYOUTS[layoutKey] || LAYOUTS.house)(k, { rng, b, unit: opts.unit });
 
   // 행동 지점
-  const actionsDef = b.type === 'house' || b.type === 'apartment' ? (opts.isHome ? ACTIONS.home : []) : (ACTIONS[b.type] || []);
+  const actionsDef = b.type === 'house' || b.type === 'apartment' || b.type === 'villa' ? (opts.isHome ? ACTIONS.home : []) : (ACTIONS[b.type] || []);
   const acts = [];
   for (const a of actionsDef) {
     let spot = k.acts.find((s) => s.id === a.id);
@@ -1181,6 +1428,8 @@ export function buildInterior(b, opts = {}) {
     workSpots: (k.work.length ? k.work : [{ x: 0, z: -D / 2 + 2, face: 0 }]).map(toWorld),
     visitSpots: (k.visit.length ? k.visit : [{ x: 0, z: 0, face: Math.PI }]).map(toWorld),
     actions: acts,
+    seats: k.seats.map((st) => ({ p: new THREE.Vector3(st.x, 0.1, st.z).add(O), face: st.face })),
+    targets: k.targets || [],
     entry: new THREE.Vector3(0, 0.1, D / 2 - 2).add(O),
     exit: new THREE.Vector3(0, 0.1, D / 2 - 1).add(O),
     bounds: { minX: O.x - W / 2 + 0.6, maxX: O.x + W / 2 - 0.6, minZ: O.z - D / 2 + 0.6, maxZ: O.z + D / 2 - 0.6 },
@@ -1197,10 +1446,17 @@ export function buildInterior(b, opts = {}) {
         else if (a.type === 'spin') a.obj.rotation[a.axis || 'z'] += dt * a.speed;
         else if (a.type === 'disco') a.obj.material = Math.floor(t * 3 + a.o) % 3 === 0 ? a.dark : a.mats[Math.floor(t * 2 + a.o) % a.mats.length];
         else if (a.type === 'lava') a.obj.material.emissiveIntensity = 0.8 + Math.sin(t * 3) * 0.2;
-        else if (a.type === 'bubble') { const p = (t * 0.6 + a.o * 0.37) % 1; a.obj.scale.setScalar(0.1 + p * 0.35); a.obj.position.y = 0.15 + p * 0.25; }
+        else if (a.type === 'bubble') { const p = (t * 0.6 + a.o * 0.37) % 1; a.obj.scale.setScalar(0.1 + p * 0.35); a.obj.position.y = (a.base || 0) + 0.15 + p * 0.25; }
         else if (a.type === 'bob') a.obj.position.y = a.base + Math.sin(t * 2) * 0.4;
       }
       for (const m of markers) m.scale.setScalar(1 + Math.sin(t * 4) * 0.1);
+      // 사격장 과녁: 좌우로 움직이고, 맞으면 쓰러졌다가 다시 일어난다
+      for (const tg of k.targets || []) {
+        tg.obj.position.x = Math.sin(t * tg.speed + tg.phase) * tg.amp;
+        if (tg.downT > 0) { tg.downT -= dt; if (tg.downT <= 0) tg.up = 1; }
+        const want = tg.up ? 0 : -Math.PI / 2;
+        tg.obj.rotation.x += (want - tg.obj.rotation.x) * Math.min(1, dt * 10);
+      }
     },
     dispose() {
       group.parent?.remove(group);
@@ -1218,6 +1474,26 @@ function shadeHex(hex, f) {
   const c = new THREE.Color(hex); const hsl = {}; c.getHSL(hsl);
   c.setHSL(hsl.h, hsl.s, Math.min(1, hsl.l * f));
   return '#' + c.getHexString();
+}
+
+// 과녁 링 무늬
+let targetMat = null;
+function targetMaterial() {
+  if (targetMat) return targetMat;
+  if (typeof document === 'undefined') return (targetMat = toon('#e53935'));
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d');
+  ['#ffffff', '#e53935', '#ffffff', '#e53935', '#ffffff', '#ffd54f'].forEach((col, i) => { x.fillStyle = col; x.beginPath(); x.arc(64, 64, 64 - i * 11, 0, Math.PI * 2); x.fill(); });
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return (targetMat = new THREE.MeshToonMaterial({ map: t, gradientMap: toonGradient() }));
+}
+
+// 냄비·튀김기 보글보글
+function bubbles(k, x, y, z, color) {
+  for (let i = 0; i < 4; i++) {
+    const m = sph(k.g, 0.12, 0.12, 0.12, color, x + (i % 2 ? 0.2 : -0.2), y, z + (i < 2 ? 0.15 : -0.15), { low: true, cast: false });
+    k.anim.push({ type: 'bubble', obj: m, o: i, base: y });
+  }
 }
 
 // 쓰지 않는 import 경고 방지

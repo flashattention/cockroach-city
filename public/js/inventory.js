@@ -27,13 +27,35 @@ export class Inventory {
   selected() { const u = this.S.hotbar[this.S.sel]; return u ? this.find(u) : null; }
   count(id) { return this.S.items.filter((it) => it.id === id).reduce((a, it) => a + (it.n || 1), 0); }
 
-  add(id, n = 1, gems = []) {
+  // 탄약 등 같은 종류를 n개 소모 (임시 아이템부터)
+  consumeId(id, n = 1) {
+    const stacks = this.S.items.filter((it) => it.id === id).sort((a, b) => (b.expiresAt ? 1 : 0) - (a.expiresAt ? 1 : 0));
+    let left = n;
+    for (const it of stacks) {
+      const take = Math.min(left, it.n || 1);
+      this.remove(it.uid, take);
+      left -= take;
+      if (left <= 0) break;
+    }
+    return left <= 0;
+  }
+
+  // 시간이 다 된 임시 아이템 제거
+  expire(now = Date.now()) {
+    const gone = this.S.items.filter((it) => it.expiresAt && it.expiresAt <= now);
+    for (const it of gone) this.remove(it.uid);
+    return gone;
+  }
+
+  // extra: { expiresAt, rarity } (맵에서 주운 임시 무기)
+  add(id, n = 1, gems = [], extra = null) {
     const d = itemDef(id);
     if (id === 'cash') { this.S.money += n; return null; }
-    let it = d.stack ? this.S.items.find((x) => x.id === id) : null;
+    const temp = !!extra?.expiresAt;
+    let it = d.stack ? this.S.items.find((x) => x.id === id && !!x.expiresAt === temp && (!temp || x.expiresAt === extra.expiresAt)) : null;
     if (it) it.n = (it.n || 1) + n;
     else {
-      it = { uid: uid(), id, n: d.stack ? n : 1, gems: [...gems] };
+      it = { uid: uid(), id, n: d.stack ? n : 1, gems: [...gems], ...(temp ? { expiresAt: extra.expiresAt, rarity: extra.rarity } : {}) };
       this.S.items.push(it);
       if (!d.stack) for (let i = 1; i < n; i++) this.S.items.push({ uid: uid(), id, n: 1, gems: [] });
       // 쓸 수 있는 물건은 빈 핫바 칸에 자동 등록

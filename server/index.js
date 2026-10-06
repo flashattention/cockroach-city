@@ -1,15 +1,17 @@
 // 바퀴시티 멀티플레이 서버
 //   - public/ 정적 파일 서빙
 //   - /ws  WebSocket: 공유 세계 동기화
-//   - 환경변수: PORT, GAME_PASSWORD, OPENAI_API_KEY, OPENAI_MODEL, OPENAI_BASE_URL, TIME_SPEED, DATA_DIR
+//   - /api/*  구글 로그인 · 캐릭터 목록/생성/삭제
+//   - 환경변수: PORT, GAME_PASSWORD, GOOGLE_CLIENT_ID, OPENAI_API_KEY, OPENAI_MODEL, OPENAI_BASE_URL, TIME_SPEED, DATA_DIR
 import './env.js';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
-import { World } from './world.js';
+import { World, isAdmin } from './world.js';
 import { llmEnabled, MODEL } from './llm.js';
+import { GOOGLE_CLIENT_ID, DEV_LOGIN, verifyGoogle, readJson } from './auth.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -22,14 +24,94 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
 
 const world = new World({ dataDir: process.env.DATA_DIR || path.join(ROOT, 'data') });
 
+const json = (res, code, obj) => {
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(obj));
+};
+// 로그인 시도 제한 (IP당 분당 20회)
+const loginHits = new Map();
+const limited = (req) => {
+  const ip = req.headers['fly-client-ip'] || req.socket.remoteAddress || '';
+  const now = Date.now();
+  const list = (loginHits.get(ip) || []).filter((t) => now - t < 60000);
+  list.push(now); loginHits.set(ip, list);
+  return list.length > 20;
+};
+
+async function api(req, res, url) {
+  const sid = (req.headers.authorization || '').replace(/^Bearer /, '');
+  if (url.pathname === '/api/status') {
+    return json(res, 200, { llm: llmEnabled, model: MODEL, password: !!PASSWORD, players: world.players.size, multiplayer: true, googleClientId: GOOGLE_CLIENT_ID, devLogin: DEV_LOGIN });
+  }
+  if (url.pathname === '/api/login' && req.method === 'POST') {
+    if (limited(req)) return json(res, 429, { error: '잠시 후 다시 시도해 주세요' });
+    const body = await readJson(req);
+    if (PASSWORD && body.password !== PASSWORD) return json(res, 403, { error: 'password' });
+    let info;
+    if (body.credential) info = await verifyGoogle(body.credential);
+    else if (DEV_LOGIN && typeof body.dev === 'string' && body.dev.trim()) info = { sub: `dev:${body.dev.trim().slice(0, 16)}`, email: '', name: body.dev.trim().slice(0, 16), picture: '' };
+    else return json(res, 400, { error: '구글 로그인이 필요해요' });
+    const session = world.login(info, Array.isArray(body.legacy) ? body.legacy : []);
+    return json(res, 200, { session, user: { name: info.name, email: info.email, picture: info.picture }, chars: world.charList(info.sub) });
+  }
+  const who = world.userOf(sid);
+  if (!who) return json(res, 401, { error: 'login' });
+  if (url.pathname === '/api/me') return json(res, 200, { user: { name: who.user.name, email: who.user.email, picture: who.user.picture }, chars: world.charList(who.sub), admin: isAdmin(who.user) });
+  const char = url.searchParams.get('char') || '';
+  try {
+    // 사진
+    if (url.pathname === '/api/photo' && req.method === 'POST') { const b = await readJson(req, 700 * 1024); return json(res, 200, { id: world.savePhoto(who.sub, b.char, b.data) }); }
+    if (url.pathname === '/api/photos') { if (!world.ownsChar(who.sub, char)) return json(res, 403, { error: '내 캐릭터가 아니에요' }); return json(res, 200, { list: world.myPhotos(char) }); }
+    if (url.pathname.startsWith('/api/photo/') && req.method === 'DELETE') {
+      const id = url.pathname.slice('/api/photo/'.length);
+      if (!world.ownsChar(who.sub, char) || world.photos[id]?.owner !== char) return json(res, 403, { error: '내 사진이 아니에요' });
+      world.deletePhoto(id); return json(res, 200, { ok: true });
+    }
+    // 인스타그램
+    if (url.pathname === '/api/insta' && req.method === 'GET') return json(res, 200, { feed: world.instaFeed(char) });
+    if (url.pathname === '/api/insta' && req.method === 'POST') { const b = await readJson(req); world.postInsta(who.sub, b.char, b.id, b.caption); return json(res, 200, { ok: true }); }
+    if (url.pathname === '/api/insta/like' && req.method === 'POST') { const b = await readJson(req); return json(res, 200, { likes: world.likeInsta(who.sub, b.char, b.id) }); }
+    // 건의함
+    if (url.pathname === '/api/feedback' && req.method === 'POST') { const b = await readJson(req); world.addFeedback(who, b.char, b.text); return json(res, 200, { ok: true }); }
+    if (url.pathname === '/api/feedback' && req.method === 'GET') {
+      if (!isAdmin(who.user)) return json(res, 403, { error: '관리자만 볼 수 있어요' });
+      return json(res, 200, { list: [...world.feedback].reverse() });
+    }
+    if (url.pathname.startsWith('/api/feedback/') && req.method === 'POST') {
+      if (!isAdmin(who.user)) return json(res, 403, { error: '관리자만' });
+      const f = world.feedback.find((x) => x.id === url.pathname.split('/')[3]);
+      if (f) { f.done = !f.done; world.dirty = true; }
+      return json(res, 200, { ok: true });
+    }
+  } catch (e) { return json(res, 400, { error: e.message }); }
+  if (url.pathname === '/api/logout' && req.method === 'POST') { world.logout(sid); return json(res, 200, { ok: true }); }
+  if (url.pathname === '/api/chars' && req.method === 'POST') {
+    const body = await readJson(req);
+    try { return json(res, 200, { char: world.createChar(who.sub, body), chars: world.charList(who.sub) }); } catch (e) { return json(res, 400, { error: e.message }); }
+  }
+  if (url.pathname.startsWith('/api/chars/') && req.method === 'DELETE') {
+    try { world.deleteChar(who.sub, url.pathname.slice('/api/chars/'.length)); return json(res, 200, { chars: world.charList(who.sub) }); } catch (e) { return json(res, 400, { error: e.message }); }
+  }
+  return json(res, 404, { error: 'not found' });
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
-  if (url.pathname === '/api/status') {
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify({ llm: llmEnabled, model: MODEL, password: !!PASSWORD, players: world.players.size, multiplayer: true }));
+  if (url.pathname.startsWith('/api/')) {
+    api(req, res, url).catch((e) => { console.warn('API 오류:', e.message); if (!res.headersSent) json(res, 400, { error: e.message }); });
     return;
   }
   if (url.pathname === '/healthz') { res.writeHead(200); res.end('ok'); return; }
+  // 사진 파일
+  const pm = /^\/photos\/([0-9a-f]{20})\.jpg$/.exec(url.pathname);
+  if (pm) {
+    fs.readFile(path.join(world.photoDir, `${pm[1]}.jpg`), (err, data) => {
+      if (err) { res.writeHead(404); res.end(); return; }
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+      res.end(data);
+    });
+    return;
+  }
   let file = path.normalize(path.join(PUBLIC, decodeURIComponent(url.pathname)));
   if (!file.startsWith(PUBLIC)) { res.writeHead(403); res.end(); return; }
   if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
@@ -49,18 +131,20 @@ wss.on('connection', (ws) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
     if (!player) {
+      // 로그인 전 첫 화면: 도시를 구경만 하는 관전자
+      if (msg.t === 'spectate') { world.addSpectator(ws); return; }
       if (msg.t !== 'hello') return;
-      if (PASSWORD && msg.password !== PASSWORD) {
-        ws.send(JSON.stringify({ t: 'error', code: 'password', message: '비밀번호가 틀렸어요' }));
-        ws.close();
-        return;
-      }
+      world.spectators.delete(ws);
       player = world.join(ws, msg);
+      if (!player) {
+        ws.send(JSON.stringify({ t: 'error', code: 'login', message: '다시 로그인해 주세요' }));
+        world.spectators.add(ws); // 계속 도시 구경
+      }
       return;
     }
     try { world.handle(player, msg); } catch (e) { console.error('메시지 처리 오류:', e); }
   });
-  ws.on('close', () => { if (player) world.leave(player); });
+  ws.on('close', () => { world.spectators.delete(ws); if (player && !player.kicked) world.leave(player); });
   ws.on('error', () => {});
 });
 
@@ -73,9 +157,10 @@ setInterval(() => {
   while (acc >= TICK) {
     acc -= TICK;
     try { world.tick(TICK); } catch (e) { console.error('틱 오류:', e); }
-    if (++n % SNAP_EVERY === 0 && world.players.size) {
+    if (++n % SNAP_EVERY === 0 && (world.players.size || world.spectators.size)) {
       const s = JSON.stringify(world.snapshot());
       for (const p of world.players.values()) if (p.ws.readyState === 1) p.ws.send(s);
+      for (const ws of world.spectators) if (ws.readyState === 1) ws.send(s);
     }
   }
 }, 25);
@@ -96,5 +181,6 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🪳 바퀴시티 서버: http://localhost:${PORT}`);
+  console.log(`   로그인: ${GOOGLE_CLIENT_ID ? '구글 로그인 필수' : '⚠️ GOOGLE_CLIENT_ID 없음 → 개발용 이름 로그인'}`);
   console.log(`   LLM: ${llmEnabled ? `${MODEL} 사용` : '키 없음 (기본 대사)'} · 비밀번호: ${PASSWORD ? '설정됨' : '없음'}`);
 });

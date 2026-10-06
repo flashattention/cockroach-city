@@ -4,9 +4,10 @@ import { Roach } from './roach.js';
 import { MODES, PLAN_KINDS, NEED_KEYS } from './citizens.js';
 import { angleLerp, G } from './utils.js';
 import { makeCarMesh } from './traffic.js';
-import { itemDef } from './items.js';
+import { itemDef, RARITY, ITEMS, shopItems } from './items.js';
 
 const STREET_MODES = new Set(['walk', 'idle', 'park', 'chat', 'fight', 'flee', 'dead']);
+const EAT_SHOPS = new Set(['restaurant', 'pizza', 'chicken', 'chinese', 'gukbap', 'burger', 'bunsik', 'cafe', 'bakery']);
 const INSIDE_MODES = new Set(['inside', 'player', 'fight', 'flee', 'dead']);
 
 export class CitizenView {
@@ -110,6 +111,12 @@ export class CitizenView {
       c.roach.baseEmotion = c.mood < 20 ? 'angry' : c.mood < 38 ? 'sad' : c.mood > 78 ? 'happy' : 'neutral';
       if (c.roach.emotionT <= 0 && c.roach.emotion !== c.roach.baseEmotion) c.roach.setEmotion(c.roach.baseEmotion, 0);
       c.roach.dancing = c.location?.type === 'club' && c.mode === 'inside' && c.plan?.kind !== 'work';
+      // 식당 손님은 가끔 음식을 먹는다
+      if (c.mode === 'inside' && !t.moving && c.plan?.kind !== 'work' && EAT_SHOPS.has(c.location?.type) && !(c.roach.eatT > 0) && Math.random() < dt * 0.12) {
+        const menu = shopItems(c.location.type).map((id) => ITEMS[id]).filter((d) => d.eat);
+        const d = menu[(c.id + Math.floor(performance.now() / 9000)) % menu.length];
+        if (d) c.roach.eat(d.eat[0], d.eat[1], 4);
+      }
       const sp = c.mode === 'flee' ? 7.5 : c.mode === 'fight' ? 5.5 : c.walkSpeed;
       c.roach.update(dt, sleeping || c.mode === 'dead' ? 0 : t.moving ? sp : 0, {});
       if (sleeping) for (const e of c.roach.eyes) e.scale.y = 0.1;
@@ -131,7 +138,7 @@ export class PlayersView {
     if (meta.id === this.myId) return;
     this.remove(meta.id);
     const pr = meta.profile || {};
-    const roach = new Roach({ color: pr.color, age: pr.age, gender: pr.gender, accessories: pr.accessories || [], lashes: pr.gender === '여' });
+    const roach = new Roach({ color: pr.color, age: pr.age, gender: pr.gender, look: pr.look, accessories: pr.accessories || [], lashes: !pr.look && pr.gender === '여' });
     roach.root.visible = false;
     this.scene.add(roach.root);
     roach.setHeld(pr.held || null);
@@ -141,6 +148,14 @@ export class PlayersView {
   meta(meta) {
     const p = this.list.get(meta.id);
     if (!p) { this.add(meta); return; }
+    if ((meta.profile?.color && meta.profile.color !== p.profile.color) || JSON.stringify(meta.profile?.look || null) !== JSON.stringify(p.profile.look || null)) {
+      // 몸 색깔이 바뀌면 모델을 다시 만든다
+      const pos = p.pos.clone(), tgt = p.target, rest = { ...p };
+      this.add(meta);
+      const n = this.list.get(meta.id);
+      Object.assign(n, { pos, target: tgt, heading: rest.heading, loc: rest.loc, car: rest.car, hp: rest.hp, stars: rest.stars });
+      return;
+    }
     p.name = meta.name; p.profile = meta.profile;
     p.roach.setAccessories(meta.profile.accessories || []);
     p.roach.setHeld(meta.profile.held || null);
@@ -186,7 +201,8 @@ export class PlayersView {
       p.roach.root.position.copy(p.pos);
       p.roach.root.rotation.y = angleLerp(p.roach.root.rotation.y, p.heading, Math.min(1, dt * 12));
       p.roach.setDead(!!p.dead);
-      p.roach.update(dt, p.dead ? 0 : p.speed, { airborne: !!p.air });
+      p.roach.flying = !!(p.air & 2); p.roach.flipped = !!(p.air & 4);
+      p.roach.update(dt, p.dead ? 0 : p.speed, { airborne: !!(p.air & 1), noCrawl: !!(p.air & 2) });
       if (p.sleeping && !p.bubble) p.bubble = { text: '💤', t: 2 };
     }
   }
@@ -276,17 +292,32 @@ export class GroundView {
     const grp = new THREE.Group();
     const spr = emojiSprite(itemDef(g.item.id).emoji);
     spr.position.y = 0.6; grp.add(spr);
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.5, 20), new THREE.MeshBasicMaterial({ color: g.item.id === 'cash' ? '#69f0ae' : '#ffd54f', transparent: true, opacity: 0.7 }));
+    const rar = g.world || g.item.ttlMs ? RARITY[g.item.rarity] || RARITY.common : null;
+    const col = rar ? rar.color : g.item.id === 'cash' ? '#69f0ae' : '#ffd54f';
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.5, 20), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.7 }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; grp.add(ring);
+    let beam = null, aura = null;
+    if (rar) {
+      // 멀리서도 보이는 빛기둥 + 바닥 오라 (희귀할수록 크고 밝게)
+      const big = { common: 0.6, rare: 0.8, epic: 1.0, legendary: 1.3 }[g.item.rarity] || 0.6;
+      beam = new THREE.Mesh(new THREE.CylinderGeometry(0.25 * big, 0.55 * big, 26, 12, 1, true), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+      beam.position.y = 13; grp.add(beam);
+      aura = new THREE.Mesh(new THREE.RingGeometry(0.2, 1.4 * big, 32), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      aura.rotation.x = -Math.PI / 2; aura.position.y = 0.08; grp.add(aura);
+      spr.scale.set(1.3, 1.3, 1);
+      if (g.bonus) { const b = emojiSprite(itemDef(g.bonus.id).emoji); b.scale.set(0.6, 0.6, 1); b.position.set(0.7, 0.45, 0); grp.add(b); }
+    }
     grp.position.set(g.x, g.y, g.z);
     this.scene.add(grp);
-    this.list.set(g.id, { ...g, obj: grp, spr, expire: performance.now() / 1000 + (g.ttl ?? 60) });
+    this.list.set(g.id, { ...g, obj: grp, spr, beam, aura, rarity: rar, expire: performance.now() / 1000 + (g.ttl ?? 60) });
   }
   remove(id) { const g = this.list.get(id); if (g) { this.scene.remove(g.obj); this.list.delete(id); } }
   update(t, myLoc) {
     for (const g of this.list.values()) {
       g.obj.visible = g.loc === myLoc;
-      g.spr.position.y = 0.6 + Math.sin(t * 3 + g.id) * 0.12;
+      g.spr.position.y = (g.rarity ? 0.9 : 0.6) + Math.sin(t * 3 + g.id) * 0.12;
+      if (g.beam) { g.beam.material.opacity = 0.25 + Math.sin(t * 3 + g.id) * 0.1; g.beam.rotation.y += 0.02; }
+      if (g.aura) { const k = 1 + Math.sin(t * 4 + g.id) * 0.15; g.aura.scale.set(k, k, k); }
     }
   }
   nearest(pos, myLoc, r = 2.2) {
@@ -329,3 +360,46 @@ export class Runners {
   }
 }
 void G;
+
+// ---------------- 땅 위 길 안내 화살표 ----------------
+export class RouteView {
+  constructor(scene, groundY) {
+    this.groundY = groundY;
+    this.group = new THREE.Group();
+    scene.add(this.group);
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0.55); shape.lineTo(0.5, -0.1); shape.lineTo(0.2, -0.1); shape.lineTo(0.2, -0.5); shape.lineTo(-0.2, -0.5); shape.lineTo(-0.2, -0.1); shape.lineTo(-0.5, -0.1); shape.closePath();
+    const geom = new THREE.ShapeGeometry(shape);
+    geom.rotateX(-Math.PI / 2);
+    this.mat = new THREE.MeshBasicMaterial({ color: '#40c4ff', transparent: true, opacity: 0.85, depthWrite: false });
+    this.arrows = [];
+    for (let i = 0; i < 40; i++) { const m = new THREE.Mesh(geom, this.mat); m.visible = false; m.renderOrder = 3; this.group.add(m); this.arrows.push(m); }
+  }
+  update(route, from, t) {
+    let n = 0;
+    if (route?.length) {
+      // 경로를 따라 3m 간격으로 화살표 (가까운 70m만)
+      let prev = from.clone(), carry = 1.5 - ((t * 2) % 3);
+      for (const q of route) {
+        const seg = new THREE.Vector3(q.x - prev.x, 0, q.z - prev.z);
+        const len = seg.length();
+        if (len > 0.01) {
+          seg.divideScalar(len);
+          const yaw = Math.atan2(seg.x, seg.z);
+          for (let d = Math.max(0, carry); d < len && n < this.arrows.length; d += 3) {
+            const a = this.arrows[n++];
+            const x = prev.x + seg.x * d, z = prev.z + seg.z * d;
+            a.position.set(x, this.groundY(x, z) + 0.06, z);
+            a.rotation.y = yaw + Math.PI;
+            a.visible = true;
+          }
+          carry = (carry - len) % 3; if (carry < 0) carry += 3;
+        }
+        prev = new THREE.Vector3(q.x, 0, q.z);
+        if (n >= this.arrows.length) break;
+      }
+    }
+    for (let i = n; i < this.arrows.length; i++) this.arrows[i].visible = false;
+    this.mat.opacity = 0.6 + Math.sin(t * 5) * 0.25;
+  }
+}

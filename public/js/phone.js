@@ -1,0 +1,167 @@
+// 휴대폰 앱들: 퀘스트, 카메라, 갤러리, 인스타그램, 연락처, 문자, 112, 건의함
+import { escapeHtml } from './utils.js';
+import { questDef } from './quests.js';
+import { expNeed, levelStats } from './level.js';
+
+const $ = (id) => document.getElementById(id);
+const ago = (t) => {
+  const s = (Date.now() - t) / 1000;
+  if (s < 60) return '방금';
+  if (s < 3600) return `${Math.floor(s / 60)}분 전`;
+  if (s < 86400) return `${Math.floor(s / 3600)}시간 전`;
+  return `${Math.floor(s / 86400)}일 전`;
+};
+
+export async function api(g, path, opts = {}) {
+  const res = await fetch(path, {
+    method: opts.method || 'GET',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${g.session}` },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+export const PHONE_APPS = {
+  quests(ui, body, g) {
+    const S = g.stats;
+    const L = S.level || 1, ls = levelStats(L);
+    const list = S.quests?.list || [];
+    body.innerHTML = `<div class="profile-big">
+      <h3>⭐ Lv.${L} <small style="font-size:13px;color:var(--ink-soft)">경험치 ${S.exp || 0} / ${expNeed(L)}</small></h3>
+      <div class="xpbig"><div style="width:${Math.min(100, ((S.exp || 0) / expNeed(L)) * 100)}%"></div></div>
+      ❤️ 최대 체력 <b>${ls.maxHp}</b> · 💪 파워 <b>×${ls.dmg.toFixed(2)}</b> · 🎯 명중 <b>+${Math.round((1 - ls.acc) * 100)}%</b> · 💥 치명타 <b>+${Math.round(ls.crit * 100)}%</b> · 💧 마나 <b>${ls.mana}</b><br>
+      <small>레벨에 끝은 없어요. 대신 올라갈수록 필요한 경험치가 많아져요. 일하기 · 퀘스트 · 무릉도장 · 사격장 · 플레이어 쓰러뜨리기로 경험치를 얻어요.</small>
+    </div>
+    <div class="profile-big" style="margin-top:12px"><h3>📋 오늘의 퀘스트 <small style="font-size:12px;color:var(--ink-soft)">${g.day() + 1}일차 · 날이 바뀌면 새 퀘스트</small></h3>
+      ${list.map((q) => { const d = questDef(q.id); return `<div class="qrow ${q.done ? 'done' : ''}"><span>${q.done ? '✅' : '⬜'} ${escapeHtml(d.text)}</span><span class="qr">${q.done ? '완료' : `${Math.floor(q.p)}/${d.n}`} · +${d.xp}EXP ₩${d.money}</span></div>`; }).join('')}
+    </div>`;
+  },
+
+  camera(ui, body, g) {
+    body.innerHTML = `<div class="profile-big" style="text-align:center">
+      <h3>📷 카메라</h3>
+      <p>지금 화면 그대로 사진을 찍어 갤러리에 저장해요. 게임 중에도 <kbd>P</kbd> 키로 바로 찍을 수 있어요.</p>
+      <button class="btn" id="cam-shot">📸 지금 찍기</button>
+      <button class="btn" id="cam-selfie">🤳 셀카 모드로 찍기</button>
+      <button class="btn ghost" id="cam-fp">👀 1인칭으로 찍기</button>
+    </div>`;
+    $('cam-shot').onclick = () => { ui.closePhone(); setTimeout(() => g.takePhoto(), 250); };
+    $('cam-selfie').onclick = () => { ui.closePhone(); g.selfie(); };
+    $('cam-fp').onclick = () => { ui.closePhone(); const was = g.player.fp; g.player.fp = true; setTimeout(() => g.takePhoto().finally(() => { g.player.fp = was; }), 300); };
+  },
+
+  async gallery(ui, body, g) {
+    body.innerHTML = '<div class="profile-big">불러오는 중...</div>';
+    try {
+      const { list } = await api(g, `/api/photos?char=${g.char}`);
+      body.innerHTML = `<div class="gallery-head">🖼️ 내 사진 ${list.length}장 <small>사진을 누르면 크게 보고 인스타에 올릴 수 있어요</small></div>
+        <div class="gallery">${list.map((p) => `<div class="ph" data-id="${p.id}"><img loading="lazy" src="/photos/${p.id}.jpg">${p.posted ? `<span class="tagp">📸 ❤️${p.likes}</span>` : ''}</div>`).join('') || '<p>아직 사진이 없어요. 📷 카메라로 찍어보세요!</p>'}</div>`;
+      body.querySelectorAll('.ph').forEach((el) => { el.onclick = () => PHONE_APPS.viewPhoto(ui, body, g, list.find((p) => p.id === el.dataset.id)); });
+    } catch (e) { body.innerHTML = `<div class="profile-big">사진을 불러오지 못했어요 (${escapeHtml(e.message)})</div>`; }
+  },
+  viewPhoto(ui, body, g, p) {
+    body.innerHTML = `<div class="photo-view"><img src="/photos/${p.id}.jpg"><div class="pv-meta">${new Date(p.t).toLocaleString('ko-KR')}${p.posted ? ` · 📸 인스타 게시됨 · ❤️ ${p.likes}` : ''}</div>
+      ${p.posted ? '' : '<input id="pv-cap" class="search" maxlength="150" placeholder="인스타그램에 쓸 글 (해시태그도 좋아요 #바퀴시티)">'}
+      <div>${p.posted ? '' : '<button class="btn" id="pv-post">📸 인스타에 올리기</button>'}<a class="btn ghost" href="/photos/${p.id}.jpg" download="roachcity-${p.id}.jpg">⬇️ 저장</a><button class="btn ghost" id="pv-del">🗑️ 삭제</button><button class="btn ghost" id="pv-back">← 갤러리</button></div></div>`;
+    $('pv-cap')?.addEventListener('keydown', (e) => e.stopPropagation());
+    $('pv-back').onclick = () => PHONE_APPS.gallery(ui, body, g);
+    $('pv-del').onclick = async () => { if (!(await ui.confirm('이 사진을 지울까요?'))) return; await api(g, `/api/photo/${p.id}?char=${g.char}`, { method: 'DELETE' }); PHONE_APPS.gallery(ui, body, g); };
+    if ($('pv-post')) $('pv-post').onclick = async () => {
+      try { await api(g, '/api/insta', { method: 'POST', body: { char: g.char, id: p.id, caption: $('pv-cap').value } }); g.questEvent('insta'); ui.toast('📸 인스타그램에 올렸어요!'); ui.openPhone('insta'); } catch (e) { ui.toast(e.message); }
+    };
+  },
+
+  async insta(ui, body, g) {
+    body.innerHTML = '<div class="profile-big">피드 불러오는 중...</div>';
+    try {
+      const { feed } = await api(g, `/api/insta?char=${g.char}`);
+      body.innerHTML = `<div class="insta-head">📸 <b>Roachstagram</b> <small>바퀴시티 사람들의 사진</small></div>
+        <div class="feed">${feed.map((p) => `<div class="post"><div class="ph-h"><span class="av">🪳</span><b>${escapeHtml(p.name)}</b> <small>Lv.${p.level} · ${ago(p.t)}</small></div>
+          <img loading="lazy" src="/photos/${p.id}.jpg"><div class="ph-a"><button class="like ${p.liked ? 'on' : ''}" data-id="${p.id}">${p.liked ? '❤️' : '🤍'} <span>${p.likes}</span></button></div>
+          ${p.caption ? `<div class="ph-c"><b>${escapeHtml(p.name)}</b> ${escapeHtml(p.caption)}</div>` : ''}</div>`).join('') || '<p>아직 게시물이 없어요. 갤러리에서 사진을 올려보세요!</p>'}</div>`;
+      body.querySelectorAll('.like').forEach((b) => {
+        b.onclick = async () => {
+          try {
+            const r = await api(g, '/api/insta/like', { method: 'POST', body: { char: g.char, id: b.dataset.id } });
+            const on = !b.classList.contains('on');
+            b.classList.toggle('on', on);
+            b.innerHTML = `${on ? '❤️' : '🤍'} <span>${r.likes}</span>`;
+          } catch (e) { ui.toast(e.message); }
+        };
+      });
+    } catch (e) { body.innerHTML = `<div class="profile-big">피드를 불러오지 못했어요 (${escapeHtml(e.message)})</div>`; }
+  },
+
+  contacts(ui, body, g) {
+    const near = [...g.players.list.values()].filter((o) => o.visible && o.pos.distanceTo(g.player.pos) < 15);
+    body.innerHTML = `<div class="profile-big"><h3>📞 내 번호 <span class="mynum">${escapeHtml(g.phone || '')}</span></h3>
+      <div class="addrow"><input id="ct-num" placeholder="010-0000-0000" maxlength="13"><input id="ct-name" placeholder="이름 (비우면 자동)" maxlength="12"><button class="btn" id="ct-add">저장</button></div>
+      ${near.length ? `<div style="margin-top:8px">📡 근처 플레이어와 번호 교환: ${near.map((o) => `<button class="btn mini" data-req="${o.id}">${escapeHtml(o.name)}</button>`).join('')}</div>` : '<small>근처에 있는 플레이어와 번호를 교환할 수도 있어요</small>'}
+    </div>
+    <div class="itemlist" style="margin-top:10px">${(g.contacts || []).map((c) => `<div class="item"><div class="ic">👤</div><div class="info"><b>${escapeHtml(c.name)}</b><small>${escapeHtml(c.num)}</small></div><div class="acts"><button class="btn mini" data-sms="${escapeHtml(c.num)}">💬 문자</button><button class="btn mini ghost" data-del="${escapeHtml(c.num)}">삭제</button></div></div>`).join('') || '<div style="padding:12px">저장한 연락처가 없어요</div>'}</div>`;
+    for (const id of ['ct-num', 'ct-name']) $(id).addEventListener('keydown', (e) => e.stopPropagation());
+    $('ct-num').oninput = (e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 11); e.target.value = d.length > 7 ? `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}` : d.length > 3 ? `${d.slice(0, 3)}-${d.slice(3)}` : d; };
+    $('ct-add').onclick = () => { g.net.send({ t: 'contactAdd', num: $('ct-num').value.trim(), name: $('ct-name').value.trim() }); };
+    body.querySelectorAll('[data-req]').forEach((b) => { b.onclick = () => g.net.send({ t: 'numReq', id: +b.dataset.req }); });
+    body.querySelectorAll('[data-sms]').forEach((b) => { b.onclick = () => { ui.smsThread = b.dataset.sms; ui.openPhone('sms'); }; });
+    body.querySelectorAll('[data-del]').forEach((b) => { b.onclick = () => g.net.send({ t: 'contactDel', num: b.dataset.del }); });
+  },
+
+  sms(ui, body, g) {
+    const name = (num) => g.contacts?.find((c) => c.num === num)?.name || num;
+    const threads = new Map();
+    for (const m of g.sms || []) { const other = m.mine ? m.to : m.from; if (!threads.has(other)) threads.set(other, []); threads.get(other).push(m); }
+    const cur = ui.smsThread;
+    if (!cur) {
+      const rows = [...threads.entries()].sort((a, b) => b[1].at(-1).t - a[1].at(-1).t);
+      body.innerHTML = `<div class="insta-head">💬 <b>문자</b> <small>연락처에서 💬 문자를 눌러 새 대화를 시작하세요</small></div>
+        <div class="itemlist">${rows.map(([num, list]) => { const last = list.at(-1); const unread = list.filter((m) => !m.mine && !m.read).length; return `<div class="item thread" data-num="${escapeHtml(num)}"><div class="ic">💬</div><div class="info"><b>${escapeHtml(name(num))}${unread ? ` <span class="badge">${unread}</span>` : ''}</b><small>${escapeHtml(last.text.slice(0, 40))} · ${ago(last.t)}</small></div></div>`; }).join('') || '<div style="padding:12px">주고받은 문자가 없어요</div>'}</div>`;
+      body.querySelectorAll('.thread').forEach((el) => { el.onclick = () => { ui.smsThread = el.dataset.num; PHONE_APPS.sms(ui, body, g); }; });
+      return;
+    }
+    const list = threads.get(cur) || [];
+    for (const m of list) if (!m.mine) m.read = true;
+    g.net.send({ t: 'smsRead', num: cur });
+    body.innerHTML = `<div class="insta-head"><button class="btn mini ghost" id="sms-back">←</button> 💬 <b>${escapeHtml(name(cur))}</b> <small>${escapeHtml(cur)}</small></div>
+      <div class="smslog" id="smslog">${list.map((m) => `<div class="sm ${m.mine ? 'me' : ''}">${escapeHtml(m.text)}<small>${ago(m.t)}</small></div>`).join('') || '<small>첫 문자를 보내보세요</small>'}</div>
+      <div class="addrow"><input id="sms-in" maxlength="200" placeholder="문자 보내기..."><button class="btn" id="sms-send">전송</button></div>`;
+    $('smslog').scrollTop = 1e9;
+    $('sms-back').onclick = () => { ui.smsThread = null; PHONE_APPS.sms(ui, body, g); };
+    const send = () => { const t = $('sms-in').value.trim(); if (!t) return; g.net.send({ t: 'sms', to: cur, text: t }); $('sms-in').value = ''; g.questEvent('sms'); };
+    $('sms-in').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.isComposing) send(); });
+    $('sms-send').onclick = send;
+    $('sms-in').focus();
+  },
+
+  police(ui, body, g) {
+    const list = g.reportable || [];
+    body.innerHTML = `<div class="profile-big"><h3>🚨 112 신고</h3>
+      <p>경찰은 누군가 신고해야만 출동해요. 시민(NPC)은 맞거나 화나면 스스로 112에 전화하고, 플레이어는 여기서 나를 공격한 사람을 신고할 수 있어요 (최근 10분).</p>
+      ${list.length ? list.map((r) => `<div class="item"><div class="ic">😠</div><div class="info"><b>${escapeHtml(r.name)}</b><small>사유: ${escapeHtml(r.reason)}</small></div><div class="acts"><button class="btn mini" data-rep="${r.token}">🚓 신고하기</button></div></div>`).join('') : '<div style="padding:10px">최근에 나를 공격한 플레이어가 없어요 🙂</div>'}
+    </div>`;
+    body.querySelectorAll('[data-rep]').forEach((b) => { b.onclick = () => { g.net.send({ t: 'report112', token: b.dataset.rep }); g.reportable = (g.reportable || []).filter((r) => r.token !== b.dataset.rep); PHONE_APPS.police(ui, body, g); }; });
+  },
+
+  feedback(ui, body, g) {
+    body.innerHTML = `<div class="profile-big"><h3>💡 개발자에게 건의하기</h3>
+      <p>버그, 원하는 기능, 불편한 점 무엇이든 적어주세요. 개발자가 모두 모아서 확인해요 🙏</p>
+      <textarea id="fb-text" maxlength="2000" rows="7" placeholder="예) 사격장 표적이 너무 빨라요 / 고양이 귀 모자 더 만들어주세요!"></textarea>
+      <button class="btn" id="fb-send">보내기 📮</button></div>`;
+    $('fb-text').addEventListener('keydown', (e) => e.stopPropagation());
+    $('fb-send').onclick = async () => {
+      try { await api(g, '/api/feedback', { method: 'POST', body: { char: g.char, text: $('fb-text').value } }); ui.toast('📮 건의가 전달됐어요. 고마워요!'); $('fb-text').value = ''; } catch (e) { ui.toast(e.message); }
+    };
+  },
+
+  async admin(ui, body, g) {
+    body.innerHTML = '<div class="profile-big">불러오는 중...</div>';
+    try {
+      const { list } = await api(g, '/api/feedback');
+      body.innerHTML = `<div class="insta-head">📮 <b>건의함</b> <small>총 ${list.length}건 · 미처리 ${list.filter((f) => !f.done).length}건</small></div>
+        <div class="itemlist">${list.map((f) => `<div class="item ${f.done ? 'fbdone' : ''}"><div class="info"><b>${escapeHtml(f.char || f.user)} <small>${escapeHtml(f.email)} · ${new Date(f.t).toLocaleString('ko-KR')}</small></b><div class="fbtext">${escapeHtml(f.text)}</div></div><div class="acts"><button class="btn mini ${f.done ? 'ghost' : ''}" data-done="${f.id}">${f.done ? '되돌리기' : '✅ 처리'}</button></div></div>`).join('') || '<div style="padding:12px">아직 건의가 없어요</div>'}</div>`;
+      body.querySelectorAll('[data-done]').forEach((b) => { b.onclick = async () => { await api(g, `/api/feedback/${b.dataset.done}`, { method: 'POST' }); PHONE_APPS.admin(ui, body, g); }; });
+    } catch (e) { body.innerHTML = `<div class="profile-big">${escapeHtml(e.message)}</div>`; }
+  },
+};

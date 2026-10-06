@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>바퀴시티 건의함</title>
+  <style>
+    :root { --bg: #fff8ef; --card: #ffffff; --ink: #4a3428; --soft: #8a6f5f; --accent: #ff8a65; --line: rgba(74,52,40,.12); }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1f1a22; --card: #2e2630; --ink: #fbeee4; --soft: #cdb7a8; --line: rgba(255,255,255,.12); } }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Apple SD Gothic Neo', sans-serif; }
+    main { max-width: 860px; margin: 0 auto; padding: 24px 16px; }
+    h1 { font-size: 24px; margin: 0 0 4px; }
+    .sub { color: var(--soft); font-size: 14px; margin-bottom: 16px; }
+    .bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    button { background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 7px 12px; font-size: 14px; cursor: pointer; }
+    button.ghost { background: var(--line); color: var(--ink); }
+    .fb { background: var(--card); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; border: 1px solid var(--line); }
+    .fb.done { opacity: .5; }
+    .meta { font-size: 12px; color: var(--soft); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .text { white-space: pre-wrap; margin: 8px 0; font-size: 15px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>📮 바퀴시티 건의함</h1>
+  <div class="sub" id="sub">불러오는 중...</div>
+  <div class="bar"><button class="ghost" data-f="open">미처리</button><button class="ghost" data-f="all">전체</button><button class="ghost" id="reload">새로고침</button></div>
+  <div id="list"></div>
+</main>
+<script>
+  const session = (() => { try { return localStorage.getItem('roachcity.session'); } catch { return null; } })();
+  let filter = 'open', items = [];
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  async function load() {
+    if (!session) { document.getElementById('sub').textContent = '먼저 게임 첫 화면에서 관리자 구글 계정으로 로그인하세요.'; return; }
+    const r = await fetch('/api/feedback', { headers: { Authorization: `Bearer ${session}` } });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { document.getElementById('sub').textContent = j.error || '볼 수 없어요'; return; }
+    items = j.list;
+    render();
+  }
+  function render() {
+    const open = items.filter((f) => !f.done).length;
+    document.getElementById('sub').textContent = `총 ${items.length}건 · 미처리 ${open}건`;
+    const list = filter === 'open' ? items.filter((f) => !f.done) : items;
+    document.getElementById('list').innerHTML = list.map((f) => `<div class="fb ${f.done ? 'done' : ''}"><div class="meta"><span><b>${esc(f.char || f.user)}</b> · ${esc(f.email)}</span><span>${new Date(f.t).toLocaleString('ko-KR')}</span></div><div class="text">${esc(f.text)}</div><button data-id="${f.id}" class="${f.done ? 'ghost' : ''}">${f.done ? '되돌리기' : '✅ 처리 완료'}</button></div>`).join('') || '<p>건의가 없어요 🎉</p>';
+    document.querySelectorAll('[data-id]').forEach((b) => { b.onclick = async () => { await fetch(`/api/feedback/${b.dataset.id}`, { method: 'POST', headers: { Authorization: `Bearer ${session}` } }); load(); }; });
+  }
+  document.querySelectorAll('[data-f]').forEach((b) => { b.onclick = () => { filter = b.dataset.f; render(); }; });
+  document.getElementById('reload').onclick = load;
+  load();
+</script>
+</body>
+</html>

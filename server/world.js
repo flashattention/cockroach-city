@@ -4,19 +4,26 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import * as THREE from 'three';
 import { SEED, DEFAULT_TIME_SPEED } from '../public/js/config.js';
-import { setupWorld, housePrice, forSale } from '../public/js/world-setup.js';
+import { setupWorld, housePrice, freeUnits, isHomeType, homeLabel, WORLD_VERSION } from '../public/js/world-setup.js';
+import { sanitizeLook, BASIC_ACC } from '../public/js/look.js';
+import { levelStats } from '../public/js/level.js';
 import { Combat } from './combat.js';
 import { itemDef } from '../public/js/items.js';
 import { MODES, PLAN_KINDS } from '../public/js/citizens.js';
-import { Traffic } from '../public/js/traffic.js';
+import { Traffic, AI_CARS, CAR_KINDS } from '../public/js/traffic.js';
 import { buildInterior } from '../public/js/interior.js';
 import { profileSystemPrompt, streetChatPrompt, memoryPrompt, fallbackReply, clampInt, INSULT } from '../public/js/prompts.js';
 import { DAYS, fmtTime } from '../public/js/utils.js';
-import { complete, llmEnabled } from './llm.js';
+import { complete, llmEnabled, SCHEMAS } from './llm.js';
 
 const WEATHERS = ['맑음 ☀️', '구름 조금 ⛅', '흐림 ☁️', '습하고 따뜻함 💧', '맑음 ☀️'];
 const CAR_MODES = ['ai', 'player', 'parked', 'wreck', 'gone'];
 const q = (v, k = 10) => Math.round(v * k);
+const MAX_CHARS = 4;
+// 건의함을 볼 수 있는 관리자 (쉼표로 여러 명)
+const ADMINS = (process.env.ADMIN_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+export const isAdmin = (user) => !!user?.email && ADMINS.includes(user.email.toLowerCase());
+const SPECTATOR_TYPES = new Set(['pjoin', 'pleave', 'pmeta', 'carSpawn', 'gdrop', 'gpick', 'homes', 'fx', 'eject', 'carSay', 'hearts']);
 
 export class World {
   constructor({ dataDir }) {
@@ -41,7 +48,14 @@ export class World {
     this.minutes = 7 * 60 + 30;
     this.weather = WEATHERS[0];
     this.players = new Map(); // 접속 중
-    this.accounts = {}; // token → { name, profile, homeId, stats }
+    this.spectators = new Set(); // 로그인 화면에서 도시를 구경하는 연결
+    this.accounts = {}; // 캐릭터 token → { name, profile, homeId, homeUnit, homes, stats, owner }
+    this.users = {}; // 구글 계정 sub → { email, name, picture, chars: [token] }
+    this.sessions = {}; // 세션 → { sub, exp }
+    this.photos = {}; // 사진 id → { owner, ownerName, t, posted, caption, likes, postedAt }
+    this.feedback = []; // 개발자에게 건의
+    this.photoDir = path.join(dataDir, 'photos');
+    fs.mkdirSync(this.photoDir, { recursive: true });
     this.affinity = {}; // npcId → { token: value }
     this.memories = {}; // npcId → [{ token, name, text }]
     this.chatLogs = {}; // "npc:token" → [{ role, content }]
@@ -65,36 +79,123 @@ export class World {
   load() {
     try {
       const d = JSON.parse(fs.readFileSync(this.dataFile, 'utf8'));
-      Object.assign(this, { minutes: d.minutes ?? this.minutes, weather: d.weather ?? this.weather, accounts: d.accounts || {}, affinity: d.affinity || {}, memories: d.memories || {}, chatLogs: d.chatLogs || {} });
-      for (const c of d.extraCars || []) { const car = this.traffic.spawnParked(new THREE.Vector3(c.x, c.y || 0, c.z), c.h, c.kind || 'car'); if (c.gone) car.mode = 'gone'; this.extraCars.push(c); }
+      Object.assign(this, { minutes: d.minutes ?? this.minutes, weather: d.weather ?? this.weather, accounts: d.accounts || {}, affinity: d.affinity || {}, memories: d.memories || {}, chatLogs: d.chatLogs || {}, users: d.users || {}, sessions: d.sessions || {}, photos: d.photos || {}, feedback: d.feedback || [] });
+      if ((d.version || 1) < WORLD_VERSION) { this.migrate(d.version || 1); d.extraCars = []; }
+      for (const c of d.extraCars || []) { const car = this.traffic.spawnParked(new THREE.Vector3(c.x, c.y || 0, c.z), c.h, c.kind || 'sedan', c.color); if (c.gone) car.mode = 'gone'; this.extraCars.push(c); }
       console.log(`📂 저장된 세계를 불러왔어요 (계정 ${Object.keys(this.accounts).length}개)`);
     } catch { /* 처음 실행 */ }
   }
   save() {
-    const extraCars = this.traffic.cars.slice(24).map((c) => ({ x: c.pos.x, y: c.pos.y || 0, z: c.pos.z, h: c.heading, kind: c.kind, gone: c.mode === 'gone' || c.mode === 'wreck' }));
-    const data = { minutes: this.minutes, weather: this.weather, accounts: this.accounts, affinity: this.affinity, memories: this.memories, chatLogs: this.chatLogs, extraCars };
+    const extraCars = this.traffic.cars.slice(AI_CARS).map((c) => ({ x: c.pos.x, y: c.pos.y || 0, z: c.pos.z, h: c.heading, kind: c.kind, color: c.color, gone: c.mode === 'gone' || c.mode === 'wreck' }));
+    const now = Date.now();
+    for (const [k, v] of Object.entries(this.sessions)) if (v.exp < now) delete this.sessions[k];
+    const data = { version: WORLD_VERSION, users: this.users, sessions: this.sessions, photos: this.photos, feedback: this.feedback, minutes: this.minutes, weather: this.weather, accounts: this.accounts, affinity: this.affinity, memories: this.memories, chatLogs: this.chatLogs, extraCars };
     const tmp = this.dataFile + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(data));
     fs.renameSync(tmp, this.dataFile);
   }
 
-  // ---------------- 플레이어 ----------------
-  homeNames() {
-    const out = {};
-    for (const [, a] of Object.entries(this.accounts)) if (a.homeId != null) (out[a.homeId] ||= []).push(a.name);
-    return Object.fromEntries(Object.entries(out).map(([id, names]) => [id, `${names.slice(0, 2).join('·')}${names.length > 2 ? ' 외' : ''}의 집`]));
+  // 도시가 커지면서 건물·주민 번호가 바뀌었다 → 집은 환불, 주민 관계는 초기화
+  migrate(from) {
+    let refunded = 0;
+    for (const acc of Object.values(this.accounts)) {
+      if (acc.homeId != null) {
+        if (acc.stats) acc.stats.money = (acc.stats.money || 0) + 4000;
+        acc.note = '🏘️ 도시가 커져서 예전 집이 재개발됐어요! 집값 ₩4000을 돌려드렸어요. 부동산에서 새 집을 골라보세요';
+        refunded++;
+      }
+      acc.homeId = null; acc.homeUnit = null; acc.homes = [];
+      if (acc.stats) { acc.stats.workId = null; acc.stats.homeId = null; }
+    }
+    this.affinity = {}; this.memories = {}; this.chatLogs = {};
+    console.log(`🔄 세계 v${from} → v${WORLD_VERSION} 변환 (집 환불 ${refunded}건)`);
+    this.dirty = true;
+  }
+
+  // ---------------- 로그인 & 캐릭터 ----------------
+  login(info, legacyTokens = []) {
+    const u = (this.users[info.sub] ||= { email: info.email, name: info.name, picture: info.picture, chars: [], created: Date.now() });
+    Object.assign(u, { email: info.email, name: info.name, picture: info.picture, last: Date.now() });
+    // 구글 로그인 전 이 브라우저에서 쓰던 캐릭터를 내 계정으로 가져온다
+    for (const t of legacyTokens.slice(0, 5)) {
+      const acc = typeof t === 'string' && this.accounts[t];
+      if (acc && !acc.owner && u.chars.length < MAX_CHARS) { acc.owner = info.sub; u.chars.push(t); }
+    }
+    const sid = crypto.randomBytes(24).toString('hex');
+    this.sessions[sid] = { sub: info.sub, exp: Date.now() + 30 * 864e5 };
+    this.dirty = true;
+    return sid;
+  }
+  userOf(sid) {
+    const s = typeof sid === 'string' && this.sessions[sid];
+    if (!s || s.exp < Date.now()) return null;
+    return this.users[s.sub] ? { sub: s.sub, user: this.users[s.sub] } : null;
+  }
+  logout(sid) { delete this.sessions[sid]; this.dirty = true; }
+  charSummary(token) {
+    const a = this.accounts[token];
+    if (!a) return null;
+    const home = a.homeId != null ? this.buildings[a.homeId] : null;
+    return {
+      token, name: a.name, profile: a.profile, money: Math.floor(a.stats?.money ?? 500), job: a.profile?.jobName || '',
+      home: home ? homeLabel(home, a.homeUnit) : '', starter: a.stats ? null : a.starter, online: [...this.players.values()].some((p) => p.token === token), last: a.last || a.created,
+    };
+  }
+  charList(sub) { return (this.users[sub]?.chars || []).map((t) => this.charSummary(t)).filter(Boolean); }
+  createChar(sub, body) {
+    const u = this.users[sub];
+    if (!u) throw new Error('로그인이 필요해요');
+    if (u.chars.length >= MAX_CHARS) throw new Error(`캐릭터는 ${MAX_CHARS}개까지 만들 수 있어요`);
+    const profile = sanitizeProfile({ ...body.profile, accessories: [], held: null, def: 0, charm: 0, regen: 0, jobName: '' });
+    const starter = {};
+    for (const [slot, list] of Object.entries(BASIC_ACC)) if (list.some(([id]) => id === body.starter?.[slot])) starter[slot] = body.starter[slot];
+    const token = crypto.randomBytes(12).toString('hex');
+    this.accounts[token] = { name: profile.name, profile, homeId: null, homeUnit: null, homes: [], stats: null, starter, owner: sub, created: Date.now() };
+    u.chars.push(token);
+    this.dirty = true;
+    return this.charSummary(token);
+  }
+  deleteChar(sub, token) {
+    const u = this.users[sub];
+    if (!u || !u.chars.includes(token)) throw new Error('내 캐릭터가 아니에요');
+    for (const p of this.players.values()) if (p.token === token) { this.send(p, { t: 'sys', text: '이 캐릭터가 삭제됐어요' }); p.ws.close(); }
+    u.chars = u.chars.filter((t) => t !== token);
+    delete this.accounts[token];
+    this.dirty = true;
+    this.broadcast({ t: 'homes', ...this.homesInfo() });
+  }
+
+  // ---------------- 집 ----------------
+  ownedUnits(bid) {
+    const out = [];
+    for (const a of Object.values(this.accounts)) for (const h of a.homes || []) if (h.bid === bid) out.push(h.unit);
+    return out;
+  }
+  homesInfo() {
+    const names = {}, owned = {};
+    for (const a of Object.values(this.accounts)) {
+      for (const h of a.homes || []) {
+        (owned[h.bid] ||= []).push(h.unit);
+        const b = this.buildings[h.bid];
+        if (b?.type === 'house') (names[h.bid] ||= []).push(a.name);
+      }
+    }
+    return {
+      homes: Object.fromEntries(Object.entries(names).map(([id, n]) => [id, `${n.slice(0, 2).join('·')}${n.length > 2 ? ' 외' : ''}의 집`])),
+      owned,
+    };
   }
 
   join(ws, msg) {
-    let token = typeof msg.token === 'string' && this.accounts[msg.token] ? msg.token : null;
-    const profile = sanitizeProfile(msg.profile);
-    if (!token) {
-      token = crypto.randomBytes(12).toString('hex');
-      this.accounts[token] = { name: profile.name, profile, homeId: null, stats: null, created: Date.now() };
-    } else if (msg.profile && !msg.continue) {
-      Object.assign(this.accounts[token], { name: profile.name, profile });
-    }
+    const who = this.userOf(msg.session);
+    const token = typeof msg.char === 'string' && who?.user.chars.includes(msg.char) && this.accounts[msg.char] ? msg.char : null;
+    if (!token) return null;
+    // 같은 캐릭터로 이미 접속 중이면 이전 접속을 끊는다
+    for (const o of [...this.players.values()]) if (o.token === token) { this.send(o, { t: 'kicked' }); o.kicked = true; o.ws.close(); this.leave(o); }
     const acc = this.accounts[token];
+    acc.last = Date.now();
+    if (!acc.phone) acc.phone = this.newPhone();
+    acc.contacts ||= []; acc.sms ||= [];
     const home = acc.homeId != null ? this.buildings[acc.homeId] : this.hotel;
     const p = {
       id: this.nextPid++, token, ws, name: acc.name, profile: acc.profile,
@@ -102,11 +203,13 @@ export class World {
       loc: -1, car: -1, air: 0, sleeping: false, talking: null, talkBusy: false, lastTalk: 0, carState: null,
       hp: 100, maxHp: 100, dead: false, heat: 0, stars: 0,
     };
+    p.maxHp = p.hp = levelStats(acc.profile.level || 1).maxHp;
     this.players.set(p.id, p);
     if (acc.pendingHeat) {
       const n = acc.pendingReports || 1;
-      setTimeout(() => { this.combat.addHeat(p, acc.pendingHeat); this.send(p, { t: 'sys', text: `🚔 자리를 비운 사이 ${n}건의 신고가 접수됐어요! 경찰이 찾고 있어요` }); acc.pendingHeat = 0; acc.pendingReports = 0; }, 3000);
+      setTimeout(() => { this.combat.addHeat(p, acc.pendingHeat, '접속하지 않은 사이 들어온 신고'); this.send(p, { t: 'sys', text: `🚔 자리를 비운 사이 ${n}건의 신고가 접수됐어요! 경찰이 찾고 있어요` }); acc.pendingHeat = 0; acc.pendingReports = 0; }, 3000);
     }
+    if (acc.note) { const note = acc.note; delete acc.note; setTimeout(() => this.send(p, { t: 'sys', text: note }), 2500); }
     // 이 플레이어에게 맞춘 친밀도 & 기억
     const aff = {}, mem = {};
     for (const c of this.sim.citizens) {
@@ -114,14 +217,17 @@ export class World {
       const m = (this.memories[c.id] || []).filter((x) => x.token === token).map((x) => x.text);
       if (m.length) mem[c.id] = m;
     }
+    const hi = this.homesInfo();
     this.send(p, {
-      t: 'welcome', you: p.id, token, homeId: acc.homeId, homes: this.homeNames(), stats: acc.stats, profile: acc.profile,
+      t: 'welcome', you: p.id, token, homeId: acc.homeId, homeUnit: acc.homeUnit, myHomes: acc.homes || [], homes: hi.homes, owned: hi.owned,
+      stats: acc.stats, starter: acc.stats ? null : acc.starter, profile: acc.profile, user: { name: who.user.name, email: who.user.email }, admin: isAdmin(who.user),
+      phone: acc.phone, contacts: acc.contacts, sms: acc.sms.slice(-100),
       minutes: this.minutes, timeSpeed: this.timeSpeed, weather: this.weather, llm: llmEnabled,
       affinity: aff, memories: mem, players: [...this.players.values()].map(playerMeta),
-      extraCars: this.traffic.cars.slice(24).map((c) => ({ id: c.id, x: c.pos.x, z: c.pos.z, h: c.heading })),
+      extraCars: this.traffic.cars.slice(AI_CARS).map((c) => ({ id: c.id, x: c.pos.x, z: c.pos.z, h: c.heading, kind: c.kind, color: c.color })),
       npcMeta: this.sim.citizens.map((c) => this.npcMeta(c)),
       ground: this.combat.groundList(), hotelId: this.hotel.id,
-      extraKinds: this.traffic.cars.slice(24).map((c) => c.kind),
+      extraKinds: this.traffic.cars.slice(AI_CARS).map((c) => c.kind),
     });
     this.broadcast({ t: 'pjoin', p: playerMeta(p) }, p.id);
     this.dirty = true;
@@ -130,6 +236,7 @@ export class World {
   }
 
   leave(p) {
+    if (!this.players.has(p.id)) return;
     if (p.talking !== null) this.endTalk(p, p.talking);
     if (p.car >= 0) { const car = this.traffic.cars[p.car]; if (car) this.traffic.exit(car); }
     this.players.delete(p.id);
@@ -146,6 +253,22 @@ export class World {
   broadcast(obj, exceptId) {
     const s = JSON.stringify(obj);
     for (const p of this.players.values()) if (p.id !== exceptId && p.ws.readyState === 1) p.ws.send(s);
+    // 관전자에게는 화면에 필요한 것만 (채팅·시스템 메시지는 보내지 않는다)
+    if (SPECTATOR_TYPES.has(obj.t)) for (const ws of this.spectators) if (ws.readyState === 1) ws.send(s);
+  }
+
+  addSpectator(ws) {
+    if (this.spectators.size >= 60) { ws.send(JSON.stringify({ t: 'error', code: 'full' })); return; }
+    this.spectators.add(ws);
+    const hi = this.homesInfo();
+    ws.send(JSON.stringify({
+      t: 'welcome', spectate: true, you: -1, homes: hi.homes, owned: hi.owned,
+      minutes: this.minutes, timeSpeed: this.timeSpeed, weather: this.weather, llm: llmEnabled,
+      players: [...this.players.values()].map(playerMeta),
+      extraCars: this.traffic.cars.slice(AI_CARS).map((c) => ({ id: c.id, x: c.pos.x, z: c.pos.z, h: c.heading, kind: c.kind, color: c.color })),
+      npcMeta: this.sim.citizens.map((c) => this.npcMeta(c)),
+      ground: this.combat.groundList(), hotelId: this.hotel.id,
+    }));
   }
 
   // ---------------- 메시지 ----------------
@@ -154,7 +277,7 @@ export class World {
       case 'st': {
         const loc = Number.isInteger(msg.loc) && this.buildings[msg.loc] ? msg.loc : -1;
         p.pos.set(+msg.x || 0, +msg.y || 0, +msg.z || 0);
-        p.heading = +msg.h || 0; p.speed = +msg.s || 0; p.air = msg.a ? 1 : 0;
+        p.heading = +msg.h || 0; p.speed = +msg.s || 0; p.air = Math.max(0, Math.min(7, msg.a | 0));
         if (loc !== p.loc) { p.loc = loc; this.updateActiveBuildings(); }
         if (p.car >= 0 && msg.car) {
           const car = this.traffic.cars[p.car];
@@ -166,6 +289,9 @@ export class World {
         const acc = this.accounts[p.token];
         acc.profile = sanitizeProfile({ ...acc.profile, ...msg.profile });
         p.profile = acc.profile;
+        acc.name = p.name;
+        const mh = levelStats(acc.profile.level).maxHp;
+        if (mh !== p.maxHp) { if (mh > p.maxHp && !p.dead) p.hp = mh; p.maxHp = mh; this.send(p, { t: 'hp', hp: Math.round(p.hp), max: mh }); }
         this.broadcast({ t: 'pmeta', p: playerMeta(p) });
         this.dirty = true;
         break;
@@ -183,7 +309,8 @@ export class World {
         if (!car || car.mode === 'player' || p.car >= 0) { this.send(p, { t: 'carDenied' }); break; }
         if (car.occ > 0) {
           this.broadcast({ t: 'eject', id: car.id, n: car.occ, x: car.pos.x, z: car.pos.z, h: car.heading });
-          this.combat.addHeat(p, 10);
+          // 쫓겨난 운전자가 절반 확률로 112에 신고
+          if (Math.random() < 0.5) setTimeout(() => { if (this.players.has(p.id)) this.reportBy('차 주인', { token: p.token, name: p.name, reason: '차량 탈취' }); }, 6000);
         }
         this.traffic.enter(car, p.id);
         car.occ = 0;
@@ -200,12 +327,7 @@ export class World {
       }
       case 'carRent': {
         if (p.car >= 0) break;
-        const car = this.traffic.spawnParked(new THREE.Vector3(+msg.x, 0, +msg.z), +msg.h || 0);
-        this.broadcast({ t: 'carSpawn', id: car.id, x: car.pos.x, z: car.pos.z, h: car.heading });
-        this.traffic.enter(car, p.id);
-        p.car = car.id;
-        this.send(p, { t: 'carOk', id: car.id });
-        this.dirty = true;
+        this.spawnCarFor(p, 'sedan', '#ff8a65', msg, true);
         break;
       }
       case 'sleep': p.sleeping = !!msg.on; this.broadcastSleep(); break;
@@ -214,38 +336,234 @@ export class World {
       case 'fx': {
         // 다른 플레이어에게 보여줄 연출 (총알 궤적, 투사체, 휘두르기)
         const k = String(msg.k || '');
-        if (['tracer', 'proj', 'swing', 'muzzle'].includes(k)) this.broadcast({ ...msg, t: 'fx', pid: p.id, loc: p.loc }, p.id);
+        if (['tracer', 'proj', 'swing', 'muzzle', 'eat', 'bolt', 'sparkle', 'cloud'].includes(k)) this.broadcast({ ...msg, t: 'fx', pid: p.id, loc: p.loc }, p.id);
         break;
       }
       case 'drop': {
         const it = msg.item;
         if (!it || !itemDef(it.id) || it.id === 'fist') break;
-        this.combat.dropItem({ id: String(it.id), n: Math.max(1, Math.min(999, +it.n || 1)), gems: Array.isArray(it.gems) ? it.gems.slice(0, 3).map(String) : [] }, p.pos.x, p.pos.y, p.pos.z, p.loc, 60);
+        const keep = { id: String(it.id), n: Math.max(1, Math.min(999, +it.n || 1)), gems: Array.isArray(it.gems) ? it.gems.slice(0, 3).map(String) : [] };
+        if (+it.ttlMs > 0) { keep.ttlMs = Math.min(30 * 60000, +it.ttlMs); keep.rarity = String(it.rarity || 'common'); }
+        this.combat.dropItem(keep, p.pos.x, p.pos.y, p.pos.z, p.loc, 60);
         break;
       }
       case 'pickup': this.combat.pickup(p, msg.gid); break;
+      case 'holy': this.combat.holy(p, msg); break;
+      case 'contactAdd': this.contactAdd(p, msg); break;
+      case 'contactDel': { const acc = this.accounts[p.token]; acc.contacts = (acc.contacts || []).filter((c) => c.num !== msg.num); this.send(p, { t: 'contacts', list: acc.contacts }); this.dirty = true; break; }
+      case 'sms': this.sendSms(p, msg); break;
+      case 'smsRead': { const acc = this.accounts[p.token]; for (const m of acc.sms || []) if (m.from === msg.num) m.read = true; this.dirty = true; break; }
+      case 'numReq': {
+        const v = this.players.get(msg.id);
+        if (v && v !== p && v.pos.distanceTo(p.pos) < 15) { this.send(v, { t: 'numReq', id: p.id, name: p.name }); this.send(p, { t: 'sys', text: `📞 ${v.name}님에게 번호 교환을 요청했어요` }); }
+        break;
+      }
+      case 'numAccept': {
+        const v = this.players.get(msg.id);
+        if (!v || v === p) break;
+        const a = this.accounts[p.token], b = this.accounts[v.token];
+        const add = (acc, num, name) => { acc.contacts ||= []; if (!acc.contacts.some((c) => c.num === num)) acc.contacts.push({ num, name }); };
+        add(a, b.phone, v.name); add(b, a.phone, p.name);
+        this.send(p, { t: 'contacts', list: a.contacts }); this.send(v, { t: 'contacts', list: b.contacts });
+        this.send(v, { t: 'sys', text: `📞 ${p.name}님과 번호를 교환했어요!` }); this.send(p, { t: 'sys', text: `📞 ${v.name}님과 번호를 교환했어요!` });
+        this.dirty = true;
+        break;
+      }
+      case 'flirt': this.flirt(p, msg); break;
+      case 'report112': this.combat.report112(p, String(msg.token || '')); break;
       case 'heal': if (!p.dead) this.combat.healPlayer(p, Math.max(0, Math.min(100, +msg.v || 0))); break;
       case 'buyHouse': {
         const b = this.buildings[msg.id];
-        const owned = Object.values(this.accounts).some((a) => a.homeId === msg.id);
-        if (!b || !forSale(b) || owned) { this.send(p, { t: 'houseFail', reason: '이미 팔린 집이에요' }); break; }
-        this.accounts[p.token].homeId = b.id;
+        const acc = this.accounts[p.token];
+        if (!b || !isHomeType(b)) break;
+        const free = freeUnits(b, this.ownedUnits(b.id));
+        const unit = b.type === 'house' ? '단독' : String(msg.unit || '');
+        if (!free.includes(unit)) { this.send(p, { t: 'houseFail', reason: '이미 팔린 집이에요' }); break; }
+        if ((acc.homes ||= []).length >= 5) { this.send(p, { t: 'houseFail', reason: '집은 5채까지만 가질 수 있어요' }); break; }
+        acc.homes.push({ bid: b.id, unit });
+        if (acc.homeId == null) { acc.homeId = b.id; acc.homeUnit = unit; }
         this.dirty = true;
-        this.send(p, { t: 'houseOk', id: b.id, price: housePrice(b) });
-        this.broadcast({ t: 'homes', homes: this.homeNames() });
+        this.send(p, { t: 'houseOk', id: b.id, unit, price: housePrice(b, unit), homeId: acc.homeId, homeUnit: acc.homeUnit, myHomes: acc.homes });
+        this.broadcast({ t: 'homes', ...this.homesInfo() });
         break;
       }
-      case 'buyVehicle': {
-        if (p.car >= 0 || !['tank', 'heli'].includes(msg.kind)) break;
-        const car = this.traffic.spawnParked(new THREE.Vector3(+msg.x, 0, +msg.z), +msg.h || 0, msg.kind);
-        this.broadcast({ t: 'carSpawn', id: car.id, x: car.pos.x, z: car.pos.z, h: car.heading, kind: car.kind });
-        this.traffic.enter(car, p.id);
-        p.car = car.id;
-        this.send(p, { t: 'carOk', id: car.id });
+      case 'setHome': {
+        const acc = this.accounts[p.token];
+        const h = (acc.homes || []).find((x) => x.bid === msg.id && x.unit === msg.unit);
+        if (!h) break;
+        acc.homeId = h.bid; acc.homeUnit = h.unit;
         this.dirty = true;
+        this.send(p, { t: 'myHomes', homeId: acc.homeId, homeUnit: acc.homeUnit, myHomes: acc.homes });
+        break;
+      }
+      case 'sellHouse': {
+        const acc = this.accounts[p.token];
+        const h = (acc.homes || []).find((x) => x.bid === msg.id && x.unit === msg.unit);
+        if (!h) break;
+        acc.homes = acc.homes.filter((x) => x !== h);
+        if (acc.homeId === h.bid && acc.homeUnit === h.unit) { acc.homeId = acc.homes[0]?.bid ?? null; acc.homeUnit = acc.homes[0]?.unit ?? null; }
+        this.dirty = true;
+        const b = this.buildings[h.bid];
+        this.send(p, { t: 'houseSold', id: h.bid, unit: h.unit, price: Math.round(housePrice(b, h.unit) * 0.8), homeId: acc.homeId, homeUnit: acc.homeUnit, myHomes: acc.homes });
+        this.broadcast({ t: 'homes', ...this.homesInfo() });
+        break;
+      }
+      case 'buyVehicle': case 'summonCar': {
+        if (p.car >= 0 || !(CAR_KINDS.includes(msg.kind) || ['tank', 'heli'].includes(msg.kind))) break;
+        if (msg.t === 'summonCar' && Date.now() - (p.lastSummon || 0) < 8000) { this.send(p, { t: 'sys', text: '🔑 차를 부른 지 얼마 안 됐어요. 잠시 후 다시 불러주세요' }); break; }
+        p.lastSummon = Date.now();
+        // 전에 불렀던 내 차는 차고로 돌려보낸다
+        const old = p.summoned != null ? this.traffic.cars[p.summoned] : null;
+        if (old && old.mode === 'parked') old.mode = 'gone';
+        const color = /^#[0-9a-fA-F]{6}$/.test(msg.color) ? msg.color : null;
+        const car = this.spawnCarFor(p, msg.kind, color, msg, msg.t === 'buyVehicle');
+        p.summoned = car.id;
         break;
       }
     }
+  }
+
+  // ---------------- 휴대폰 ----------------
+  newPhone() {
+    const used = new Set(Object.values(this.accounts).map((a) => a.phone));
+    let n;
+    do n = `010-${String(1000 + Math.floor(Math.random() * 9000))}-${String(1000 + Math.floor(Math.random() * 9000))}`; while (used.has(n));
+    return n;
+  }
+  accByPhone(num) { return Object.entries(this.accounts).find(([, a]) => a.phone === num) || null; }
+  contactAdd(p, msg) {
+    const num = String(msg.num || '').trim();
+    const acc = this.accounts[p.token];
+    const found = this.accByPhone(num);
+    if (!found) { this.send(p, { t: 'sys', text: '📵 없는 번호예요' }); return; }
+    if (found[1] === acc) { this.send(p, { t: 'sys', text: '내 번호예요 😅' }); return; }
+    acc.contacts ||= [];
+    const name = String(msg.name || '').trim().slice(0, 12) || found[1].name;
+    const ex = acc.contacts.find((c) => c.num === num);
+    if (ex) ex.name = name; else acc.contacts.push({ num, name });
+    if (acc.contacts.length > 100) acc.contacts.shift();
+    this.dirty = true;
+    this.send(p, { t: 'contacts', list: acc.contacts });
+    this.send(p, { t: 'sys', text: `📞 ${name} (${num}) 저장 완료` });
+  }
+  sendSms(p, msg) {
+    const text = String(msg.text || '').trim().slice(0, 200);
+    if (!text || Date.now() - (p.lastSms || 0) < 700) return;
+    p.lastSms = Date.now();
+    const acc = this.accounts[p.token];
+    const found = this.accByPhone(String(msg.to || ''));
+    if (!found) { this.send(p, { t: 'sys', text: '📵 없는 번호예요' }); return; }
+    const [tok, to] = found;
+    const m = { from: acc.phone, fromName: acc.name, to: to.phone, text, t: Date.now() };
+    (to.sms ||= []).push({ ...m, read: false });
+    (acc.sms ||= []).push({ ...m, read: true, mine: true });
+    for (const a of [to, acc]) if (a.sms.length > 200) a.sms.splice(0, a.sms.length - 200);
+    this.dirty = true;
+    this.send(p, { t: 'smsOut', m: { ...m, mine: true, read: true } });
+    const v = [...this.players.values()].find((x) => x.token === tok);
+    if (v) this.send(v, { t: 'smsIn', m: { ...m, read: false } });
+  }
+
+  // ---------------- 사진 · 인스타그램 ----------------
+  ownsChar(sub, token) { return this.users[sub]?.chars.includes(token) && this.accounts[token]; }
+  savePhoto(sub, char, dataUrl) {
+    const acc = this.ownsChar(sub, char);
+    if (!acc) throw new Error('내 캐릭터가 아니에요');
+    const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
+    if (!m) throw new Error('잘못된 사진');
+    const buf = Buffer.from(m[1], 'base64');
+    if (buf.length > 450 * 1024) throw new Error('사진이 너무 커요');
+    const id = crypto.randomBytes(10).toString('hex');
+    fs.writeFileSync(path.join(this.photoDir, `${id}.jpg`), buf);
+    this.photos[id] = { owner: char, ownerName: acc.name, t: Date.now(), posted: false, caption: '', likes: [] };
+    // 캐릭터당 사진 80장까지 (올리지 않은 오래된 것부터 정리)
+    const mine = Object.entries(this.photos).filter(([, p]) => p.owner === char && !p.posted).sort((a, b) => a[1].t - b[1].t);
+    while (mine.length > 80) this.deletePhoto(mine.shift()[0]);
+    this.dirty = true;
+    return id;
+  }
+  deletePhoto(id) {
+    delete this.photos[id];
+    try { fs.unlinkSync(path.join(this.photoDir, `${id}.jpg`)); } catch { /* 이미 없음 */ }
+    this.dirty = true;
+  }
+  myPhotos(char) { return Object.entries(this.photos).filter(([, p]) => p.owner === char).sort((a, b) => b[1].t - a[1].t).map(([id, p]) => ({ id, t: p.t, posted: p.posted, caption: p.caption, likes: p.likes.length })); }
+  instaFeed(char) {
+    return Object.entries(this.photos).filter(([, p]) => p.posted).sort((a, b) => b[1].postedAt - a[1].postedAt).slice(0, 60)
+      .map(([id, p]) => ({ id, name: this.accounts[p.owner]?.name || p.ownerName, mine: p.owner === char, caption: p.caption, t: p.postedAt, likes: p.likes.length, liked: p.likes.includes(char), level: this.accounts[p.owner]?.profile?.level || 1 }));
+  }
+  postInsta(sub, char, id, caption) {
+    const p = this.photos[id];
+    if (!this.ownsChar(sub, char) || !p || p.owner !== char) throw new Error('내 사진이 아니에요');
+    p.posted = true; p.postedAt = Date.now(); p.caption = String(caption || '').slice(0, 150);
+    this.dirty = true;
+    this.broadcast({ t: 'sys', text: `📸 ${this.accounts[char].name}님이 인스타그램에 새 사진을 올렸어요!` });
+  }
+  likeInsta(sub, char, id) {
+    const p = this.photos[id];
+    if (!this.ownsChar(sub, char) || !p?.posted) throw new Error('없는 게시물');
+    const i = p.likes.indexOf(char);
+    if (i >= 0) p.likes.splice(i, 1); else {
+      p.likes.push(char);
+      const owner = [...this.players.values()].find((x) => x.token === p.owner);
+      if (owner && p.owner !== char) this.send(owner, { t: 'sys', text: `❤️ ${this.accounts[char].name}님이 내 인스타 사진을 좋아해요` });
+    }
+    this.dirty = true;
+    return p.likes.length;
+  }
+
+  // ---------------- 건의함 ----------------
+  addFeedback(who, char, text) {
+    text = String(text || '').trim().slice(0, 2000);
+    if (text.length < 2) throw new Error('내용을 적어주세요');
+    const mine = this.feedback.filter((f) => f.sub === who.sub && Date.now() - f.t < 60000);
+    if (mine.length >= 3) throw new Error('잠시 후 다시 보내주세요');
+    this.feedback.push({ id: crypto.randomBytes(6).toString('hex'), t: Date.now(), sub: who.sub, email: who.user.email, user: who.user.name, char: this.accounts[char]?.name || '', text, done: false });
+    if (this.feedback.length > 2000) this.feedback.shift();
+    this.dirty = true;
+  }
+
+  // 플러팅: 하트 날리기. 매력이 높을수록 잘 먹힌다
+  flirt(p, msg) {
+    if (p.dead || Date.now() - (p.lastFlirt || 0) < 2000) return;
+    p.lastFlirt = Date.now();
+    const from = [p.pos.x, p.pos.y, p.pos.z];
+    if (msg.tt === 'npc') {
+      const c = this.sim.citizens[msg.id];
+      if (!c || c.mode === 'dead') return;
+      const pos = this.combat.npcPos(c);
+      if (pos.distanceTo(p.pos) > 9) return;
+      const charm = p.profile.charm || 0;
+      const grudge = c.grudges[p.token]?.pts || 0;
+      const aff = this.aff(c, p.token);
+      const chance = Math.max(0.1, Math.min(0.95, 0.35 + charm / 120 + aff / 200 - grudge / 80 + (c.personality.id === 'romantic' ? 0.2 : 0) - (c.age < 18 ? 1 : 0)));
+      const ok = Math.random() < chance;
+      if (c.age < 18) c.say('어... 저 아직 학생인데요? 😅', 3);
+      else if (ok) { c.say(['어머 😳💕', '헉... 설레잖아요 🥰', '저도 하트 💗', '오늘 좀 멋있네요? 😊', '부끄러워요... ☺️'][Math.floor(Math.random() * 5)], 3); c.emote('love', 4); this.sim.adjustMood(c, 8, `${p.name}가 하트를 보냄`); }
+      else { c.say(['뭐예요... 😒', '저 바빠요 😑', '하하... 네... 😅', '부담스러워요 🙄'][Math.floor(Math.random() * 4)], 3); c.emote(grudge > 30 ? 'angry' : 'surprised', 3); }
+      const v = this.setAff(c, p.token, aff + (c.age < 18 ? 0 : ok ? 4 + Math.round(charm / 25) : -2));
+      this.send(p, { t: 'aff', npc: c.id, v });
+      this.send(p, { t: 'flirtRes', ok: ok && c.age >= 18, name: c.name });
+      this.broadcast({ t: 'fx', k: 'hearts', a: from, b: [pos.x, pos.y, pos.z], pid: p.id, loc: p.loc, e: ok ? '💗' : '💔' });
+    } else if (msg.tt === 'player') {
+      const v = this.players.get(msg.id);
+      if (!v || v === p || v.loc !== p.loc || v.pos.distanceTo(p.pos) > 9) return;
+      this.send(v, { t: 'flirted', name: p.name });
+      this.send(p, { t: 'flirtRes', ok: true, name: v.name, player: true });
+      this.broadcast({ t: 'fx', k: 'hearts', a: from, b: [v.pos.x, v.pos.y, v.pos.z], pid: p.id, loc: p.loc, e: '💖' });
+    } else this.broadcast({ t: 'fx', k: 'hearts', a: from, b: null, pid: p.id, loc: p.loc, e: '💗' });
+  }
+
+  spawnCarFor(p, kind, color, msg, enter) {
+    const car = this.traffic.spawnParked(new THREE.Vector3(+msg.x || p.pos.x, 0, +msg.z || p.pos.z), +msg.h || 0, kind, color);
+    this.broadcast({ t: 'carSpawn', id: car.id, x: car.pos.x, z: car.pos.z, h: car.heading, kind: car.kind, color: car.color });
+    if (enter) {
+      this.traffic.enter(car, p.id);
+      p.car = car.id;
+      this.send(p, { t: 'carOk', id: car.id });
+    }
+    this.dirty = true;
+    return car;
   }
 
   updateActiveBuildings() {
@@ -313,7 +631,7 @@ export class World {
     let r, error;
     try {
       if (!llmEnabled) throw new Error('offline');
-      const out = await complete([{ role: 'system', content: profileSystemPrompt(c, ctx) }, ...log.slice(-14), { role: 'user', content }], { temperature: 0.95, max_tokens: 260 });
+      const out = await complete([{ role: 'system', content: profileSystemPrompt(c, ctx) }, ...log.slice(-14), { role: 'user', content }], { schema: SCHEMAS.talk, temperature: 0.95, max_tokens: 260 });
       r = { reply: String(out.reply || '...').slice(0, 400), emotion: out.emotion || 'neutral', affinity_delta: clampInt(out.affinity_delta, -3, 3), mood_delta: clampInt(out.mood_delta, -10, 10), insulted: out.insulted === true, action: out.action || 'none', amount: clampInt(out.amount, 0, 30) };
       // LLM이 놓친 노골적인 욕설도 잡아낸다
       if (text && INSULT.test(text) && !r.insulted) { r.insulted = true; r.mood_delta = Math.min(r.mood_delta, -6); }
@@ -354,7 +672,7 @@ export class World {
     if (llmEnabled) {
       try {
         const recent = log.slice(-12).map((m) => `${m.role === 'user' ? p.name : c.name}: ${m.content}`).join('\n');
-        const out = await complete([{ role: 'system', content: memoryPrompt(c, p.name) }, { role: 'user', content: recent }], { temperature: 0.5, max_tokens: 120 });
+        const out = await complete([{ role: 'system', content: memoryPrompt(c, p.name) }, { role: 'user', content: recent }], { schema: SCHEMAS.memory, temperature: 0.5, max_tokens: 120 });
         text = out.memory ? String(out.memory).slice(0, 80) : null;
       } catch { /* 무시 */ }
     } else {
@@ -372,11 +690,19 @@ export class World {
   }
 
   handleReport(c, rep) {
-    const p = [...this.players.values()].find((x) => x.token === rep.token);
     this.addMemory(c, rep, `${rep.name}을(를) ${rep.reason} 때문에 경찰에 신고했다`);
-    const text = `🚔 ${c.name}이(가) 경찰서에 ${rep.name}님을 신고했어요! (사유: ${rep.reason})`;
+    this.reportBy(c.name, rep);
+  }
+  handlePlayerReport(v, rep) {
+    this.reportBy(`${v.name}님`, rep);
+    this.send(v, { t: 'sys', text: `📱 112에 ${rep.name}님을 신고했어요. 경찰이 출동합니다 🚓` });
+  }
+  reportBy(who, rep) {
+    const p = [...this.players.values()].find((x) => x.token === rep.token);
+    const text = `🚔 ${who}이(가) 112에 ${rep.name}님을 신고했어요! (사유: ${rep.reason})`;
+    const heat = { 살인: 70, '살인 목격': 60, 폭행: 35 }[rep.reason] || 25;
     if (p) {
-      this.combat.addHeat(p, rep.reason === '폭행' ? 35 : 25);
+      this.combat.addHeat(p, heat, `${who}의 신고 (${rep.reason})`);
       this.send(p, { t: 'sys', text });
     } else {
       const acc = this.accounts[rep.token];
@@ -399,7 +725,7 @@ export class World {
     if (this.streetChatTimes.length >= this.streetChatPerMin) return null; // 비용 상한
     this.streetChatTimes.push(now);
     try {
-      const out = await complete([{ role: 'user', content: streetChatPrompt(a, b, { timeText: this.timeText() }) }], { temperature: 1.0, max_tokens: 300 });
+      const out = await complete([{ role: 'user', content: streetChatPrompt(a, b, { timeText: this.timeText() }) }], { schema: SCHEMAS.street, temperature: 1.0, max_tokens: 300 });
       const lines = (out.lines || []).filter((l) => l && l.text).slice(0, 6).map((l) => ({ speaker: l.speaker === 'B' ? 'B' : 'A', text: String(l.text).slice(0, 60) }));
       return lines.length ? lines : null;
     } catch { return null; }
@@ -414,19 +740,6 @@ export class World {
     this.sim.update(dt, this.minutes, { players });
     this.traffic.update(dt, { players, sim: this.sim });
     this.combat.tick(dt);
-    // 플레이어 차에 치일 뻔한 시민
-    for (const p of this.players.values()) {
-      if (p.car < 0) continue;
-      const car = this.traffic.cars[p.car];
-      if (!car || Math.abs(car.speed) < 2) continue;
-      for (const c of this.sim.citizens) {
-        if (c.location && c.mode !== 'park') continue;
-        if ((car.pos.y || 0) < 1.5 && c.mode !== 'dead' && Math.hypot(c.pos.x - car.pos.x, c.pos.z - car.pos.z) < car.mesh.radius + 0.8) {
-          this.sim.dodge(c, car.pos, { token: p.token, name: p.name });
-          this.send(p, { t: 'aff', npc: c.id, v: this.setAff(c, p.token, this.aff(c, p.token) - 2) });
-        }
-      }
-    }
     // 대화 중인 플레이어가 멀어지거나 오래 말이 없으면 대화 종료
     for (const p of this.players.values()) {
       if (p.talking === null) continue;
@@ -490,5 +803,9 @@ function sanitizeProfile(pr = {}) {
     def: Math.max(0, Math.min(150, Number(pr.def) || 0)),
     charm: Math.max(0, Math.min(500, Number(pr.charm) || 0)),
     regen: Math.max(0, Math.min(6, Number(pr.regen) || 0)),
+    look: sanitizeLook(pr.look),
+    level: Math.max(1, Math.min(9999, Math.floor(Number(pr.level)) || 1)),
+    badges: Array.isArray(pr.badges) ? pr.badges.slice(0, 8).map((b) => String(b).slice(0, 24)) : [],
+    phone: typeof pr.phone === 'string' ? pr.phone.slice(0, 16) : '',
   };
 }

@@ -1,11 +1,41 @@
 import * as THREE from 'three';
 import { toon, geo, G } from './utils.js';
+import { DEFAULT_LOOK } from './look.js';
 
 const rsph = () => geo('rsph', () => new THREE.SphereGeometry(1, 14, 10));
 const limbGeo = () => geo('limb', () => new THREE.CapsuleGeometry(0.065, 0.32, 4, 8));
 const legGeo = () => geo('leg', () => new THREE.CapsuleGeometry(0.1, 0.32, 4, 8));
 const smileGeo = () => geo('smile', () => new THREE.TorusGeometry(0.07, 0.018, 6, 14, Math.PI));
 const ringGeo = () => geo('ring', () => new THREE.TorusGeometry(0.1, 0.016, 6, 16));
+const starGeo = () => geo('star', () => {
+  const sh = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 ? 0.45 : 1, a = (i / 10) * Math.PI * 2 + Math.PI / 2;
+    if (i === 0) sh.moveTo(Math.cos(a) * r, Math.sin(a) * r); else sh.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  sh.closePath();
+  return new THREE.ExtrudeGeometry(sh, { depth: 0.4, bevelEnabled: false }).translate(0, 0, -0.2);
+});
+const heartGeo = () => geo('heart', () => {
+  const sh = new THREE.Shape();
+  sh.moveTo(0, -1); sh.bezierCurveTo(-1.4, 0, -1, 1.1, 0, 0.45); sh.bezierCurveTo(1, 1.1, 1.4, 0, 0, -1);
+  return new THREE.ExtrudeGeometry(sh, { depth: 0.4, bevelEnabled: false }).translate(0, 0, -0.2);
+});
+const curlGeo = (side) => geo('curl' + side, () => {
+  const pts = [];
+  for (let i = 0; i <= 30; i++) {
+    const t = i / 30;
+    const a = t * Math.PI * 3.2, r = 0.05 + (1 - t) * 0.12;
+    pts.push(new THREE.Vector3(side * (t * 0.35 + Math.sin(a) * r * t), t * 0.5 + Math.cos(a) * r * t * 0.8, 0.08 * t));
+  }
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 30, 0.022, 5, false);
+});
+const droopGeo = (side) => geo('droop' + side, () => {
+  const c = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0, 0), new THREE.Vector3(side * 0.18, 0.32, 0.08), new THREE.Vector3(side * 0.42, 0.34, 0.12), new THREE.Vector3(side * 0.6, 0.1, 0.1),
+  ]);
+  return new THREE.TubeGeometry(c, 14, 0.024, 5, false);
+});
 const antennaGeo = (side) => geo('ant' + side, () => {
   const c = new THREE.CatmullRomCurve3([
     new THREE.Vector3(0, 0, 0),
@@ -41,18 +71,19 @@ export class Roach {
     let color = o.color || '#8a5634';
     if (age >= 65) color = '#' + new THREE.Color(color).lerp(new THREE.Color('#b9a99a'), 0.35).getHexString();
     this.color = color;
+    const look = this.look = { ...DEFAULT_LOOK, ...(o.look || {}) };
 
     this.root = new THREE.Group();
     this.inner = new THREE.Group();
     this.root.add(this.inner);
 
     const bodyM = toon(color);
+    this.bodyM = bodyM;
     const darkM = toon(shade(color, 0.72));
-    const bellyM = toon(shade(color, 1.45));
+    const bellyM = toon(look.belly && look.belly !== 'auto' ? look.belly : shade(color, 1.45));
     const wingM = toon(shade(color, 0.85));
     const white = toon('#ffffff');
     const black = toon('#1d1410');
-    const pink = toon('#ff9fb2');
 
     // 다리
     this.legs = [];
@@ -75,12 +106,7 @@ export class Roach {
     for (let i = 0; i < 3; i++) mesh(G.box(), toon(shade(color, 1.2)), this.torso, 0, 0.82 + i * 0.16, 0.43 - Math.abs(i - 1) * 0.02, 0.38 - Math.abs(i - 1) * 0.06, 0.02, 0.03);
     // 날개 (등)
     this.wings = [];
-    for (const s of [-1, 1]) {
-      const w = mesh(rsph(), wingM, this.torso, s * 0.17, 1.12, -0.32, 0.3, 0.62, 0.1);
-      w.rotation.set(0.12, 0, s * 0.12);
-      mesh(rsph(), toon(shade(color, 1.25)), w, 0.25 * s, 0.25, 0.6, 0.18, 0.2, 0.5);
-      this.wings.push(w);
-    }
+    this.buildWings(look.wings | 0, color, wingM);
 
     // 팔 (4개)
     this.arms = [];
@@ -106,51 +132,15 @@ export class Roach {
     this.heldPose = 'none';
     this.attackT = 0; this.attackKind = null;
     this.dead = false; this.seated = false; this.dancing = false; this.hurtT = 0;
+    this.crawlK = 0; // 0 = 두 발로 걷기, 1 = 여섯 다리로 기어 달리기
 
     // 머리
     this.head = new THREE.Group();
     this.head.position.y = 1.95;
     this.torso.add(this.head);
     this.headMesh = mesh(rsph(), bodyM, this.head, 0, 0, 0, 0.5, 0.46, 0.47);
-    this.bodyM = bodyM;
-    // 눈
-    this.eyes = [];
-    this.pupils = [];
-    for (const s of [-1, 1]) {
-      const eye = new THREE.Group();
-      eye.position.set(s * 0.19, 0.05, 0.38);
-      this.head.add(eye);
-      mesh(rsph(), white, eye, 0, 0, 0.02, 0.15, 0.18, 0.1);
-      const p = mesh(rsph(), black, eye, 0, -0.01, 0.1, 0.09, 0.11, 0.05);
-      mesh(G.sphereLow(), white, eye, s * -0.03, 0.04, 0.145, 0.03, 0.03, 0.02);
-      this.eyes.push(eye);
-      this.pupils.push(p);
-    }
-    // 볼터치
-    for (const s of [-1, 1]) mesh(G.sphereLow(), pink, this.head, s * 0.3, -0.11, 0.36, 0.09, 0.055, 0.04);
-    // 입
-    this.mouth = mesh(smileGeo(), black, this.head, 0, -0.15, 0.45);
-    this.mouth.rotation.z = Math.PI;
-    this.mouthO = mesh(G.sphereLow(), black, this.head, 0, -0.17, 0.45, 0.05, 0.06, 0.03);
-    this.mouthO.visible = false;
-    // 눈썹 (화남)
-    this.brows = [];
-    for (const s of [-1, 1]) {
-      const b = mesh(G.box(), black, this.head, s * 0.19, 0.27, 0.43, 0.16, 0.03, 0.03);
-      b.rotation.z = s * -0.35; b.visible = false;
-      this.brows.push(b);
-    }
-    // 더듬이
-    this.antennae = [];
-    for (const s of [-1, 1]) {
-      const pivot = new THREE.Group();
-      pivot.position.set(s * 0.12, 0.38, 0.15);
-      this.head.add(pivot);
-      mesh(antennaGeo(s), darkM, pivot);
-      mesh(G.sphereLow(), toon(shade(color, 1.1)), pivot, s * 0.5, 0.62, 0, 0.06, 0.06, 0.06);
-      pivot.userData.phase = Math.random() * 6;
-      this.antennae.push(pivot);
-    }
+    this.pupilColor = look.pupil || '#1d1410';
+    this.buildFace(look, color, darkM, white, black);
 
     if (o.lashes) for (const s of [-1, 1]) {
       const l = mesh(G.box(), black, this.head, s * 0.3, 0.17, 0.36, 0.08, 0.02, 0.02);
@@ -185,6 +175,142 @@ export class Roach {
     this.jumpSquash = 0;
     this.far = null;
     this.detailsDirty = true;
+  }
+
+  // 날개 모양: 0 기본, 1 반짝 투명, 2 나비, 3 천사 깃털, 4 박쥐, 5 꼬마, 6 무지개, 7 접은 날개(딱지)
+  buildWings(style, color, wingM) {
+    const gm = this.gradient;
+    const glassy = (c, op = 0.55) => new THREE.MeshToonMaterial({ color: c, transparent: true, opacity: op, emissive: c, emissiveIntensity: 0.15 });
+    for (const s of [-1, 1]) {
+      const w = new THREE.Group();
+      w.position.set(s * 0.17, 1.12, -0.32);
+      this.torso.add(w);
+      this.wings.push(w);
+      if (style === 2) { // 나비
+        const a = mesh(rsph(), toon('#ff8fc8'), w, s * 0.32, 0.25, -0.05, 0.42, 0.4, 0.04); a.rotation.z = s * -0.4;
+        const b = mesh(rsph(), toon('#b388ff'), w, s * 0.24, -0.25, -0.05, 0.28, 0.26, 0.04); b.rotation.z = s * 0.4;
+        mesh(G.sphereLow(), toon('#ffffff'), w, s * 0.4, 0.32, -0.1, 0.09, 0.09, 0.02);
+        mesh(G.sphereLow(), toon('#fff176'), w, s * 0.26, -0.26, -0.1, 0.07, 0.07, 0.02);
+      } else if (style === 3) { // 천사
+        for (let i = 0; i < 3; i++) {
+          const f = mesh(rsph(), toon(i === 1 ? '#f5f5f5' : '#ffffff'), w, s * (0.1 + i * 0.07), 0.32 - i * 0.16, -0.1 - i * 0.03, 0.3 - i * 0.05, 0.11, 0.05);
+          f.rotation.z = s * (1.0 - i * 0.3);
+        }
+      } else if (style === 4) { // 박쥐
+        const m = toon('#4a2c5e');
+        const a = mesh(rsph(), m, w, s * 0.36, 0.18, -0.05, 0.48, 0.3, 0.03); a.rotation.z = s * -0.25;
+        for (let i = 0; i < 3; i++) mesh(rsph(), toon('#3a2048'), w, s * (0.12 + i * 0.22), -0.08, -0.05, 0.1, 0.12, 0.035);
+      } else if (style === 6) { // 무지개
+        ['#ff8a80', '#ffd180', '#ffff8d', '#b9f6ca', '#80d8ff', '#b388ff'].forEach((c, i) => {
+          mesh(rsph(), toon(c), w, s * 0.05, 0.05 - i * 0.04, -0.02 - i * 0.012, 0.32 - i * 0.035, 0.62 - i * 0.07, 0.06);
+        });
+      } else {
+        const sc = style === 5 ? 0.55 : 1;
+        const mat = style === 1 ? glassy('#b3e5fc') : style === 7 ? toon(shade(color, 0.6)) : wingM;
+        const main = mesh(rsph(), mat, w, 0, 0, 0, 0.3 * sc * (style === 7 ? 1.1 : 1), 0.62 * sc, style === 7 ? 0.14 : 0.1);
+        main.rotation.set(0.12, 0, s * 0.12);
+        if (style === 1) mesh(G.sphereLow(), glassy('#ffffff', 0.8), main, 0.25 * s, 0.35, 0.6, 0.15, 0.12, 0.3);
+        else if (style !== 7) mesh(rsph(), toon(shade(color, 1.25)), main, 0.25 * s, 0.25, 0.6, 0.18, 0.2, 0.5);
+        else mesh(G.sphereLow(), toon('#ffffff'), main, 0.3 * s, 0.4, 0.7, 0.12, 0.2, 0.2);
+      }
+    }
+    void gm;
+  }
+
+  buildFace(look, color, darkM, white, black) {
+    const H = this.head;
+    // 눈: 0 동글, 1 왕눈 반짝, 2 졸린 눈, 3 웃는 실눈, 4 별 눈, 5 고양이 눈, 6 속눈썹, 7 점 눈
+    this.eyes = [];
+    this.pupils = [];
+    const es = look.eyes | 0;
+    const pm = toon(this.pupilColor);
+    for (const s of [-1, 1]) {
+      const eye = new THREE.Group();
+      eye.position.set(s * 0.19, 0.05, 0.38);
+      H.add(eye);
+      if (es === 3) { // 웃는 실눈 ^^
+        const arc = mesh(smileGeo(), black, eye, 0, -0.02, 0.1, 1.1, 1.1, 1);
+        this.pupils.push(arc);
+      } else if (es === 7) {
+        const p = mesh(rsph(), pm, eye, 0, 0, 0.08, 0.06, 0.07, 0.04);
+        this.pupils.push(p);
+      } else {
+        const big = es === 1 ? 1.22 : 1;
+        mesh(rsph(), es === 5 ? toon('#f0f4c3') : white, eye, 0, 0, 0.02, 0.15 * big, 0.18 * big, 0.1);
+        let p;
+        if (es === 4) { p = mesh(starGeo(), pm, eye, 0, -0.01, 0.11, 0.09, 0.09, 0.05); }
+        else if (es === 5) p = mesh(rsph(), pm, eye, 0, -0.01, 0.1, 0.035, 0.13, 0.05);
+        else p = mesh(rsph(), pm, eye, 0, -0.01, 0.1, 0.09 * big, 0.11 * big, 0.05);
+        this.pupils.push(p);
+        mesh(G.sphereLow(), white, eye, s * -0.03, 0.04, 0.145, 0.03 * big, 0.03 * big, 0.02);
+        if (es === 1) mesh(G.sphereLow(), white, eye, s * 0.04, -0.05, 0.145, 0.018, 0.018, 0.015);
+        if (es === 2) { // 눈꺼풀
+          const lid = mesh(G.hemi(), this.bodyM, eye, 0, 0.0, 0.03, 0.165, 0.2, 0.12);
+          lid.rotation.x = -0.25;
+        }
+        if (es === 6) for (let i = 0; i < 3; i++) {
+          const l = mesh(G.box(), black, eye, s * (0.06 + i * 0.05), 0.17 - i * 0.025, 0.08, 0.02, 0.08, 0.02);
+          l.rotation.z = s * (-0.4 - i * 0.35);
+        }
+      }
+      this.eyes.push(eye);
+    }
+    // 볼터치
+    if (look.cheek !== 'none') for (const s of [-1, 1]) mesh(G.sphereLow(), toon(look.cheek || '#ff9fb2'), H, s * 0.3, -0.11, 0.36, 0.09, 0.055, 0.04);
+    // 코: 0 없음, 1 콩알, 2 딸기, 3 돼지, 4 뾰족, 5 하트
+    const ns = look.nose | 0;
+    if (ns === 1) mesh(G.sphereLow(), toon(shade(color, 0.6)), H, 0, -0.05, 0.47, 0.045, 0.035, 0.03);
+    else if (ns === 2) { mesh(G.sphereLow(), toon('#ff5252'), H, 0, -0.05, 0.47, 0.07, 0.07, 0.06); for (const [x, y] of [[-0.02, -0.03], [0.025, -0.06], [0, -0.08]]) mesh(G.sphereLow(), toon('#fff59d'), H, x, y, 0.53, 0.008, 0.008, 0.005); }
+    else if (ns === 3) { const n = mesh(G.cyl(), toon('#ffab91'), H, 0, -0.05, 0.47, 0.08, 0.06, 0.06); n.rotation.x = Math.PI / 2; for (const s of [-1, 1]) mesh(G.sphereLow(), toon('#6d4c41'), H, s * 0.025, -0.05, 0.505, 0.015, 0.022, 0.01); }
+    else if (ns === 4) { const n = mesh(G.cone(), toon(shade(color, 0.8)), H, 0, -0.04, 0.5, 0.05, 0.14, 0.05); n.rotation.x = Math.PI / 2; }
+    else if (ns === 5) { const n = mesh(heartGeo(), toon('#ff6f91'), H, 0, -0.05, 0.47, 0.05, 0.05, 0.06); void n; }
+    // 입 (그룹: 감정에 따라 뒤집힌다. 로컬 y는 화면에서 반대)
+    const ms = look.mouth | 0;
+    this.mouth = new THREE.Group();
+    this.mouth.position.set(0, -0.15, 0.45);
+    this.mouth.rotation.z = Math.PI;
+    H.add(this.mouth);
+    const M = this.mouth;
+    if (ms === 1) { for (const s of [-1, 1]) mesh(smileGeo(), black, M, s * 0.04, 0, 0, 0.6, 0.6, 1); }
+    else if (ms === 4) mesh(G.box(), black, M, 0, 0.03, 0, 0.14, 0.02, 0.02);
+    else if (ms === 6) {
+      const half = new THREE.Mesh(geo('halfdisc', () => new THREE.CircleGeometry(0.1, 16, 0, Math.PI)), toon('#8e2b2b'));
+      half.position.set(0, 0, 0.005); M.add(half);
+      mesh(G.sphereLow(), toon('#ff8a80'), M, 0, 0.06, 0.01, 0.045, 0.025, 0.01);
+    } else if (ms === 7) mesh(rsph(), toon('#ffa726'), M, 0, 0.02, 0.03, 0.13, 0.05, 0.08);
+    else mesh(smileGeo(), black, M, 0, 0, 0);
+    if (ms === 2) for (const s of [-1, 1]) mesh(G.box(), white, M, s * 0.022, 0.075, 0.005, 0.04, 0.05, 0.015);
+    if (ms === 3) mesh(G.sphereLow(), toon('#ff6f91'), M, 0.02, 0.1, 0.01, 0.04, 0.05, 0.02);
+    if (ms === 5) for (const s of [-1, 1]) { const f = mesh(G.cone(), white, M, s * 0.055, 0.03, 0.01, 0.018, 0.045, 0.018); f.rotation.z = Math.PI; }
+    this.mouthO = mesh(G.sphereLow(), black, H, 0, -0.17, 0.45, 0.05, 0.06, 0.03);
+    this.mouthO.visible = false;
+    // 눈썹 (화남)
+    this.brows = [];
+    for (const s of [-1, 1]) {
+      const b = mesh(G.box(), black, H, s * 0.19, 0.27, 0.43, 0.16, 0.03, 0.03);
+      b.rotation.z = s * -0.35; b.visible = false;
+      this.brows.push(b);
+    }
+    // 더듬이: 0 기본, 1 짧은, 2 꼬불, 3 하트 끝, 4 별 끝, 5 축 처진, 6 길쭉, 7 방울
+    const as = look.antenna | 0;
+    this.antennae = [];
+    for (const s of [-1, 1]) {
+      const pivot = new THREE.Group();
+      pivot.position.set(s * 0.12, 0.38, 0.15);
+      H.add(pivot);
+      const sc = as === 1 ? 0.55 : as === 6 ? 1.45 : 1;
+      let tip = new THREE.Vector3(s * 0.5 * sc, 0.62 * sc, 0);
+      if (as === 2) { mesh(curlGeo(s), darkM, pivot); tip = new THREE.Vector3(s * 0.35, 0.5, 0.08); }
+      else if (as === 5) { mesh(droopGeo(s), darkM, pivot); tip = new THREE.Vector3(s * 0.6, 0.1, 0.1); }
+      else mesh(antennaGeo(s), darkM, pivot, 0, 0, 0, sc, sc, sc);
+      const tc = toon(shade(color, 1.1));
+      if (as === 3) mesh(heartGeo(), toon('#ff6f91'), pivot, tip.x, tip.y, tip.z, 0.09, 0.09, 0.09);
+      else if (as === 4) mesh(starGeo(), toon('#ffd54f'), pivot, tip.x, tip.y, tip.z, 0.1, 0.1, 0.1);
+      else if (as === 7) mesh(rsph(), toon('#ff9fb2'), pivot, tip.x, tip.y, tip.z, 0.12, 0.12, 0.12);
+      else mesh(G.sphereLow(), tc, pivot, tip.x, tip.y, tip.z, 0.06, 0.06, 0.06);
+      pivot.userData.phase = Math.random() * 6;
+      this.antennae.push(pivot);
+    }
   }
 
   // 멀리 있으면 얼굴 디테일과 그림자를 끈다
@@ -547,6 +673,116 @@ export class Roach {
           this.hasCane = true;
           mesh(G.cylLow(), toon('#6d4c41'), g, 0.62, 0.5, 0.25, 0.035, 1.0, 0.035);
           break;
+        // ---------------- 기본 악세서리 ----------------
+        case 'sprout':
+          mesh(G.cylLow(), toon('#7cb342'), g, 0, H + 0.55, 0, 0.025, 0.25, 0.025);
+          for (const s of [-1, 1]) { const l = mesh(rsph(), toon('#8bc34a'), g, s * 0.1, H + 0.7, 0, 0.12, 0.05, 0.07); l.rotation.z = s * 0.4; }
+          break;
+        case 'bunny':
+          mesh(G.cyl(), toon('#fafafa'), g, 0, H + 0.33, 0, 0.47, 0.05, 0.45);
+          for (const s of [-1, 1]) {
+            const e = mesh(rsph(), toon('#fafafa'), g, s * 0.2, H + 0.75, -0.05, 0.1, 0.36, 0.06); e.rotation.z = s * -0.2;
+            const i2 = mesh(rsph(), toon('#ffb6c8'), g, s * 0.2, H + 0.75, -0.0, 0.05, 0.27, 0.04); i2.rotation.z = s * -0.2;
+          }
+          break;
+        case 'flowerpin':
+          for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; mesh(G.sphereLow(), toon('#ffffff'), g, 0.3 + Math.cos(a) * 0.09, H + 0.3 + Math.sin(a) * 0.09, 0.3, 0.07, 0.07, 0.03); }
+          mesh(G.sphereLow(), toon('#ffd54f'), g, 0.3, H + 0.3, 0.32, 0.06, 0.06, 0.04);
+          break;
+        case 'starpin': mesh(starGeo(), toon('#ffd54f'), g, -0.3, H + 0.3, 0.3, 0.12, 0.12, 0.12).rotation.z = 0.3; break;
+        case 'partyhat': {
+          const h2 = mesh(G.cone(), stripeToon('#ff7aa2', '#fff59d'), g, 0.05, H + 0.66, 0, 0.24, 0.6, 0.24); h2.rotation.z = -0.15;
+          mesh(G.sphereLow(), toon('#4fc3f7'), g, 0.15, H + 1.0, 0, 0.08, 0.08, 0.08);
+          break;
+        }
+        case 'halo': {
+          const r = mesh(ringGeo(), new THREE.MeshToonMaterial({ color: '#fff59d', emissive: '#ffd54f', emissiveIntensity: 0.8 }), g, 0, H + 0.68, 0, 2.6, 2.6, 2.2);
+          r.rotation.x = Math.PI / 2;
+          break;
+        }
+        case 'bandaid': {
+          const b2 = mesh(G.box(), toon('#ffcc80'), g, 0.27, H + 0.2, 0.4, 0.16, 0.05, 0.02); b2.rotation.z = 0.5; b2.rotation.y = 0.5;
+          break;
+        }
+        case 'mask':
+          mesh(rsph(), toon('#fafafa'), g, 0, H - 0.12, 0.33, 0.3, 0.16, 0.16);
+          for (const s of [-1, 1]) mesh(G.box(), toon('#eeeeee'), g, s * 0.33, H - 0.05, 0.25, 0.02, 0.02, 0.25);
+          break;
+        case 'stache':
+          for (const s of [-1, 1]) { const m = mesh(rsph(), toon('#3e2723'), g, s * 0.075, H - 0.1, 0.47, 0.08, 0.032, 0.03); m.rotation.z = s * -0.35; }
+          break;
+        case 'mole': mesh(G.sphereLow(), toon('#3e2723'), g, 0.17, H - 0.14, 0.43, 0.022, 0.022, 0.015); break;
+        case 'freckles':
+          for (const s of [-1, 1]) for (const [x, y] of [[0.24, -0.05], [0.3, -0.08], [0.27, -0.12], [0.33, -0.03]]) mesh(G.sphereLow(), toon('#a1663e'), g, s * x, H + y, 0.38 + (0.33 - x) * 0.2, 0.014, 0.014, 0.01);
+          break;
+        case 'eyepatch':
+          mesh(G.cyl(), toon('#212121'), g, 0.19, H + 0.05, 0.5, 0.15, 0.03, 0.15).rotation.x = Math.PI / 2;
+          mesh(G.box(), toon('#212121'), g, 0, H + 0.2, 0.1, 0.98, 0.03, 0.8).rotation.z = -0.3;
+          break;
+        case 'heartcheek': for (const s of [-1, 1]) mesh(heartGeo(), toon('#ff4f81'), g, s * 0.3, H - 0.1, 0.4, 0.05, 0.05, 0.05); break;
+        case 'minishades':
+          for (const s of [-1, 1]) mesh(G.cyl(), toon('#212121'), g, s * 0.17, H + 0.05, 0.52, 0.09, 0.02, 0.09).rotation.x = Math.PI / 2;
+          mesh(G.box(), toon('#212121'), g, 0, H + 0.06, 0.53, 0.12, 0.02, 0.02);
+          break;
+        case 'clownnose': mesh(G.sphereLow(), toon('#ff1744'), g, 0, H - 0.04, 0.5, 0.08, 0.08, 0.08); break;
+        case 'tee':
+          mesh(rsph(), toon(c), g, 0, 1.12, 0, 0.53, 0.5, 0.45);
+          break;
+        case 'stripes':
+          mesh(rsph(), toon('#ffffff'), g, 0, 1.12, 0, 0.53, 0.5, 0.45);
+          for (let i = 0; i < 4; i++) mesh(G.cyl(), toon(c), g, 0, 0.85 + i * 0.16, 0, 0.5 - Math.abs(i - 1.5) * 0.05, 0.05, 0.43 - Math.abs(i - 1.5) * 0.04, { cast: false });
+          break;
+        case 'overalls':
+          mesh(rsph(), toon(c), g, 0, 0.9, 0, 0.53, 0.38, 0.45);
+          mesh(G.box(), toon(c), g, 0, 1.15, 0.38, 0.4, 0.35, 0.05);
+          for (const s of [-1, 1]) mesh(G.box(), toon(c), g, s * 0.16, 1.4, 0.33, 0.06, 0.4, 0.04).rotation.x = -0.25;
+          for (const s of [-1, 1]) mesh(G.sphereLow(), toon('#ffd54f'), g, s * 0.16, 1.27, 0.41, 0.03, 0.03, 0.02);
+          break;
+        case 'cape': {
+          const cp = mesh(rsph(), toon(c), g, 0, 1.05, -0.36, 0.55, 0.75, 0.12); cp.rotation.x = 0.15;
+          mesh(G.cyl(), toon(c), g, 0, 1.6, 0, 0.42, 0.06, 0.36);
+          break;
+        }
+        case 'raincoat':
+          mesh(rsph(), toon('#ffeb3b'), g, 0, 1.03, 0, 0.55, 0.64, 0.47);
+          mesh(G.hemi(), toon('#ffeb3b'), g, 0, H + 0.12, -0.05, 0.53, 0.48, 0.52);
+          for (let i = 0; i < 3; i++) mesh(G.sphereLow(), toon('#fafafa'), g, 0, 0.9 + i * 0.2, 0.47, 0.03, 0.03, 0.02);
+          break;
+        case 'jersey':
+          mesh(rsph(), toon(c), g, 0, 1.12, 0, 0.53, 0.5, 0.45);
+          mesh(G.box(), toon('#ffffff'), g, 0, 1.15, -0.44, 0.22, 0.3, 0.02);
+          mesh(G.cyl(), toon('#ffffff'), g, 0, 1.58, 0, 0.3, 0.05, 0.26);
+          break;
+        case 'watch':
+          mesh(G.cyl(), toon('#455a64'), g, -0.55, 0.92, 0.42, 0.08, 0.06, 0.08);
+          mesh(G.cyl(), toon('#e1f5fe'), g, -0.55, 0.955, 0.42, 0.055, 0.02, 0.055);
+          break;
+        case 'bracelet':
+          for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; mesh(G.sphereLow(), toon(['#ff8a80', '#80d8ff', '#ccff90', '#ffd180'][i % 4]), g, 0.55 + Math.cos(a) * 0.08, 0.92, 0.42 + Math.sin(a) * 0.08, 0.03, 0.03, 0.03); }
+          break;
+        case 'balloon': {
+          mesh(G.cylLow(), toon('#eeeeee'), g, 0.62, 1.6, 0.2, 0.008, 1.6, 0.008);
+          const bl = mesh(rsph(), new THREE.MeshToonMaterial({ color: '#ff5252', emissive: '#ff1744', emissiveIntensity: 0.15 }), g, 0.62, 2.7, 0.2, 0.32, 0.38, 0.32);
+          void bl;
+          break;
+        }
+        case 'locket':
+          { const t = mesh(ringGeo(), toon('#ffd54f'), g, 0, 1.55, 0, 3.2, 3.2, 4.5); t.rotation.x = Math.PI / 2 + 0.3; }
+          mesh(heartGeo(), toon('#ff4f81'), g, 0, 1.3, 0.44, 0.07, 0.07, 0.06);
+          break;
+        case 'bell':
+          { const t = mesh(ringGeo(), toon('#e53935'), g, 0, 1.55, 0, 3.4, 3.4, 4.5); t.rotation.x = Math.PI / 2 + 0.25; }
+          mesh(G.sphereLow(), toon('#ffd54f'), g, 0, 1.36, 0.44, 0.09, 0.09, 0.09);
+          break;
+        case 'camera':
+          { const t = mesh(ringGeo(), toon('#424242'), g, 0, 1.5, 0, 3.4, 3.4, 4.5); t.rotation.x = Math.PI / 2 + 0.35; }
+          mesh(G.box(), toon('#37474f'), g, 0, 1.15, 0.5, 0.3, 0.2, 0.12);
+          mesh(G.cyl(), toon('#90caf9'), g, 0, 1.15, 0.58, 0.07, 0.06, 0.07).rotation.x = Math.PI / 2;
+          break;
+        case 'brooch':
+          for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; mesh(G.sphereLow(), toon('#f48fb1'), g, 0.2 + Math.cos(a) * 0.05, 1.4 + Math.sin(a) * 0.05, 0.43, 0.04, 0.04, 0.02); }
+          mesh(G.sphereLow(), toon('#fff59d'), g, 0.2, 1.4, 0.45, 0.03, 0.03, 0.02);
+          break;
       }
     }
   }
@@ -556,9 +792,10 @@ export class Roach {
     this.emotionT = duration;
     const happy = e === 'happy' || e === 'love';
     for (const eye of this.eyes) eye.scale.set(1, happy ? 0.55 : e === 'surprised' || e === 'scared' ? 1.25 : 1, 1);
-    for (const p of this.pupils) p.material = toon(e === 'love' ? '#ff4f81' : '#1d1410');
+    for (const p of this.pupils) p.material = toon(e === 'love' ? '#ff4f81' : this.pupilColor);
     this.mouth.rotation.z = e === 'sad' || e === 'angry' ? 0 : Math.PI;
     this.mouth.position.y = e === 'sad' || e === 'angry' ? -0.2 : -0.15;
+    this.mouth.scale.y = e === 'sad' || e === 'angry' ? 0.8 : 1;
     this.mouth.visible = !(e === 'surprised' || e === 'scared');
     this.mouthO.visible = !this.mouth.visible;
     this.mouthO.userData.on = this.mouthO.visible;
@@ -643,6 +880,13 @@ export class Roach {
         mesh(G.cylLow(), toon('#fafafa'), g, 0, -0.1, 0, 0.008, 0.01, 1.2).rotation.x = Math.PI / 2;
         this.heldPose = 'gun'; break;
       }
+      case 'crossbow': {
+        mesh(G.box(), wood, g, 0, -0.2, 0.02, 0.12, 0.8, 0.14);
+        const arc = mesh(new THREE.TorusGeometry(0.42, 0.035, 6, 14, Math.PI), toon('#5d4037'), g, 0, -0.55, 0.02);
+        arc.rotation.z = Math.PI; arc.rotation.x = Math.PI / 2;
+        mesh(G.box(), toon('#ffd54f'), g, 0, -0.1, 0.12, 0.08, 0.25, 0.1);
+        this.heldPose = 'gun'; break;
+      }
       case 'grenade':
         mesh(G.sphereLow(), toon('#558b2f'), g, 0, -0.08, 0, 0.13, 0.15, 0.13);
         mesh(G.box(), toon('#9e9e9e'), g, 0, 0.06, 0, 0.06, 0.06, 0.06);
@@ -651,6 +895,14 @@ export class Roach {
         mesh(G.sphereLow(), toon('#b0bec5'), g, 0, -0.08, 0, 0.14, 0.14, 0.14);
         mesh(G.sphereLow(), toon('#ff5252', { emissive: '#ff1744' }), g, 0, -0.08, 0.12, 0.04, 0.04, 0.04);
         this.heldPose = 'none'; break;
+      case 'wand': {
+        mesh(G.cylLow(), toon('#5d4037'), g, 0, -0.35, 0, 0.035, 0.9, 0.035);
+        const orb = mesh(G.sphereLow(), new THREE.MeshToonMaterial({ color: c, emissive: c, emissiveIntensity: 0.9 }), g, 0, -0.85, 0, 0.11, 0.11, 0.11);
+        mesh(G.box(), toon('#ffd54f'), g, 0, -0.75, 0, 0.09, 0.05, 0.09);
+        this.wandOrb = orb;
+        this.heldPose = 'wand'; break;
+      }
+      case 'food': buildFood(g, spec.split(':')[1], spec.split(':')[2] || '#ffcc80'); this.heldPose = 'food'; break;
       case 'doll': {
         mesh(G.sphereLow(), toon(c), g, 0, -0.25, 0.15, 0.18, 0.2, 0.16);
         mesh(G.sphereLow(), toon(c), g, 0, -0.02, 0.15, 0.14, 0.13, 0.13);
@@ -662,6 +914,33 @@ export class Roach {
     g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   }
 
+  // 먹기 연출: motion = bite | slurp | spoon | drink | slice | drumstick, prop = 'shape:color'
+  eat(motion, prop, dur = 3) {
+    this.eatT = dur; this.eatDur = dur; this.eatMotion = motion;
+    if (!this.eatProp) {
+      this.eatProp = new THREE.Group();
+      this.hand.add(this.eatProp);
+      this.handL = new THREE.Group(); this.handL.position.set(0, -0.42, 0); this.arms[0].add(this.handL);
+      this.eatPropL = new THREE.Group(); this.handL.add(this.eatPropL);
+    }
+    this.eatProp.clear(); this.eatPropL.clear();
+    this.heldGroup.visible = false;
+    const [shape, col] = (prop || 'bun:#d7a86e').split(':');
+    if (motion === 'slurp' || motion === 'spoon') {
+      buildFood(this.eatPropL, shape, col);
+      const tool = toon(motion === 'slurp' ? '#c8a165' : '#cfd8dc');
+      if (motion === 'slurp') for (const x of [-0.03, 0.03]) mesh(G.cylLow(), tool, this.eatProp, x, -0.3, 0.05, 0.012, 0.6, 0.012);
+      else { mesh(G.cylLow(), tool, this.eatProp, 0, -0.2, 0.03, 0.015, 0.4, 0.015); mesh(G.sphereLow(), tool, this.eatProp, 0, -0.42, 0.05, 0.06, 0.02, 0.05); }
+    } else buildFood(this.eatProp, shape, col);
+    this.eatProp.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    this.eatPropL.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  }
+  stopEat() {
+    this.eatT = 0;
+    this.eatProp?.clear(); this.eatPropL?.clear();
+    this.heldGroup.visible = true;
+  }
+
   attack(kind = 'melee') { this.attackT = kind === 'melee' ? 0.3 : kind === 'throw' ? 0.35 : 0.12; this.attackKind = kind; this.attackDur = this.attackT; }
 
   hurt() {
@@ -671,6 +950,10 @@ export class Roach {
   }
 
   setDead(v) { this.dead = v; }
+  setFlipped(v) { this.flipped = v; }
+  // 플러팅: 손키스 후 하트
+  flirt() { this.flirtT = 1.2; this.setEmotion('love', 3); }
+  cast() { this.castT = 0.45; }
   setSeated(v) { this.seated = v; }
 
   /** speed: 현재 이동 속도 (m/s) */
@@ -717,7 +1000,7 @@ export class Roach {
       a.rotation.x = Math.sin(this.t * 2.3 + ph) * 0.12 - k * 0.15;
     }
     // 날개 살짝
-    for (let i = 0; i < 2; i++) this.wings[i].rotation.y = (i ? 1 : -1) * (opts.airborne ? 0.6 + Math.sin(this.t * 40) * 0.3 : Math.sin(this.t * 1.5) * 0.03);
+    if (!this.flying) for (let i = 0; i < 2; i++) { this.wings[i].rotation.y = (i ? 1 : -1) * (opts.airborne ? 0.6 + Math.sin(this.t * 40) * 0.3 : Math.sin(this.t * 1.5) * 0.03); this.wings[i].rotation.z = 0; }
 
     // 깜빡임
     this.blinkT -= dt;
@@ -733,9 +1016,38 @@ export class Roach {
       this.emotionT -= dt;
       if (this.emotionT <= 0) this.setEmotion(this.baseEmotion || 'neutral', 0);
     }
+    // 달리기: 진짜 바퀴벌레처럼 몸을 바닥에 붙이고 여섯 다리로 기어간다 (삼각 보행)
+    const wantCrawl = speed >= 7 && !this.seated && !this.dead && !this.dancing && this.attackT <= 0 && !opts.noCrawl;
+    this.crawlK += ((wantCrawl ? 1 : 0) - this.crawlK) * Math.min(1, dt * 9);
+    const ck = this.crawlK;
+    if (ck > 0.01) {
+      const tilt = 1.38 * ck;
+      this.inner.rotation.x = tilt;
+      this.inner.position.y = this.inner.position.y * (1 - ck) + ck * (0.46 + Math.abs(Math.sin(this.phase)) * 0.05);
+      this.torso.rotation.x = 0; this.torso.rotation.z = 0;
+      this.head.rotation.x = -1.15 * ck + Math.sin(this.phase * 2) * 0.04 * ck;
+      // 다리 끝이 바닥을 향하도록 몸 기울기만큼 되돌리고, 곤충처럼 옆으로 벌린다
+      const g = Math.sin(this.phase * 1.3);
+      const tripodA = [this.arms[0], this.arms[3], this.legs[0]];
+      const tripodB = [this.arms[1], this.arms[2], this.legs[1]];
+      const leg = (o, side, sign, front) => {
+        const swing = sign * g * 0.55;
+        const tx = -tilt + swing + front;
+        const tz = side * (front > 0 ? 1.15 : front < 0 ? 1.0 : 1.25);
+        o.rotation.x = o.rotation.x * (1 - ck) + tx * ck;
+        o.rotation.z = o.rotation.z * (1 - ck) + tz * ck;
+      };
+      leg(this.arms[0], -1, 1, 0.35); leg(this.arms[1], 1, -1, 0.35);   // 앞다리
+      leg(this.arms[2], -1, -1, 0); leg(this.arms[3], 1, 1, 0);        // 가운뎃다리
+      leg(this.legs[0], -1, 1, -0.3); leg(this.legs[1], 1, -1, -0.3);   // 뒷다리
+      void tripodA; void tripodB;
+      // 더듬이는 앞으로 쭉 뻗어 흔들린다
+      for (const a of this.antennae) a.rotation.x = -0.6 * ck + Math.sin(this.t * 12 + a.userData.phase) * 0.15;
+    } else this.inner.rotation.x = 0;
+
     // 무기 자세
     const ar = this.arms[1], al = this.arms[0];
-    if (this.heldPose === 'gun' || this.heldPose === 'heavy') {
+    if (ck > 0.5) { /* 기어갈 때는 무기를 품에 안는다 */ } else if (this.heldPose === 'gun' || this.heldPose === 'heavy') {
       ar.rotation.x = -1.45; ar.rotation.z = 0.15;
       al.rotation.x = -1.3; al.rotation.z = -0.1;
     } else if (this.heldPose === 'melee' && this.waveT <= 0) {
@@ -758,6 +1070,80 @@ export class Roach {
       for (let i = 0; i < 4; i++) { this.arms[i].rotation.z = this.arms[i].userData.baseZ * (1.5 + Math.sin(this.t * 8 + i) * 1.2); this.arms[i].rotation.x = -0.8 + Math.sin(this.t * 6 + i) * 0.5; }
       this.legs[0].rotation.x = d * 0.4; this.legs[1].rotation.x = -d * 0.4;
     }
+    // 먹기
+    if (this.eatT > 0) {
+      this.eatT -= dt;
+      const t = this.t, m = this.eatMotion;
+      const chew = Math.sin(t * 14);
+      if (m === 'slurp') {
+        al.rotation.x = -1.25; al.rotation.z = 0.25;
+        ar.rotation.x = -1.9 + Math.max(0, Math.sin(t * 7)) * 0.6; ar.rotation.z = -0.15;
+        this.head.rotation.x = 0.3 + Math.sin(t * 7) * 0.05;
+      } else if (m === 'spoon') {
+        al.rotation.x = -1.1; al.rotation.z = 0.3;
+        const sc = (Math.sin(t * 3.2) + 1) / 2;
+        ar.rotation.x = -1.2 - sc * 1.15; ar.rotation.z = -0.2;
+        this.head.rotation.x = 0.15 + sc * 0.1;
+      } else if (m === 'drink') {
+        ar.rotation.x = -2.35 + Math.sin(t * 2) * 0.05; ar.rotation.z = -0.35;
+        this.head.rotation.x = -0.3;
+      } else if (m === 'slice') {
+        ar.rotation.x = -2.7 + Math.sin(t * 3) * 0.15; ar.rotation.z = -0.25;
+        this.head.rotation.x = -0.25 + Math.max(0, Math.sin(t * 3)) * 0.15;
+      } else if (m === 'drumstick') {
+        ar.rotation.x = -2.2; ar.rotation.z = -0.4; al.rotation.x = -2.0; al.rotation.z = 0.4;
+        this.torso.rotation.y = Math.sin(t * 5) * 0.15;
+      } else {
+        ar.rotation.x = -2.0 - Math.max(0, Math.sin(t * 4)) * 0.4; ar.rotation.z = -0.35;
+        this.head.rotation.x = 0.05;
+      }
+      this.mouthO.visible = chew > 0.2 && m !== 'drink';
+      this.mouth.visible = !this.mouthO.visible;
+      if (this.eatT <= 0) { this.stopEat(); this.mouthO.visible = false; this.mouth.visible = true; }
+    } else if (this.heldPose === 'food') { ar.rotation.x = -0.9; ar.rotation.z = -0.1; }
+    // 활 당기기 (drawK 0~1)
+    if (this.drawK > 0 && this.heldPose === 'gun') {
+      ar.rotation.x = -1.5; ar.rotation.z = 0.1;
+      al.rotation.x = -1.5 + this.drawK * 0.3; al.rotation.z = -0.2 - this.drawK * 0.7;
+    }
+    // 마법봉: 들고 있다가 시전할 때 앞으로 쭉
+    if (this.heldPose === 'wand') {
+      ar.rotation.x = this.castT > 0 ? -2.4 + (1 - this.castT / 0.45) * 0.9 : -0.9 + Math.sin(this.t * 2) * 0.05;
+      if (this.wandOrb) this.wandOrb.scale.setScalar(0.11 * (1 + Math.sin(this.t * 6) * 0.15 + (this.castT > 0 ? 0.8 : 0)));
+    }
+    if (this.castT > 0) this.castT -= dt;
+    // 플러팅: 손을 입에 댔다가 앞으로 쭉
+    if (this.flirtT > 0) {
+      this.flirtT -= dt;
+      const p = 1 - this.flirtT / 1.2;
+      ar.rotation.x = p < 0.4 ? -2.3 : -2.3 + (p - 0.4) * 2.5; ar.rotation.z = p < 0.4 ? -0.9 : -0.3;
+      this.head.rotation.z = Math.sin(this.t * 8) * 0.12;
+      this.torso.rotation.y = Math.sin(p * Math.PI) * 0.3;
+    }
+    // 날기: 날개를 활짝 펴고 파닥파닥, 몸은 앞으로 눕힌다
+    if (this.flying) {
+      const flap = Math.sin(this.t * 32);
+      for (let i = 0; i < 2; i++) {
+        const w = this.wings[i], s = i ? 1 : -1;
+        w.rotation.y = s * (1.1 + flap * 0.55);
+        w.rotation.z = s * (0.5 + flap * 0.25);
+      }
+      const lean = Math.min(0.9, speed / 14);
+      this.inner.rotation.x = lean;
+      this.inner.position.y = Math.sin(this.t * 6) * 0.08;
+      this.head.rotation.x = -lean * 0.7;
+      this.legs[0].rotation.x = 0.5 + Math.sin(this.t * 5) * 0.2; this.legs[1].rotation.x = 0.5 - Math.sin(this.t * 5) * 0.2;
+      if (this.heldPose === 'none') for (let i = 0; i < 4; i++) { this.arms[i].rotation.x = 0.4 + Math.sin(this.t * 7 + i) * 0.2; }
+    }
+    // 차에 치여 뒤집힘: 등을 대고 누워 다리를 버둥버둥
+    if (this.flipped) {
+      this.inner.rotation.x = -Math.PI / 2 * 0.95;
+      this.inner.position.y = 0.55;
+      const w = Math.sin(this.t * 24);
+      for (let i = 0; i < 4; i++) { this.arms[i].rotation.x = -1.2 + w * 0.5 * (i % 2 ? 1 : -1); this.arms[i].rotation.z = this.arms[i].userData.baseZ * 1.6; }
+      this.legs[0].rotation.x = -1.4 + w * 0.6; this.legs[1].rotation.x = -1.4 - w * 0.6;
+      for (const a of this.antennae) a.rotation.x = Math.sin(this.t * 15 + a.userData.phase) * 0.4;
+    }
     // 앉기 (운전석)
     if (this.seated) {
       this.legs[0].rotation.x = this.legs[1].rotation.x = -1.5;
@@ -766,6 +1152,7 @@ export class Roach {
     }
     // 쓰러짐
     this.inner.rotation.z = this.dead ? Math.PI / 2 * 0.92 : 0;
+    if (!this.flying && !this.flipped && this.crawlK <= 0.01) this.inner.rotation.x = 0;
     if (this.dead) { this.inner.position.y = 0.42; for (const e of this.eyes) e.scale.y = 0.1; }
     // 피격 깜빡임
     if (this.hurtT > 0) {
@@ -782,3 +1169,81 @@ export class Roach {
 }
 
 function color(c) { return c; }
+
+// 음식 모양 (손 기준 -y가 앞)
+export function buildFood(g, shape, col) {
+  const T = (c) => toon(c);
+  switch (shape) {
+    case 'bowl': // 면/국 그릇
+      mesh(G.cyl(), T('#fafafa'), g, 0, -0.15, 0.12, 0.2, 0.14, 0.2);
+      mesh(G.cyl(), T(col), g, 0, -0.08, 0.12, 0.18, 0.02, 0.18);
+      mesh(G.cyl(), T('#e53935'), g, 0, -0.2, 0.12, 0.205, 0.03, 0.205);
+      break;
+    case 'slice': { // 피자 조각
+      const sl = mesh(geo('slice', () => new THREE.CylinderGeometry(0.35, 0.35, 0.04, 3, 1, false, 0, Math.PI / 3)), T('#ffca28'), g, 0, -0.2, 0.05);
+      sl.rotation.set(Math.PI / 2, 0, Math.PI / 2 + Math.PI / 6);
+      mesh(G.sphereLow(), T(col), g, 0.03, -0.32, 0.08, 0.035, 0.035, 0.015);
+      mesh(G.sphereLow(), T(col), g, -0.04, -0.42, 0.08, 0.03, 0.03, 0.015);
+      mesh(G.cylLow(), T('#d18b3f'), g, 0, -0.05, 0.05, 0.05, 0.3, 0.05).rotation.z = Math.PI / 2;
+      break;
+    }
+    case 'drumstick':
+      mesh(G.sphereLow(), T(col), g, 0, -0.28, 0.08, 0.13, 0.17, 0.13);
+      mesh(G.cylLow(), T('#fff8e1'), g, 0, -0.08, 0.08, 0.03, 0.2, 0.03);
+      mesh(G.sphereLow(), T('#fff8e1'), g, 0, 0.03, 0.08, 0.045, 0.045, 0.045);
+      break;
+    case 'cup':
+      mesh(G.cyl(), T(col), g, 0, -0.12, 0.1, 0.09, 0.26, 0.09);
+      mesh(G.cyl(), T('#ffffff'), g, 0, 0.02, 0.1, 0.095, 0.03, 0.095);
+      mesh(G.cylLow(), T('#ff5252'), g, 0.03, 0.12, 0.1, 0.01, 0.2, 0.01);
+      break;
+    case 'bun': // 햄버거
+      mesh(G.hemi(), T('#e0a050'), g, 0, -0.18, 0.12, 0.17, 0.12, 0.17);
+      mesh(G.cyl(), T('#6d4c41'), g, 0, -0.19, 0.12, 0.17, 0.04, 0.17);
+      mesh(G.cyl(), T('#9ccc65'), g, 0, -0.215, 0.12, 0.18, 0.015, 0.18);
+      mesh(G.cyl(), T(col), g, 0, -0.23, 0.12, 0.17, 0.015, 0.17);
+      mesh(G.cyl(), T('#e0a050'), g, 0, -0.26, 0.12, 0.16, 0.04, 0.16);
+      break;
+    case 'tri': { // 삼각김밥
+      const t = mesh(geo('tri', () => new THREE.CylinderGeometry(0.16, 0.16, 0.08, 3)), T('#fafafa'), g, 0, -0.22, 0.1);
+      t.rotation.x = Math.PI / 2;
+      mesh(G.box(), T('#263238'), g, 0, -0.3, 0.1, 0.12, 0.08, 0.09);
+      break;
+    }
+    case 'skewer':
+      mesh(G.cylLow(), T('#d7ccc8'), g, 0, -0.25, 0.08, 0.012, 0.6, 0.012);
+      for (let i = 0; i < 3; i++) mesh(G.box(), T(col), g, 0, -0.32 - i * 0.1, 0.08, 0.1, 0.08, 0.06);
+      break;
+    case 'box': // 감자튀김/도시락
+      mesh(G.box(), T(col), g, 0, -0.18, 0.1, 0.22, 0.2, 0.12);
+      for (let i = 0; i < 5; i++) mesh(G.box(), T('#ffd54f'), g, -0.08 + i * 0.04, -0.05, 0.1, 0.025, 0.12, 0.025);
+      break;
+    case 'bread':
+      mesh(new THREE.TorusGeometry(0.12, 0.06, 8, 12, Math.PI * 1.3), T(col), g, 0, -0.2, 0.1);
+      break;
+    case 'can':
+      mesh(G.cyl(), T(col), g, 0, -0.15, 0.1, 0.07, 0.2, 0.07);
+      mesh(G.cyl(), T('#cfd8dc'), g, 0, -0.04, 0.1, 0.065, 0.02, 0.065);
+      break;
+    case 'pizzabox':
+      mesh(G.box(), T('#f5deb3'), g, 0, -0.2, 0.2, 0.5, 0.08, 0.5);
+      mesh(G.box(), T(col), g, 0, -0.155, 0.2, 0.2, 0.01, 0.2);
+      break;
+    case 'chickenbox':
+      mesh(G.box(), T(col), g, 0, -0.22, 0.15, 0.36, 0.22, 0.28);
+      mesh(G.box(), T('#ffffff'), g, 0, -0.1, 0.15, 0.37, 0.03, 0.29);
+      break;
+    default: // 포장 봉투
+      mesh(G.box(), T(col), g, 0, -0.25, 0.1, 0.26, 0.32, 0.14);
+      mesh(new THREE.TorusGeometry(0.06, 0.012, 5, 10), T('#5d4037'), g, 0, -0.06, 0.1);
+  }
+}
+
+function stripeToon(a, b) {
+  if (typeof document === 'undefined') return toon(a);
+  const c = document.createElement('canvas'); c.width = 8; c.height = 64;
+  const x = c.getContext('2d');
+  for (let i = 0; i < 8; i++) { x.fillStyle = i % 2 ? b : a; x.fillRect(0, i * 8, 8, 8); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.MeshToonMaterial({ map: t });
+}

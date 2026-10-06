@@ -28,13 +28,29 @@
     <div class="card" id="clock-card">
       <div id="clock-day">1일차 · 월요일</div>
       <div id="clock-time">오전 7:30</div>
+      <div id="lv-row"><b id="lv">Lv.1</b><div id="xp-bar"><div id="xp-fill"></div></div><span id="xp-txt">0/80</span></div>
       <div id="money-row"><span id="money">₩100</span> · <span id="job-label">무직</span></div>
       <div id="online">👥 1명 접속 중</div>
       <div id="charm">✨ 매력 0</div>
       <div id="stars" class="hidden"></div>
     </div>
     <div class="card" id="needs-card"></div>
+    <div class="card" id="quest-card"></div>
   </div>
+
+  <!-- 상단 버튼 -->
+  <div id="topbar" class="hidden">
+    <button id="tb-phone" title="휴대폰 (Tab)">📱 휴대폰</button>
+    <button id="tb-feedback" title="개발자에게 건의하기">💡 건의하기</button>
+    <button id="tb-exit" title="저장하고 캐릭터 선택으로">💾 저장하고 나가기</button>
+  </div>
+  <div id="flip" class="hidden"><div class="fl-t">🙃 뒤집혔어요!</div><div class="fl-k"><kbd>←</kbd><kbd>→</kbd> 번갈아 빠르게 눌러서 일어나세요</div><div class="fl-bar"><div id="flip-fill"></div></div></div>
+  <div id="scope" class="hidden"></div>
+  <div id="draw-meter" class="hidden"><div id="draw-fill"></div></div>
+  <div id="xp-pops"></div>
+  <div id="range-hud" class="hidden"></div>
+  <div id="score-pop"></div>
+  <div id="shutter"></div>
 
   <div id="minimap-wrap" class="hidden">
     <canvas id="minimap" width="200" height="200"></canvas>
@@ -46,18 +62,21 @@
   <div id="hurt"></div>
   <div id="course" class="hidden"></div>
   <div id="celebrate" class="hidden"></div>
+  <div id="loot" class="hidden"></div>
   <div id="death" class="hidden"><div id="death-text"></div></div>
-  <div id="hotbar-wrap" class="hidden"><div id="weapon-name"></div><div id="hotbar"></div></div>
+  <div id="hotbar-wrap" class="hidden"><div id="weapon-name"></div><div id="hotbar-row"><div id="hotbar"></div><button id="bag-btn" title="가방 (I)">🎒<small>I</small></button></div></div>
   <div id="confirm" class="hidden"><div id="confirm-inner"><div id="confirm-text"></div><div><button class="btn" id="confirm-yes">버리기</button> <button class="btn ghost" id="confirm-no">취소</button></div></div></div>
   <div id="toasts"></div>
+  <button id="keys-btn" class="hidden" title="조작법 (H)">⌨️ 조작법 <b>H</b></button>
   <div id="help-hint" class="hidden">
-    <b>WASD</b> 이동 · <b>Space</b> 점프 · <b>클릭</b> 공격/사용 · <b>1~0</b> 핫바 · <b>E</b> 대화/입장/줍기 · <b>F</b> 차 · <b>Q</b> 버리기 · <b>I</b> 가방 · <b>M</b> 지도 · <b>R</b> 자동이동 · <b>C</b> 대쉬 · <b>Enter</b> 채팅
+    <b>WASD</b> 이동 · <b>Space</b> 점프 · <b>클릭</b> 공격/사용 · <b>우클릭</b> 조준 · <b>G</b> 날기 · <b>V</b> 1인칭 · <b>B</b> 플러팅 · <b>P</b> 사진 · <b>E</b> 대화/입장 · <b>F</b> 차 · <b>I</b> 가방 · <b>M</b> 지도 · <b>Enter</b> 채팅
   </div>
 
   <!-- 플레이어 채팅 -->
   <div id="pchat" class="hidden">
     <div id="pchat-log"></div>
-    <input id="pchat-input" placeholder="모두에게 말하기... (Enter)" maxlength="120" autocomplete="off" />
+    <div id="pchat-head">💬 전체 채팅 <small>Enter로 말하기</small></div>
+    <input id="pchat-input" placeholder="모두에게 말하기... (Enter 전송 · Esc 닫기)" maxlength="120" autocomplete="off" />
   </div>
 
   <!-- 잠 -->
@@ -87,11 +106,20 @@
   <div id="phone" class="hidden">
     <div id="phone-inner">
       <div id="phone-tabs">
+        <button data-tab="quests">📋 퀘스트</button>
+        <button data-tab="camera">📷 카메라</button>
+        <button data-tab="gallery">🖼️ 갤러리</button>
+        <button data-tab="insta">📸 인스타</button>
+        <button data-tab="contacts">📞 연락처</button>
+        <button data-tab="sms">💬 문자</button>
+        <button data-tab="police">🚨 112</button>
         <button data-tab="citizens" class="active">👥 시민 도감</button>
-        <button data-tab="me">🪳 내 정보</button>
+        <button data-tab="me">🙂 내 정보</button>
         <button data-tab="map">🗺️ 지도</button>
         <button data-tab="settings">⚙️ 설정</button>
         <button data-tab="help">❓ 도움말</button>
+        <button data-tab="feedback">💡 건의</button>
+        <button data-tab="admin" id="tab-admin" class="hidden">📮 건의함</button>
         <button id="phone-close">✕</button>
       </div>
       <div id="phone-body"></div>
@@ -105,28 +133,67 @@
   <div id="fade" class="hidden"><div id="fade-text"></div><div id="fade-bar"><div></div></div></div>
 
   <!-- 로딩 -->
-  <div id="loading" class="hidden"><div class="spinner">🪳</div><div id="loading-text">도시를 짓는 중...</div></div>
+  <div id="loading" class="hidden"><div class="spinner"><svg class="cute-roach" viewBox="0 0 120 130" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M46 34 Q30 6 14 8" stroke="#5d3a24" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M74 34 Q90 6 106 8" stroke="#5d3a24" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <circle cx="14" cy="8" r="6" fill="#a86b3e"/><circle cx="106" cy="8" r="6" fill="#a86b3e"/>
+  <ellipse cx="60" cy="98" rx="30" ry="28" fill="#8a5634"/>
+  <ellipse cx="60" cy="102" rx="19" ry="19" fill="#c08a5c"/>
+  <path d="M30 92 l-14 10 M30 104 l-14 8 M90 92 l14 10 M90 104 l14 8" stroke="#5d3a24" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="60" cy="52" rx="34" ry="31" fill="#8a5634"/>
+  <ellipse cx="46" cy="52" rx="10" ry="12" fill="#fff"/><ellipse cx="74" cy="52" rx="10" ry="12" fill="#fff"/>
+  <ellipse cx="47" cy="54" rx="6" ry="7.5" fill="#1d1410"/><ellipse cx="75" cy="54" rx="6" ry="7.5" fill="#1d1410"/>
+  <circle cx="45" cy="50" r="2.4" fill="#fff"/><circle cx="73" cy="50" r="2.4" fill="#fff"/>
+  <ellipse cx="34" cy="64" rx="6" ry="3.6" fill="#ff9fb2"/><ellipse cx="86" cy="64" rx="6" ry="3.6" fill="#ff9fb2"/>
+  <path d="M53 66 Q60 73 67 66" stroke="#1d1410" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg></div><div id="loading-text">도시를 짓는 중...</div></div>
 
   <!-- 시작 화면 -->
   <div id="start">
     <div id="start-card">
-      <div id="title">🪳 바퀴시티 <small>Roach City</small></div>
-      <p class="tagline">인간 도시와 똑같이 살아가는 바퀴벌레들의 도시에 새로 이사 온 당신!<br />동료들과 함께 일하고, 먹고, 이웃을 사귀며 바퀴 인생을 살아보세요.</p>
-      <div id="start-preview"></div>
-      <div class="form">
-        <label>이름 <input id="p-name" value="바퀴" maxlength="8" /></label>
-        <label>성별
-          <select id="p-gender"><option>여</option><option>남</option></select>
-        </label>
-        <label>나이 <input id="p-age" type="number" min="18" max="80" value="25" /></label>
-        <label>성격 <select id="p-personality"></select></label>
-        <div class="colors-label">몸 색깔</div>
-        <div id="p-colors"></div>
-        <label id="pw-row" class="hidden" style="grid-column: 1 / -1">🔒 입장 비밀번호 <input id="p-password" type="password" autocomplete="current-password" /></label>
+      <div id="title"><span class="title-icon"><svg class="cute-roach" viewBox="0 0 120 130" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M46 34 Q30 6 14 8" stroke="#5d3a24" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M74 34 Q90 6 106 8" stroke="#5d3a24" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <circle cx="14" cy="8" r="6" fill="#a86b3e"/><circle cx="106" cy="8" r="6" fill="#a86b3e"/>
+  <ellipse cx="60" cy="98" rx="30" ry="28" fill="#8a5634"/>
+  <ellipse cx="60" cy="102" rx="19" ry="19" fill="#c08a5c"/>
+  <path d="M30 92 l-14 10 M30 104 l-14 8 M90 92 l14 10 M90 104 l14 8" stroke="#5d3a24" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="60" cy="52" rx="34" ry="31" fill="#8a5634"/>
+  <ellipse cx="46" cy="52" rx="10" ry="12" fill="#fff"/><ellipse cx="74" cy="52" rx="10" ry="12" fill="#fff"/>
+  <ellipse cx="47" cy="54" rx="6" ry="7.5" fill="#1d1410"/><ellipse cx="75" cy="54" rx="6" ry="7.5" fill="#1d1410"/>
+  <circle cx="45" cy="50" r="2.4" fill="#fff"/><circle cx="73" cy="50" r="2.4" fill="#fff"/>
+  <ellipse cx="34" cy="64" rx="6" ry="3.6" fill="#ff9fb2"/><ellipse cx="86" cy="64" rx="6" ry="3.6" fill="#ff9fb2"/>
+  <path d="M53 66 Q60 73 67 66" stroke="#1d1410" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg></span>바퀴시티 <small>Roach City</small></div>
+      <div id="v-login" class="view">
+        <p class="tagline">인간 도시와 똑같이 살아가는 바퀴벌레들의 도시에 새로 이사 온 당신!<br />동료들과 함께 일하고, 먹고, 이웃을 사귀며 바퀴 인생을 살아보세요.</p>
+        <label id="pw-row" class="hidden pw">🔒 입장 비밀번호 <input id="p-password" type="password" autocomplete="current-password" /></label>
+        <div id="g-btn"></div>
+        <div id="dev-login" class="hidden">
+          <input id="dev-name" maxlength="16" placeholder="이름 (개발용 로그인)" />
+          <button id="dev-btn" class="btn">개발용 로그인</button>
+        </div>
+      </div>
+      <div id="v-select" class="view hidden">
+        <div class="who"><span id="who-name"></span> <button id="logout-btn" class="btn ghost mini">로그아웃</button></div>
+        <div id="char-list"></div>
+      </div>
+      <div id="v-create" class="view hidden">
+        <div class="creator">
+          <div id="create-preview" title="드래그해서 돌려보세요"></div>
+          <div class="creator-side">
+            <div id="create-tabs"></div>
+            <div id="create-body"></div>
+          </div>
+        </div>
+        <div class="create-foot">
+          <button class="btn ghost" id="create-back">← 돌아가기</button>
+          <button class="btn ghost" id="create-random">🎲 랜덤</button>
+          <button id="create-ok">이 바퀴로 시작 🏠</button>
+        </div>
       </div>
       <div id="start-error" class="hidden"></div>
       <div id="llm-status"></div>
-      <button id="start-btn">바퀴시티로 이사하기 🏠</button>
     </div>
   </div>
 

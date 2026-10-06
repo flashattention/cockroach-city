@@ -1,7 +1,11 @@
 // 브라우저 전투: 조준, 타격 판정, 투사체, 이펙트
 import * as THREE from 'three';
-import { itemDef, weaponStats } from './items.js';
+import { itemDef, weaponStats, ammoName, ITEMS, SHOPS } from './items.js';
 import { G } from './utils.js';
+import { levelStats } from './level.js';
+
+const ELEMENT_COLOR = { fire: '#ff5722', ice: '#4fc3f7', thunder: '#ffee58', wind: '#a5d6a7', poison: '#9ccc65', holy: '#fff59d', dark: '#7e57c2' };
+const BASE_SPREAD = { pistol: 0.018, blaster: 0.015, rifle: 0.03, blaster_rifle: 0.026, minigun: 0.045, sniper: 0.012 };
 
 const tmpV = new THREE.Vector3();
 
@@ -47,6 +51,43 @@ export class FX {
     if (!small) { this.flash.position.copy(p); this.flash.position.y += 2; this.flash.intensity = 40; this.flashT = 0.25; }
   }
 
+  // 지그재그 번개
+  bolt(a, b, color = '#ffee58') {
+    const pts = [a.clone()];
+    const n = 7;
+    for (let i = 1; i < n; i++) { const q = a.clone().lerp(b, i / n); q.x += (Math.random() - 0.5) * 0.9; q.y += (Math.random() - 0.5) * 0.9; q.z += (Math.random() - 0.5) * 0.9; pts.push(q); }
+    pts.push(b.clone());
+    for (let i = 0; i < pts.length - 1; i++) this.tracer(pts[i], pts[i + 1], color, 2.2);
+  }
+  // 떠오르는 하트·반짝이
+  hearts(a, b, emoji = '💗') {
+    for (let i = 0; i < 6; i++) {
+      const sp = makeEmojiSprite(emoji);
+      sp.position.copy(a);
+      this.scene.add(sp);
+      const to = b ? b.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.8, 1.6 + Math.random() * 0.6, (Math.random() - 0.5) * 0.8)) : a.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2, 2 + Math.random(), (Math.random() - 0.5) * 2));
+      this.items.push({ m: sp, t: 1.3 + i * 0.08, life: 1.3 + i * 0.08, kind: 'fly', from: a.clone().add(new THREE.Vector3(0, 1.4, 0)), to, delay: i * 0.08 });
+    }
+  }
+  sparkle(p, color, n = 12, r = 1.5) {
+    for (let i = 0; i < n; i++) {
+      const m = new THREE.Mesh(G.sphereLow(), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false }));
+      m.scale.setScalar(0.12);
+      m.position.copy(p).add(new THREE.Vector3((Math.random() - 0.5) * r, Math.random() * r, (Math.random() - 0.5) * r));
+      this.scene.add(m);
+      this.items.push({ m, t: 0.9, life: 0.9, kind: 'smoke' });
+    }
+  }
+  cloud(p, color) {
+    for (let i = 0; i < 9; i++) {
+      const s = new THREE.Mesh(G.sphereLow(), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false }));
+      s.position.copy(p).add(new THREE.Vector3((Math.random() - 0.5) * 2.5, Math.random() * 1.2, (Math.random() - 0.5) * 2.5));
+      s.scale.setScalar(0.7 + Math.random() * 0.5);
+      this.scene.add(s);
+      this.items.push({ m: s, t: 3.5, life: 3.5, kind: 'smoke' });
+    }
+  }
+
   slash(p, heading) {
     const m = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.05, 4, 16, Math.PI * 0.8), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8, depthWrite: false }));
     m.position.copy(p); m.position.y += 1.1;
@@ -61,12 +102,29 @@ export class FX {
       it.t -= dt;
       const k = Math.max(0, it.t / it.life);
       if (it.kind === 'boom') { it.m.scale.setScalar(0.3 + (1 - k) * it.r); it.m.material.opacity = k; }
-      else if (it.kind === 'smoke') { it.m.position.y += dt * 1.5; it.m.scale.multiplyScalar(1 + dt * 0.6); it.m.material.opacity = 0.7 * k; }
+      else if (it.kind === 'fly') {
+        const u = Math.min(1, Math.max(0, (it.life - it.t - (it.delay || 0)) / (it.life - (it.delay || 0)) * 1.4));
+        it.m.position.copy(it.from).lerp(it.to, u); it.m.position.y += Math.sin(u * Math.PI) * 0.8;
+        it.m.material.opacity = Math.min(1, k * 2.5);
+      } else if (it.kind === 'smoke') { it.m.position.y += dt * 1.5; it.m.scale.multiplyScalar(1 + dt * 0.6); it.m.material.opacity = 0.7 * k; }
       else it.m.material.opacity = k;
       if (it.t <= 0) { this.scene.remove(it.m); it.m.material.dispose(); this.items.splice(i, 1); }
     }
     if (this.flashT > 0) { this.flashT -= dt; this.flash.intensity = Math.max(0, this.flashT / 0.25) * 40; }
   }
+}
+
+const spriteCache = new Map();
+function makeEmojiSprite(emoji) {
+  let tex = spriteCache.get(emoji);
+  if (!tex) {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const x = c.getContext('2d'); x.font = '50px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(emoji, 32, 36);
+    tex = new THREE.CanvasTexture(c); spriteCache.set(emoji, tex);
+  }
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sp.scale.setScalar(0.6);
+  return sp;
 }
 
 // 수직 원기둥과 광선의 교차 (가장 가까운 t)
@@ -124,6 +182,7 @@ export class Combat {
       const big = u.kind === 'tank' || u.kind === 'heli';
       out.push({ tt: 'unit', id: u.id, base: u.obj.position, r: big ? 2.4 : 0.55, h: big ? 3 : 2 });
     }
+    if (g.mode === 'interior') for (const t of g.interior.targets || []) if (t.up) out.push({ tt: 'rtarget', id: t.id, base: t.obj.getWorldPosition(new THREE.Vector3()).setY(t.y0 - t.r), r: t.r, h: t.r * 2, rt: t });
     if (g.mode === 'city') for (const car of g.traffic.cars) {
       if (car === g.player.inCar || car.mode === 'wreck' || car.mode === 'gone') continue;
       if (car.pos.distanceTo(g.player.pos) > 150) continue;
@@ -168,18 +227,39 @@ export class Combat {
     const it = this.g.inv.selected();
     if (!it) return { id: 'fist', gems: [] };
     const d = itemDef(it.id);
-    if (['melee', 'gun', 'throw', 'launcher'].includes(d.cat)) return { id: it.id, gems: it.gems || [], item: it };
+    if (['melee', 'gun', 'throw', 'launcher', 'wand'].includes(d.cat)) return { id: it.id, gems: it.gems || [], item: it };
     return null;
   }
 
   // 마우스 누름
   trigger(down) {
+    const w = this.selectedWeapon();
+    const d = w ? itemDef(w.id) : null;
+    // 활: 누르고 있으면 시위를 당기고, 놓으면 쏜다
+    if (d && d.kind === 'arrow' && !d.auto && !this.g.player.inCar) {
+      if (down && !this.drawing && this.cool <= 0) this.drawing = { t: 0 };
+      else if (!down && this.drawing) { const k = Math.min(1, this.drawing.t / 1.1); this.drawing = null; this.g.player.roach.drawK = 0; this.drawPower = k; this.tryFire(); this.drawPower = null; }
+      return;
+    }
+    this.drawing = null;
     this.firing = down;
     if (down) this.tryFire();
+  }
+  // 상대 피해 보정 (활 당긴 정도 등)
+  sendHit(t, w, extra = {}) {
+    if (t.tt === 'rtarget') { this.g.hitRangeTarget?.(t.rt, extra.point); return; }
+    const { point, ...rest } = extra;
+    void point;
+    this.g.net.send({ t: 'hit', tt: t.tt, id: t.id, w: w.id, gems: w.gems, ...rest });
   }
 
   update(dt) {
     this.cool -= dt;
+    if (this.drawing) {
+      this.drawing.t += dt;
+      this.g.player.roach.drawK = Math.min(1, this.drawing.t / 1.1);
+      this.g.ui.drawMeter(Math.min(1, this.drawing.t / 1.1));
+    } else this.g.ui.drawMeter(null);
     if (this.firing) {
       const w = this.selectedWeapon();
       const car = this.g.player.inCar;
@@ -200,6 +280,19 @@ export class Combat {
     const w = this.selectedWeapon();
     if (!w) return;
     const s = weaponStats(w.id, w.gems);
+    // 총과 활은 탄약이 있어야 쏠 수 있다
+    if (s.ammo && !g.range) {
+      if (g.inv.count(s.ammo) <= 0) {
+        this.cool = 0.4;
+        if (performance.now() - (this.noAmmoMsg || 0) > 2500) {
+          this.noAmmoMsg = performance.now();
+          const a = ITEMS[s.ammo];
+          g.ui.toast(`${s.ammo === 'arrow' ? '🏹 화살이' : '🔫 총알이'} 없어요! ${SHOPS[a.shop]?.title || '상점'}에서 ${ammoName(s.ammo)}을(를) 사세요 (₩${a.price}/${a.pack}발)`);
+        }
+        return;
+      }
+      g.inv.consumeId(s.ammo, 1);
+    }
     this.cool = s.rate;
     const p = g.player;
     // 공격 방향으로 몸 돌리기
@@ -210,6 +303,75 @@ export class Combat {
     if (s.kind === 'hitscan') return this.shoot(w, s, o, d);
     if (s.kind === 'grenade') return this.throwGrenade(w, s, d);
     if (s.kind === 'rocket') return this.fireRocket(w, s, o, d);
+    if (s.kind === 'arrow') return this.shootArrow(w, s, o, d);
+    if (s.kind === 'magic') return this.castMagic(w, s, o, d);
+  }
+
+  // ---------------- 마법 ----------------
+  castMagic(w, s, o, d) {
+    const g = this.g, p = g.player;
+    if ((g.mana ?? 0) < s.mana) { this.cool = 0.3; g.ui.toast('💧 마나가 부족해요! 잠시 기다리거나 마나 물약을 마셔요'); return; }
+    g.mana -= s.mana;
+    g.questEvent?.('magic');
+    p.roach.cast();
+    const color = ELEMENT_COLOR[s.element];
+    const hand = this.handPos();
+    const el = s.element;
+    if (el === 'holy') {
+      this.fx.sparkle(p.pos.clone().setY(p.pos.y + 0.5), color, 24, 3);
+      g.net.send({ t: 'fx', k: 'sparkle', p: [p.pos.x, p.pos.y + 0.5, p.pos.z], c: color });
+      g.net.send({ t: 'holy', w: w.id });
+      return;
+    }
+    if (el === 'wind') {
+      const fwd = new THREE.Vector3(Math.sin(p.heading), 0, Math.cos(p.heading));
+      this.fx.cloud(p.pos.clone().addScaledVector(fwd, 2.5), '#e8f5e9');
+      g.net.send({ t: 'fx', k: 'cloud', p: [p.pos.x + fwd.x * 2.5, p.pos.y, p.pos.z + fwd.z * 2.5], c: '#e8f5e9' });
+      let n = 0;
+      for (const t of this.targets()) {
+        if (t.tt === 'car') continue;
+        tmpV.subVectors(t.base, p.pos); tmpV.y = 0;
+        const dist = tmpV.length();
+        if (dist > s.range || dist < 0.01 || tmpV.normalize().dot(fwd) < 0.5) continue;
+        this.sendHit(t, w);
+        if (++n >= 5) break;
+      }
+      return;
+    }
+    if (el === 'thunder') {
+      const r = this.raycast(o, d, s.range + o.distanceTo(hand));
+      this.fx.bolt(hand, r.point, color);
+      g.net.send({ t: 'fx', k: 'bolt', a: [hand.x, hand.y, hand.z], b: [r.point.x, r.point.y, r.point.z], c: color });
+      if (!r.target) return;
+      this.sendHit(r.target, w, { point: r.point });
+      // 주변 2명에게 연쇄
+      let from = r.target.base.clone().setY(r.target.base.y + 1);
+      const hitIds = new Set([r.target.tt + r.target.id]);
+      for (let i = 0; i < 2; i++) {
+        let best = null, bd = 7;
+        for (const t of this.targets()) {
+          if (t.tt === 'car' || hitIds.has(t.tt + t.id)) continue;
+          const dd = t.base.distanceTo(from);
+          if (dd < bd) { bd = dd; best = t; }
+        }
+        if (!best) break;
+        hitIds.add(best.tt + best.id);
+        const to = best.base.clone().setY(best.base.y + 1);
+        this.fx.bolt(from, to, color);
+        g.net.send({ t: 'fx', k: 'bolt', a: [from.x, from.y, from.z], b: [to.x, to.y, to.z], c: color });
+        this.sendHit(best, w);
+        from = to;
+      }
+      return;
+    }
+    // 투사체 마법 (화염구, 얼음 화살, 독구름, 암흑구)
+    const r = this.raycast(o, d, s.range + 10);
+    const start = hand.clone().addScaledVector(d, 0.6);
+    const speed = { fire: 34, ice: 46, poison: 30, dark: 16 }[el] || 30;
+    const v = r.point.clone().sub(start).normalize().multiplyScalar(speed);
+    const type = 'm_' + el;
+    this.spawnProj(type, start, v, w, true, r.target);
+    g.net.send({ t: 'fx', k: 'proj', type, p: [start.x, start.y, start.z], v: [v.x, v.y, v.z], w: w.id });
   }
 
   melee(w, s) {
@@ -225,7 +387,7 @@ export class Combat {
       const dist = tmpV.length();
       if (dist > s.range + t.r || dist < 0.01) continue;
       if (tmpV.normalize().dot(fwd) < 0.45) continue;
-      g.net.send({ t: 'hit', tt: t.tt, id: t.id, w: w.id, gems: w.gems });
+      this.sendHit(t, w);
       if (++n >= 3) break;
     }
   }
@@ -236,16 +398,20 @@ export class Combat {
     const hand = this.handPos();
     const pellets = s.pellets || 1;
     const hits = new Map();
+    // 명중률: 레벨이 높을수록, 조준(우클릭) 중일수록 덜 퍼진다
+    const acc = levelStats(g.stats?.level || 1).acc * (1 - 0.7 * (g.player.aim || 0));
+    const base = (BASE_SPREAD[w.id] || 0.02) * acc;
     for (let i = 0; i < pellets; i++) {
       const dd = d.clone();
-      if (pellets > 1) { dd.x += (Math.random() - 0.5) * s.spread * 2; dd.y += (Math.random() - 0.5) * s.spread * 2; dd.z += (Math.random() - 0.5) * s.spread * 2; dd.normalize(); }
+      const sp = pellets > 1 ? s.spread * Math.max(0.5, acc) : base;
+      dd.x += (Math.random() - 0.5) * sp * 2; dd.y += (Math.random() - 0.5) * sp * 2; dd.z += (Math.random() - 0.5) * sp * 2; dd.normalize();
       const camDist = o.distanceTo(hand);
       const r = this.raycast(o, dd, s.range + camDist);
       this.fx.tracer(hand, r.point, s.tracer || '#fff59d', w.id === 'sniper' ? 1.5 : 1);
       if (i === 0) g.net.send({ t: 'fx', k: 'tracer', a: [hand.x, hand.y, hand.z], b: [r.point.x, r.point.y, r.point.z], c: s.tracer });
-      if (r.target) { const k = r.target.tt + r.target.id; hits.set(k, { ...r.target, n: (hits.get(k)?.n || 0) + 1 }); }
+      if (r.target) { const k = r.target.tt + r.target.id; hits.set(k, { ...r.target, n: (hits.get(k)?.n || 0) + 1, point: r.point }); }
     }
-    for (const h of hits.values()) g.net.send({ t: 'hit', tt: h.tt, id: h.id, w: w.id, gems: w.gems, n: h.n });
+    for (const h of hits.values()) this.sendHit(h, w, h.tt === 'rtarget' ? { point: h.point } : { n: h.n });
   }
 
   throwGrenade(w, s, d) {
@@ -270,6 +436,20 @@ export class Combat {
     g.net.send({ t: 'fx', k: 'proj', type: w.id === 'ion_cannon' ? 'ion' : 'rocket', p: [start.x, start.y, start.z], v: [v.x, v.y, v.z], w: w.id });
   }
 
+  shootArrow(w, s, o, d) {
+    const g = this.g;
+    g.player.roach.attack('shoot');
+    const start = this.handPos().addScaledVector(d, 0.6);
+    const r = this.raycast(o, d, s.range + 10);
+    // 덜 당기면 힘없이 바로 앞에 떨어지고, 끝까지 당기면 멀리 강하게
+    const k = this.drawPower ?? 1;
+    const v = r.point.clone().sub(start).normalize().multiplyScalar(8 + 46 * k);
+    v.y += 1.2 * k;
+    w = { ...w, pw: 0.25 + 0.95 * k };
+    this.spawnProj('arrow', start, v, w, true);
+    g.net.send({ t: 'fx', k: 'proj', type: 'arrow', p: [start.x, start.y, start.z], v: [v.x, v.y, v.z], w: w.id });
+  }
+
   vehicleFire(car) {
     const g = this.g;
     this.cool = car.kind === 'tank' ? 2.2 : 0.8;
@@ -286,10 +466,28 @@ export class Combat {
   }
 
   // 투사체 (내 것이면 폭발 시 서버에 알림)
-  spawnProj(type, start, v, w, mine) {
-    const color = type === 'grenade' ? '#558b2f' : type === 'ion' ? '#18ffff' : type === 'shell' ? '#ffab00' : '#ff7043';
-    const m = new THREE.Mesh(G.sphereLow(), new THREE.MeshBasicMaterial({ color }));
-    m.scale.setScalar(type === 'grenade' ? 0.15 : 0.22);
+  spawnProj(type, start, v, w, mine, homing = null) {
+    const color = type.startsWith('m_') ? ELEMENT_COLOR[type.slice(2)] : type === 'grenade' ? '#558b2f' : type === 'ion' ? '#18ffff' : type === 'shell' ? '#ffab00' : '#ff7043';
+    let m;
+    if (type.startsWith('m_')) {
+      m = new THREE.Group();
+      const core = new THREE.Mesh(G.sphereLow(), new THREE.MeshBasicMaterial({ color: '#ffffff' })); core.scale.setScalar(0.14); m.add(core);
+      const glow = new THREE.Mesh(G.sphereLow(), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }));
+      glow.scale.setScalar(type === 'm_dark' ? 0.55 : 0.32); m.add(glow);
+      m.position.copy(start);
+      this.g.scene.add(m);
+      this.projs.push({ type, pos: start.clone(), v: v.clone(), m, w, mine, t: 0, loc: this.g.loc(), traveled: 0, homing, color });
+      return;
+    }
+    if (type === 'arrow') {
+      m = new THREE.Group();
+      const shaft = new THREE.Mesh(G.cylLow(), new THREE.MeshBasicMaterial({ color: '#8d6e63' })); shaft.scale.set(0.025, 0.9, 0.025); m.add(shaft);
+      const tip = new THREE.Mesh(G.cone(), new THREE.MeshBasicMaterial({ color: '#cfd8dc' })); tip.scale.set(0.06, 0.15, 0.06); tip.position.y = 0.5; m.add(tip);
+      const fl = new THREE.Mesh(G.box(), new THREE.MeshBasicMaterial({ color: '#ffffff' })); fl.scale.set(0.12, 0.15, 0.01); fl.position.y = -0.4; m.add(fl);
+    } else {
+      m = new THREE.Mesh(G.sphereLow(), new THREE.MeshBasicMaterial({ color }));
+      m.scale.setScalar(type === 'grenade' ? 0.15 : 0.22);
+    }
     m.position.copy(start);
     this.g.scene.add(m);
     this.projs.push({ type, pos: start.clone(), v: v.clone(), m, w, mine, t: 0, loc: this.g.loc(), traveled: 0 });
@@ -302,6 +500,68 @@ export class Combat {
       pr.t += dt;
       let boom = false;
       const ground = g.mode === 'city' ? g.city.groundY(pr.pos.x, pr.pos.z) : 0.1;
+      if (pr.type.startsWith('m_')) {
+        // 암흑구는 조준한 대상을 따라간다
+        if (pr.homing && pr.type === 'm_dark') {
+          const want = pr.homing.base.clone().setY(pr.homing.base.y + 1).sub(pr.pos).normalize().multiplyScalar(pr.v.length());
+          pr.v.lerp(want, Math.min(1, dt * 2.5));
+        }
+        const step = pr.v.clone().multiplyScalar(dt);
+        pr.pos.add(step); pr.traveled += step.length();
+        pr.m.position.copy(pr.pos);
+        if (Math.random() < 0.6) { this.fx.sparkle(pr.pos, pr.color, 1, 0.3); }
+        let hit = null, stop = pr.pos.y <= ground + 0.1 || pr.traveled > (pr.w.id ? (itemDef(pr.w.id).range || 60) + 10 : 70);
+        if (!stop && g.mode === 'city') for (const b of g.city.colliders) {
+          if (!b.small && pr.pos.x > b.minX && pr.pos.x < b.maxX && pr.pos.z > b.minZ && pr.pos.z < b.maxZ && pr.pos.y < (b.h ?? 10)) { stop = true; break; }
+        }
+        if (!stop && pr.t > 0.05) for (const t of this.targets()) {
+          if (t.tt === 'car') continue;
+          const dx = pr.pos.x - t.base.x, dz = pr.pos.z - t.base.z;
+          if (Math.hypot(dx, dz) < t.r + 0.35 && pr.pos.y > t.base.y - 0.3 && pr.pos.y < t.base.y + t.h + 0.3) { hit = t; stop = true; break; }
+        }
+        if (stop) {
+          g.scene.remove(pr.m);
+          this.projs.splice(i, 1);
+          const el = pr.type.slice(2);
+          if (el === 'fire' || el === 'dark') {
+            if (pr.mine) {
+              if (hit?.tt === 'rtarget') this.sendHit(hit, pr.w, { point: pr.pos.clone() });
+              g.net.send({ t: 'explode', x: pr.pos.x, y: pr.pos.y, z: pr.pos.z, loc: pr.loc, w: pr.w.id, gems: pr.w.gems });
+            } else this.fx.boom(pr.pos, el === 'dark' ? 2.5 : 3.5, true);
+          } else {
+            if (el === 'poison') this.fx.cloud(pr.pos, '#9ccc65');
+            else this.fx.sparkle(pr.pos, pr.color, 14, 1.2);
+            if (pr.mine && hit) this.sendHit(hit, pr.w, { point: pr.pos.clone() });
+          }
+        }
+        continue;
+      }
+      if (pr.type === 'arrow') {
+        pr.v.y -= (pr.w.pw && pr.w.pw < 0.6 ? 14 : 6) * dt;
+        const step = pr.v.clone().multiplyScalar(dt);
+        pr.pos.add(step); pr.traveled += step.length();
+        pr.m.position.copy(pr.pos);
+        pr.m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pr.v.clone().normalize());
+        let stop = pr.pos.y <= ground + 0.05 || pr.traveled > 130;
+        if (!stop && g.mode === 'city') for (const b of g.city.colliders) {
+          if (!b.small && pr.pos.x > b.minX && pr.pos.x < b.maxX && pr.pos.z > b.minZ && pr.pos.z < b.maxZ && pr.pos.y < (b.h ?? 10)) { stop = true; break; }
+        }
+        if (!stop && pr.mine && pr.t > 0.03) for (const t of this.targets()) {
+          if (t.tt === 'car') continue;
+          const dx = pr.pos.x - t.base.x, dz = pr.pos.z - t.base.z;
+          if (Math.hypot(dx, dz) < t.r + 0.25 && pr.pos.y > t.base.y - 0.2 && pr.pos.y < t.base.y + t.h + 0.2) {
+            this.sendHit(t, pr.w, t.tt === 'rtarget' ? { point: pr.pos.clone() } : { pw: pr.w.pw });
+            stop = true; pr.hitTarget = true; break;
+          }
+        }
+        if (stop) {
+          this.projs.splice(i, 1);
+          // 벽이나 땅에 꽂힌 화살은 잠시 남는다
+          if (pr.hitTarget) g.scene.remove(pr.m);
+          else setTimeout(() => g.scene.remove(pr.m), 8000);
+        }
+        continue;
+      }
       if (pr.type === 'grenade') {
         pr.v.y -= 20 * dt;
         pr.pos.addScaledVector(pr.v, dt);
@@ -343,8 +603,13 @@ export class Combat {
     if (m.loc !== undefined && m.loc !== g.loc()) return;
     const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
     if (m.k === 'tracer') this.fx.tracer(v3(m.a), v3(m.b), m.c || '#fff59d', m.w || 1);
-    else if (m.k === 'boom') { this.fx.boom(v3(m.p), m.r || 5, m.small); if (!m.small) g.shake(Math.max(0, 1 - g.player.pos.distanceTo(v3(m.p)) / 40)); }
+    else if (m.k === 'boom') { this.fx.boom(v3(m.p), m.r || 5, m.small); if (!m.small && g.player) g.shake(Math.max(0, 1 - g.player.pos.distanceTo(v3(m.p)) / 40)); }
     else if (m.k === 'proj') this.spawnProj(m.type, v3(m.p), v3(m.v), { id: m.w }, false);
+    else if (m.k === 'bolt') this.fx.bolt(v3(m.a), v3(m.b), m.c);
+    else if (m.k === 'sparkle') this.fx.sparkle(v3(m.p), m.c || '#fff59d', 20, 3);
+    else if (m.k === 'cloud') this.fx.cloud(v3(m.p), m.c || '#e8f5e9');
+    else if (m.k === 'hearts') { const a = v3(m.a), b = m.b ? v3(m.b) : null; this.fx.hearts(a, b, m.e || '💗'); const p = g.players.list.get(m.pid); p?.roach.flirt(); }
+    else if (m.k === 'eat') { const p = g.players.list.get(m.pid); if (p) p.roach.eat(m.m, m.prop, Math.min(6, +m.d || 3)); }
     else if (m.k === 'swing') { const p = g.players.list.get(m.pid); if (p && p.visible) { p.roach.attack('melee'); this.fx.slash(p.pos, p.heading); } }
     else if (m.k === 'dmgnum') {
       g.ui.floatText(v3(m.p), `${m.crit ? '💥' : ''}-${m.v}`, m.crit ? '#ffd600' : '#ff5252');

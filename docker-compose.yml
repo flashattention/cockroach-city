@@ -10,7 +10,10 @@ services:
     environment:
       # 셸에 설정된 값이 있으면 그대로 넘김 (.env 파일 값도 사용)
       - OPENAI_API_KEY
+      - GOOGLE_CLIENT_ID
       - GAME_PASSWORD
+      # 로컬에서는 GOOGLE_CLIENT_ID가 없으면 이름만으로 로그인 (구글 ID가 있으면 무시됨)
+      - ALLOW_DEV_LOGIN=1
     volumes:
       - ./data:/data
     restart: unless-stopped

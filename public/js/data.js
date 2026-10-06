@@ -3,6 +3,7 @@
 // size: S(1/4 블록), M(1/2 블록), B(블록 전체)
 export const BUILDING_TYPES = {
   house:        { name: '주택', emoji: '🏠', cat: 'home', names: ['{s}씨네 집'] },
+  villa:        { name: '빌라', emoji: '🏘️', cat: 'home', names: ['햇살 빌라', '포근 빌라', '더듬이 하우스', '이슬 빌라', '초록 빌라', '모서리 빌라', '꿀잠 빌라', '여섯다리 빌라', '틈새 빌라', '솜사탕 빌라'] },
   apartment:    { name: '아파트', emoji: '🏢', cat: 'home', names: ['더듬이 아파트', '틈새 맨션', '습기촉촉 빌라', '하수구뷰 하이츠', '어둠속 래미안', '바퀴 팰리스', '포근 굴 아파트', '싱크대 타워', '다리여섯 빌'] },
   hospital:     { name: '종합병원', emoji: '🏥', cat: 'health', names: ['바퀴 종합병원'] },
   pharmacy:     { name: '약국', emoji: '💊', cat: 'health', names: ['튼튼 약국'] },
@@ -16,11 +17,17 @@ export const BUILDING_TYPES = {
   court:        { name: '법원', emoji: '⚖️', cat: 'public', names: ['바퀴 지방법원'] },
   cityhall:     { name: '시청', emoji: '🏛️', cat: 'public', names: ['바퀴시티 시청'] },
   postoffice:   { name: '우체국', emoji: '📮', cat: 'public', names: ['바퀴 우체국'] },
-  restaurant:   { name: '식당', emoji: '🍜', cat: 'food', names: ['부스러기 식당', '바삭 키친', '할매 국밥', '설탕 한 톨 비스트로'] },
+  restaurant:   { name: '한식당', emoji: '🍚', cat: 'food', names: ['부스러기 식당', '엄마손 백반', '설탕 한 톨 한식'] },
+  pizza:        { name: '피자집', emoji: '🍕', cat: 'food', names: ['바퀴 피자', '더듬이 피자', '치즈폭탄 피자', '화덕 6다리'] },
+  chicken:      { name: '치킨집', emoji: '🍗', cat: 'food', names: ['바삭 치킨', '두마리 통닭', '양념 듬뿍 치킨', '꼬꼬 치킨'] },
+  chinese:      { name: '중국집', emoji: '🥡', cat: 'food', names: ['홍콩반점 바퀴점', '만리장성', '용궁 반점'] },
+  gukbap:       { name: '국밥집', emoji: '🍲', cat: 'food', names: ['할매 국밥', '뜨끈 국밥', '부산 돼지국밥', '24시 해장국'] },
+  burger:       { name: '버거집', emoji: '🍔', cat: 'food', names: ['바퀴 버거', '더블더듬 버거', '감튀 하우스'] },
+  bunsik:       { name: '분식집', emoji: '🍢', cat: 'food', names: ['떡볶이 천국', '김밥 나라', '학교 앞 분식'] },
   cafe:         { name: '카페', emoji: '☕', cat: 'food', names: ['더듬이 커피', '카페 6다리', '틈새 로스터리', '밤샘 카페'] },
   bakery:       { name: '빵집', emoji: '🥐', cat: 'food', names: ['빵가루 베이커리', '크럼블 하우스'] },
   supermarket:  { name: '슈퍼마켓', emoji: '🛒', cat: 'shop', names: ['바퀴마트'] },
-  convenience:  { name: '편의점', emoji: '🏪', cat: 'shop', names: ['24 바퀴편의점', '밤새 편의점', '구석 편의점'] },
+  convenience:  { name: '편의점', emoji: '🏪', cat: 'shop', names: ['24 바퀴편의점', '밤새 편의점', '구석 편의점', 'CU바퀴', 'GS더듬', '세븐다리'] },
   bank:         { name: '은행', emoji: '🏦', cat: 'biz', names: ['바퀴 중앙은행'] },
   office:       { name: '오피스', emoji: '💼', cat: 'biz', names: ['바퀴테크 타워', '더듬이 파이낸스', '갑각 컴퍼니', '육각 소프트'] },
   tvstation:    { name: '방송국', emoji: '📺', cat: 'biz', names: ['BKB 방송국'] },
@@ -38,7 +45,7 @@ export const BUILDING_TYPES = {
   construction: { name: '공사장', emoji: '🚧', cat: 'industry', names: ['바퀴 타워 신축 현장'] },
   garage:       { name: '주유소·정비소', emoji: '⛽', cat: 'industry', names: ['바퀴 모터스'] },
   flowershop:   { name: '꽃집', emoji: '💐', cat: 'shop', names: ['꽃잎 한 장', '향기 꽃집'] },
-  realestate:   { name: '부동산', emoji: '🏘️', cat: 'biz', names: ['틈새 부동산'] },
+  realestate:   { name: '부동산', emoji: '🏘️', cat: 'biz', names: ['틈새 부동산', '전원 부동산', '행복 공인중개사'] },
   lab:          { name: '연구소', emoji: '🔬', cat: 'biz', names: ['바퀴 과학연구소'] },
   park:         { name: '공원', emoji: '🌳', cat: 'leisure', names: ['도토리 공원', '이슬방울 공원'] },
   armory_3k:    { name: '삼국지 병기점', emoji: '⚔️', cat: 'shop', names: ['관우네 병기점'] },
@@ -49,6 +56,9 @@ export const BUILDING_TYPES = {
   eyewear:      { name: '안경원', emoji: '🕶️', cat: 'shop', names: ['눈부심 안경원'] },
   club:         { name: '클럽', emoji: '🪩', cat: 'leisure', names: ['클럽 바퀴락'] },
   dojang:       { name: '무릉도장', emoji: '🥋', cat: 'culture', names: ['무릉도장'] },
+  range:        { name: '사격 연습장', emoji: '🎯', cat: 'leisure', names: ['명중 사격장'] },
+  magicshop:    { name: '마법봉 공방', emoji: '🪄', cat: 'shop', names: ['반짝 마법봉 공방'] },
+  dealer:       { name: '자동차 쇼룸', emoji: '🏎️', cat: 'shop', names: ['바퀴 모터스 쇼룸'] },
 };
 
 export const CATEGORY_COLORS = {
@@ -56,16 +66,23 @@ export const CATEGORY_COLORS = {
   biz: '#8fd3c8', culture: '#d8b4fe', leisure: '#7ee08a', industry: '#b0a191',
 };
 
-// 각 행은 북→남, 각 칸은 서→동
+// 각 행은 북→남, 각 칸은 서→동 (8x8: 바깥 테두리는 교외 주택단지)
 // "M:a|S:b,c" = 북쪽 절반 a, 남쪽 두 칸 b,c / "S:a,b,c,d" = NW,NE,SW,SE / "B:x" = 블록 전체
+const HB = 'S:house,house,house,house';
+const VB = 'S:villa,villa,villa,villa';
+const AB = 'M:apartment|M:apartment';
 export const CITY_PLAN = [
-  ['S:house,house,house,house', 'M:apartment|S:house,flowershop', 'B:school', 'B:university', 'M:apartment|S:house,house', 'S:house,house,vet,house'],
-  ['M:kindergarten|S:house,convenience', 'S:cafe,bakery,restaurant,pharmacy', 'M:library|M:postoffice', 'M:bank|M:office', 'S:salon,clothing,cafe,bookstore', 'M:gym|S:house,house'],
-  ['B:hospital', 'M:police|M:fire', 'B:cityhall', 'M:office|M:tvstation', 'M:hotel|M:cinema', 'S:restaurant,realestate,dental,convenience'],
-  ['M:apartment|S:house,house', 'M:supermarket|S:cafe,gallery', 'M:court|M:office', 'B:museum', 'M:concerthall|S:restaurant,bakery', 'M:apartment|M:apartment'],
-  ['S:hatshop,eyewear,house,convenience', 'B:park', 'M:lab|S:cafe,house', 'M:apartment|S:restaurant,salon', 'B:construction', 'M:garage|S:house,house'],
-  ['S:armory_3k,armory_mil,armory_sf,jeweler', 'M:apartment|S:house,house', 'M:apartment|S:house,flowershop', 'B:factory', 'M:club|S:house,house', 'B:dojang'],
+  [HB, 'S:villa,villa,house,house', AB, HB, 'S:convenience,chicken,villa,villa', HB, 'M:apartment|S:villa,villa', HB],
+  ['S:house,house,magicshop,pizza', 'S:house,pizza,house,house', 'M:apartment|S:house,flowershop', 'B:school', 'B:university', 'M:apartment|S:chicken,house', 'S:house,gukbap,vet,house', VB],
+  [VB, 'M:kindergarten|S:house,convenience', 'S:cafe,bakery,restaurant,pharmacy', 'M:library|M:postoffice', 'M:bank|M:office', 'S:salon,clothing,cafe,bookstore', 'M:gym|S:bunsik,house', 'S:house,house,chinese,realestate'],
+  [AB, 'B:hospital', 'M:police|M:fire', 'B:cityhall', 'M:office|M:tvstation', 'M:hotel|M:cinema', 'S:chinese,realestate,dental,convenience', HB],
+  ['S:gukbap,bunsik,house,house', 'M:apartment|S:burger,house', 'M:supermarket|S:cafe,gallery', 'M:court|M:office', 'B:museum', 'M:concerthall|S:pizza,bakery', 'M:apartment|M:apartment', AB],
+  [HB, 'S:hatshop,eyewear,chicken,convenience', 'B:park', 'M:lab|S:cafe,gukbap', 'M:apartment|S:chinese,salon', 'B:construction', 'M:garage|S:bunsik,house', 'S:villa,villa,burger,convenience'],
+  ['S:villa,villa,realestate,range', 'S:armory_3k,armory_mil,armory_sf,jeweler', 'M:apartment|S:house,burger', 'M:apartment|S:convenience,flowershop', 'B:factory', 'M:club|S:pizza,house', 'B:dojang', VB],
+  [HB, AB, 'S:house,house,dealer,pizza', VB, HB, 'S:villa,villa,gukbap,chinese', HB, 'M:apartment|S:house,house'],
 ];
+export const isSuburbBlock = (r, c) => r === 0 || c === 0 || r === CITY_PLAN.length - 1 || c === CITY_PLAN.length - 1;
+export const HOME_TYPES = ['house', 'villa', 'apartment'];
 
 // 직업: building = 근무지 타입, wage = 시급(₩), hours = 기본 근무시간, acc = 의상
 // mobile: 근무 중 거리를 돌아다님 / night: 야간근무 확률
@@ -96,6 +113,12 @@ export const JOBS = [
   { id: 'chef', name: '셰프', building: 'restaurant', wage: 30, hours: [10, 21], acc: ['chef', 'apron:#ffffff'], duty: '맛있는 부스러기 요리를 만든다' },
   { id: 'waiter', name: '웨이터', building: 'restaurant', wage: 15, hours: [11, 21], acc: ['bowtie', 'apron:#333333'], duty: '손님을 맞이하고 서빙한다' },
   { id: 'delivery', name: '배달원', building: 'restaurant', wage: 16, hours: [11, 22], mobile: 0.85, acc: ['cap:#3dbf6e', 'backpack:#3dbf6e'], duty: '음식을 배달한다' },
+  { id: 'pizza_chef', name: '피자 셰프', building: 'pizza', wage: 22, hours: [11, 22], acc: ['chef', 'apron:#d32f2f'], duty: '화덕에 피자를 굽는다' },
+  { id: 'chicken_cook', name: '치킨집 사장', building: 'chicken', wage: 24, hours: [14, 24], acc: ['cap:#ffb300', 'apron:#ffb300'], duty: '치킨을 바삭하게 튀긴다' },
+  { id: 'chinese_chef', name: '중식 요리사', building: 'chinese', wage: 24, hours: [10, 21], acc: ['chef', 'apron:#ffffff'], duty: '웍을 돌려 짜장면을 볶는다' },
+  { id: 'gukbap_owner', name: '국밥집 주인', building: 'gukbap', wage: 22, hours: [6, 20], acc: ['headband:#ffffff', 'apron:#8d6e63'], duty: '밤새 육수를 끓인다' },
+  { id: 'burger_crew', name: '버거 크루', building: 'burger', wage: 13, hours: [10, 20], acc: ['cap:#e53935', 'apron:#ffd54f'], duty: '버거를 만든다' },
+  { id: 'bunsik_owner', name: '분식집 이모', building: 'bunsik', wage: 18, hours: [9, 20], acc: ['apron:#f48fb1'], duty: '떡볶이를 휘휘 젓는다' },
   { id: 'barista', name: '바리스타', building: 'cafe', wage: 15, hours: [6, 15], acc: ['apron:#5b3a29', 'beret:#5b3a29'], duty: '커피를 내린다' },
   { id: 'baker', name: '제빵사', building: 'bakery', wage: 18, hours: [5, 14], acc: ['chef', 'apron:#ffe0a8'], duty: '새벽부터 빵을 굽는다' },
   { id: 'cashier', name: '계산원', building: 'supermarket', wage: 14, hours: [9, 18], acc: ['apron:#4caf50'], duty: '계산대를 지킨다' },
@@ -134,6 +157,9 @@ export const JOBS = [
   { id: 'mechanic', name: '정비사', building: 'garage', wage: 22, hours: [8, 18], acc: ['cap:#1565c0', 'apron:#1565c0'], duty: '자동차를 고친다' },
   { id: 'taxi_driver', name: '택시기사', building: 'garage', wage: 18, hours: [6, 18], night: 0.3, acc: ['cap:#fbc02d'], duty: '손님을 태우고 도시를 누빈다' },
   { id: 'florist', name: '플로리스트', building: 'flowershop', wage: 16, hours: [9, 19], acc: ['apron:#81c784', 'bow:#ff80ab'], duty: '꽃다발을 만든다' },
+  { id: 'range_coach', name: '사격 교관', building: 'range', wage: 26, hours: [10, 20], acc: ['cap:#33691e', 'vest_kevlar'], duty: '사격 자세를 가르친다' },
+  { id: 'wizard', name: '마법봉 장인', building: 'magicshop', wage: 30, hours: [11, 21], acc: ['wizard', 'robe'], duty: '마법봉에 마력을 불어넣는다' },
+  { id: 'car_dealer', name: '자동차 딜러', building: 'dealer', wage: 34, hours: [10, 20], acc: ['tie:#d32f2f', 'sunglasses'], duty: '스포츠카를 판다' },
   { id: 'realtor', name: '공인중개사', building: 'realestate', wage: 30, hours: [9, 19], acc: ['tie:#00897b'], duty: '아늑한 틈새 집을 소개한다' },
   { id: 'blacksmith', name: '대장장이', building: 'armory_3k', wage: 28, hours: [9, 19], acc: ['apron:#5d4037', 'headband:#c62828'], duty: '삼국지 명검을 벼린다' },
   { id: 'arms_dealer', name: '무기상', building: 'armory_mil', wage: 32, hours: [10, 20], acc: ['vest', 'sunglasses'], duty: '군용 장비와 전차를 판다' },
@@ -218,28 +244,28 @@ export const ACTIONS = {
     { id: 'cook', label: '🍳 요리해서 먹기', cost: 5, dur: 45, fx: { hunger: 45, fun: 5 } },
     { id: 'shower', label: '🚿 샤워하기', cost: 0, dur: 20, fx: { hygiene: 60 } },
     { id: 'tv', label: '📺 TV 보기', cost: 0, dur: 60, fx: { fun: 25, energy: 5 } },
+    { id: 'recolor', label: '🎨 거울 앞에서 몸 색깔 바꾸기', recolor: true },
   ],
-  restaurant: [{ id: 'eat', label: '🍜 식사하기', cost: 15, dur: 45, fx: { hunger: 65, social: 5, fun: 5 } }],
-  cafe: [
-    { id: 'coffee', label: '☕ 커피 마시기', cost: 6, dur: 25, fx: { energy: 20, fun: 5, social: 3 } },
-    { id: 'dessert', label: '🍰 디저트 먹기', cost: 8, dur: 25, fx: { hunger: 20, fun: 12 } },
-    { id: 'shop', label: '🥤 테이크아웃 (상점)', shop: true },
-  ],
-  bakery: [
-    { id: 'bread', label: '🥐 빵 먹기', cost: 5, dur: 15, fx: { hunger: 30, fun: 5 } },
-    { id: 'shop', label: '🍞 빵 사가기 (상점)', shop: true },
-  ],
+  restaurant: [{ id: 'order', label: '🍚 주문하기 (먹고 가기 · 포장)', menu: true }],
+  pizza: [{ id: 'order', label: '🍕 주문하기 (먹고 가기 · 포장)', menu: true }],
+  chicken: [{ id: 'order', label: '🍗 주문하기 (먹고 가기 · 포장)', menu: true }],
+  chinese: [{ id: 'order', label: '🥡 주문하기 (먹고 가기 · 포장)', menu: true }],
+  gukbap: [{ id: 'order', label: '🍲 주문하기 (먹고 가기 · 포장)', menu: true }],
+  burger: [{ id: 'order', label: '🍔 주문하기 (먹고 가기 · 포장)', menu: true }],
+  bunsik: [{ id: 'order', label: '🍢 주문하기 (먹고 가기 · 포장)', menu: true }],
+  cafe: [{ id: 'coffee', label: '☕ 주문하기 (먹고 가기 · 테이크아웃)', menu: true }],
+  bakery: [{ id: 'bread', label: '🥐 빵 고르기 (먹고 가기 · 포장)', menu: true }],
   convenience: [
-    { id: 'kimbap', label: '🍙 삼각김밥 먹기', cost: 3, dur: 10, fx: { hunger: 22 } },
-    { id: 'energy', label: '🥫 에너지 드링크', cost: 4, dur: 5, fx: { energy: 25, hygiene: -3 } },
+    { id: 'order', label: '🍜 계산대에서 사먹기 (먹고 가기 · 포장)', menu: true },
+    { id: 'microwave', label: '♨️ 전자레인지로 데워먹기', menu: true },
     { id: 'shop', label: '🛒 진열대 둘러보기 (상점)', shop: true },
   ],
-  supermarket: [{ id: 'groceries', label: '🛒 장보기 (요리 재료)', cost: 18, dur: 40, fx: { hunger: 30, fun: 5 } }],
+  supermarket: [{ id: 'groceries', label: '🛒 장보기 (요리 재료)', cost: 18, dur: 40, fx: { hunger: 30, fun: 5 } }, { id: 'shop', label: '🧺 진열대 둘러보기 (상점)', shop: true }],
   pharmacy: [{ id: 'vitamin', label: '💊 비타민 먹기', cost: 8, dur: 10, fx: { energy: 20, hygiene: 5 } }, { id: 'shop', label: '🩹 구급상자 사기 (상점)', shop: true }],
   hospital: [{ id: 'checkup', label: '🩺 진료 받기 (체력 회복)', cost: 20, dur: 60, fx: { energy: 35, hygiene: 15, hunger: -5 }, heal: 100 }],
   dental: [{ id: 'scaling', label: '🦷 스케일링', cost: 15, dur: 40, fx: { hygiene: 45 } }],
   vet: [{ id: 'pet', label: '🐾 진드기 친구 쓰다듬기', cost: 0, dur: 20, fx: { fun: 15, social: 5 } }],
-  salon: [{ id: 'haircut', label: '💇 더듬이 손질', cost: 12, dur: 45, fx: { hygiene: 35, fun: 12 } }],
+  salon: [{ id: 'haircut', label: '💇 더듬이 손질', cost: 12, dur: 45, fx: { hygiene: 35, fun: 12 } }, { id: 'restyle', label: '💇 얼굴·더듬이·날개 스타일 바꾸기', cost: 30, restyle: true }],
   clothing: [{ id: 'shop', label: '👗 옷 구경하기 (상점)', shop: true }],
   bookstore: [{ id: 'shop', label: '📖 책·인형 사기 (상점)', shop: true }],
   library: [{ id: 'read', label: '📚 책 읽기', cost: 0, dur: 60, fx: { fun: 18, energy: -5 } }],
@@ -260,6 +286,12 @@ export const ACTIONS = {
   tvstation: [{ id: 'show', label: '📺 방청객 참여', cost: 0, dur: 90, fx: { fun: 30, social: 10 }, earn: 15 }],
   hotel: [{ id: 'stay', label: '🛏️ 호텔 숙박', cost: 40, dur: 0, fx: { energy: 100, hygiene: 40 }, sleep: true }],
   realestate: [{ id: 'buyhouse', label: '🏠 집 구매하기', houses: true }],
+  range: [
+    { id: 'range_start', label: '🎯 사격 시작 (60초 · 탄약 무료)', rangeStart: true },
+    { id: 'range_rent', label: '🔫 연습용 총 빌리기 (10분)', rangeRent: true },
+  ],
+  magicshop: [{ id: 'shop', label: '🪄 지팡이 둘러보기 (상점)', shop: true }],
+  dealer: [{ id: 'dealer', label: '🏎️ 자동차 구경하기 (쇼룸)', dealer: true }],
   flowershop: [{ id: 'shop', label: '💐 꽃·인형 사기 (상점)', shop: true }],
   armory_3k: [{ id: 'shop', label: '⚔️ 병기 둘러보기 (상점)', shop: true }],
   armory_mil: [{ id: 'shop', label: '🎖️ 장비 둘러보기 (상점)', shop: true }],
@@ -272,9 +304,9 @@ export const ACTIONS = {
     { id: 'cocktail', label: '🍹 칵테일 한 잔', cost: 15, dur: 15, fx: { fun: 15, energy: 10 } },
   ],
   dojang: [
-    { id: 'course_jump2', label: '🥋 수련: 점프맵 (2단 점프 전수)', course: 'jump2' },
+    { id: 'course_jump2', label: '🥋 수련: 점프맵 (점프력 강화 전수)', course: 'jump2' },
     { id: 'course_jump3', label: '🥋 수련: 고급 점프맵 (3단 점프 전수)', course: 'jump3' },
-    { id: 'course_dash', label: '🔥 수련: 용암 징검다리 (대쉬 전수)', course: 'dash' },
+    { id: 'course_dash', label: '🔥 수련: 용암 징검다리 (대쉬 거리 강화 전수)', course: 'dash' },
     { id: 'meditate', label: '🧘 명상하기', cost: 0, dur: 30, fx: { fun: 10, energy: 15 } },
   ],
   school: [{ id: 'class', label: '✏️ 공개 수업 듣기', cost: 0, dur: 60, fx: { social: 10, energy: -5 } }],

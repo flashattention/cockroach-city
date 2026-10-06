@@ -3,6 +3,7 @@
 // 시민 프로필(이름, 직업, 관계 등)을 똑같이 만든 뒤 위치/상태는 서버 스냅샷으로 받는다.
 import * as THREE from 'three';
 import { X_LINES, Z_LINES, HALF, POPULATION } from './config.js';
+import { npcLevel } from './level.js';
 import {
   JOBS, SPECIAL_JOBS, PERSONALITIES, SURNAMES, NAMES_M, NAMES_F, NAMES_N, OLD_M, OLD_F,
   SOCIAL_ROLES, HOBBIES, WORRIES, DREAMS, BODY_COLORS, SMALL_TALK, BUILDING_TYPES,
@@ -11,8 +12,8 @@ import { RNG } from './utils.js';
 
 // 주말에 쉬는 직장
 const WEEKDAY_ONLY = new Set(['school', 'kindergarten', 'university', 'office', 'bank', 'court', 'cityhall', 'postoffice', 'lab', 'factory', 'construction', 'realestate']);
-const LEISURE_TYPES = ['cafe', 'restaurant', 'bakery', 'park', 'library', 'gym', 'cinema', 'supermarket', 'convenience', 'bookstore', 'museum', 'gallery', 'salon', 'clothing', 'concerthall', 'flowershop', 'bank', 'postoffice', 'pharmacy', 'hospital', 'hatshop', 'eyewear', 'jeweler', 'dojang', 'armory_3k', 'armory_mil', 'armory_sf'];
-const MEAL_TYPES = ['restaurant', 'cafe', 'bakery', 'convenience'];
+const LEISURE_TYPES = ['cafe', 'restaurant', 'pizza', 'chicken', 'chinese', 'gukbap', 'burger', 'bunsik', 'bakery', 'park', 'library', 'gym', 'cinema', 'supermarket', 'convenience', 'bookstore', 'museum', 'gallery', 'salon', 'clothing', 'concerthall', 'flowershop', 'bank', 'postoffice', 'pharmacy', 'hospital', 'hatshop', 'eyewear', 'jeweler', 'dojang', 'armory_3k', 'armory_mil', 'armory_sf'];
+const MEAL_TYPES = ['restaurant', 'cafe', 'bakery', 'convenience', 'pizza', 'chicken', 'chinese', 'gukbap', 'burger', 'bunsik'];
 
 const inHours = (h, [a, b]) => (a <= b ? h >= a && h < b : h >= a || h < b);
 
@@ -30,7 +31,7 @@ const MOOD_TRAITS = {
 export const moodLabel = (m) => (m >= 80 ? '최고' : m >= 62 ? '좋음' : m >= 42 ? '보통' : m >= 25 ? '나쁨' : '최악');
 export const moodEmoji = (m) => (m >= 80 ? '😄' : m >= 62 ? '🙂' : m >= 42 ? '😐' : m >= 25 ? '😟' : '😡');
 const AGGRESSIVE = new Set(['competitive', 'rebel', 'grumpy', 'braggart']);
-const FOOD_TYPES = new Set(['restaurant', 'cafe', 'bakery', 'convenience', 'supermarket']);
+const FOOD_TYPES = new Set(['restaurant', 'cafe', 'bakery', 'convenience', 'supermarket', 'pizza', 'chicken', 'chinese', 'gukbap', 'burger', 'bunsik']);
 const FUN_TYPES = new Set(['cinema', 'concerthall', 'club', 'museum', 'gallery', 'gym', 'library', 'bookstore', 'park', 'dojang', 'clothing', 'hatshop', 'eyewear']);
 export const PLAN_KINDS = ['none', 'sleep', 'work', 'leisure', 'patrol', 'wander', 'report'];
 
@@ -96,6 +97,9 @@ export class Citizen {
     this.moving = 0;
     // 플레이어와 똑같은 욕구와 체력
     this.maxHp = this.age < 13 ? 60 : this.age >= 70 ? 70 : 100;
+    // 레벨: 나이와 직업으로 정해지고, 높을수록 튼튼하고 주먹이 세다
+    this.level = npcLevel(this, ((this.id * 7919) % 100) / 100);
+    this.maxHp += (this.level - 1) * 5;
     this.hp = this.maxHp;
     const r = (a, b) => a + ((this.id * 37 + a * 13) % (b - a));
     this.needs = { hunger: r(50, 95), energy: r(55, 95), fun: r(40, 90), social: r(40, 90), hygiene: r(55, 95) };
@@ -185,6 +189,36 @@ export class Sim {
     this.encounterT = 0;
     this.events = [];
     this.onStreetChat = null; // (a, b) => Promise<lines[]|null>
+    // 건물 벽 (도망·싸움 중에 건물을 뚫고 지나가지 않도록)
+    this.blockers = city.buildings.filter((b) => b.type !== 'park').map((b) => ({ minX: b.x - b.w / 2, maxX: b.x + b.w / 2, minZ: b.z - b.d / 2, maxZ: b.z + b.d / 2 }));
+  }
+
+  pushOut(pos, r = 0.5) {
+    for (const b of this.blockers) {
+      if (pos.x < b.minX - r || pos.x > b.maxX + r || pos.z < b.minZ - r || pos.z > b.maxZ + r) continue;
+      const cx = Math.max(b.minX, Math.min(pos.x, b.maxX)), cz = Math.max(b.minZ, Math.min(pos.z, b.maxZ));
+      const dx = pos.x - cx, dz = pos.z - cz, d = Math.hypot(dx, dz);
+      if (d > 1e-4) { if (d < r) { pos.x = cx + (dx / d) * r; pos.z = cz + (dz / d) * r; } continue; }
+      // 안쪽에 들어가 버렸으면 가장 가까운 면 밖으로
+      const opts = [[b.minX - r - pos.x, 0], [b.maxX + r - pos.x, 0], [0, b.minZ - r - pos.z], [0, b.maxZ + r - pos.z]];
+      opts.sort((a, c) => Math.abs(a[0] + a[1]) - Math.abs(c[0] + c[1]));
+      pos.x += opts[0][0]; pos.z += opts[0][1];
+    }
+  }
+
+  // 공격한 쪽에서 먼 보도 지점으로 달아나는 경로
+  fleeRoute(c, from) {
+    let best = null, bd = -1;
+    for (let i = 0; i < 8; i++) {
+      const sp = randomStreetPoint(this.rng);
+      const away = Math.hypot(sp.point.x - from.x, sp.point.z - from.z);
+      const near = Math.hypot(sp.point.x - c.pos.x, sp.point.z - c.pos.z);
+      if (near < 15 || near > 90) continue;
+      if (away > bd) { bd = away; best = sp; }
+    }
+    best ||= randomStreetPoint(this.rng);
+    const nl = nearestLine(c.pos);
+    c.path = [nl.point.clone(), ...lineRoute(nl.point, nl.type, best.point, best.type)];
   }
 
   emit(ev) { this.events.push(ev); }
@@ -194,7 +228,7 @@ export class Sim {
   // reserved: 플레이어용으로 비워둘 집 목록
   generate(reserved = []) {
     const R = this.rng;
-    const homes = this.city.buildings.filter((b) => (b.type === 'house' || b.type === 'apartment') && !reserved.includes(b));
+    const homes = this.city.buildings.filter((b) => (b.type === 'house' || b.type === 'apartment' || b.type === 'villa') && !reserved.includes(b));
     R.shuffle(homes);
     const people = [];
     let hid = 0;
@@ -236,7 +270,7 @@ export class Sim {
       return hh;
     };
     // 아파트 먼저 몇 가구씩, 그다음 주택
-    const apartments = homes.filter((h) => h.type === 'apartment');
+    const apartments = homes.filter((h) => h.type === 'apartment' || h.type === 'villa');
     const houses = homes.filter((h) => h.type === 'house');
     let hi = 0;
     while (people.length < POPULATION) {
@@ -247,7 +281,7 @@ export class Sim {
       }
       for (const a of apartments) {
         if (people.length >= POPULATION) break;
-        if (households.filter((h) => h.home === a).length < 7) {
+        if (households.filter((h) => h.home === a).length < (a.type === 'villa' ? 3 : 7)) {
           makeHousehold(a, R.weighted(['single', 'couple', 'family', 'roommates'], (k) => ({ single: 4, couple: 2, family: 2, roommates: 1 }[k])));
           progressed = true;
         }
@@ -307,7 +341,7 @@ export class Sim {
     const slots = [];
     for (const j of JOBS) slots.push(j);
     for (const t of Object.keys(byType)) {
-      if (t === 'house' || t === 'apartment') continue;
+      if (t === 'house' || t === 'apartment' || t === 'villa') continue;
       const primary = JOBS.filter((j) => j.building === t);
       if (!primary.length) continue;
       for (let i = 1; i < byType[t].length; i++) slots.push(primary[i % primary.length]);
@@ -393,6 +427,7 @@ export class Sim {
     // 주택 이름: 가장(첫 구성원) 성씨로
     for (const h of this.city.buildings) {
       if (h.type === 'house' && !reserved.includes(h)) h.name = h.residents.length ? `${h.residents[0].name[0]}씨네 집` : '빈 집 (매물)';
+      if (h.type === 'apartment' || h.type === 'villa') h.npcHouseholds = households.filter((x) => x.home === h).length;
     }
     return this.citizens;
   }
@@ -473,7 +508,7 @@ export class Sim {
 
   chooseMeal(c, m) {
     if (this.rng.chance(0.25)) return { kind: 'leisure', building: c.home, until: m + 50 };
-    return this.leisureAt(c, this.rng.pick(['restaurant', 'restaurant', 'cafe', 'bakery', 'convenience']), m + 50);
+    return this.leisureAt(c, this.rng.pick(['restaurant', 'pizza', 'chicken', 'chinese', 'gukbap', 'burger', 'bunsik', 'cafe', 'bakery', 'convenience']), m + 50);
   }
 
   leisureAt(c, type, until) {
@@ -608,6 +643,19 @@ export class Sim {
       c.chatCooldown -= dt;
       c.thoughtCooldown -= dt;
       if (gm > 0) this.updateNeeds(c, gm);
+      // 신고하기로 마음먹으면 잠시 뒤 휴대폰으로 112에 전화 (죽어 있으면 깨어난 뒤)
+      if (c.report && c.mode !== 'dead') {
+        c.reportCallT = (c.reportCallT ?? 4 + R.next() * 5) - dt;
+        if (c.reportCallT <= 0) {
+          const rep = c.report;
+          c.report = null; c.reportCallT = undefined;
+          if (c.grudges[rep.token]) c.grudges[rep.token].pts = 15;
+          c.say(R.pick(['📱 여보세요, 112죠? 신고할게요!', '📱 경찰이죠? 여기 이상한 바퀴가 있어요!', '📱 112! 빨리 와주세요!']), 3);
+          this.onReport?.(c, rep);
+          this.adjustMood(c, 12, '경찰에 신고하고 나니 속이 좀 풀림');
+          if (c.plan?.kind === 'report') { c.plan = null; c.replanT = 0; }
+        }
+      }
 
       if (COMBAT.has(c.mode)) { c.moving = this.updateCombat(c, dt, ctx); continue; }
 
@@ -687,7 +735,7 @@ export class Sim {
     if (inside && c.location === c.home) { N.hunger += 25 * gm / 60; N.hygiene += 40 * gm / 60; }
     if ((inside && FUN_TYPES.has(t)) || c.mode === 'park') N.fun += 40 * gm / 60;
     if (c.mode === 'chat' || c.mode === 'player') N.social += 90 * gm / 60;
-    if (inside && t !== 'house' && t !== 'apartment') N.social += 6 * gm / 60;
+    if (inside && t !== 'house' && t !== 'apartment' && t !== 'villa') N.social += 6 * gm / 60;
     if (inside && (t === 'gym' || t === 'salon')) N.hygiene += 30 * gm / 60;
     if (inside && c.plan?.kind === 'work') N.fun -= 1.5 * gm / 60;
     for (const k of NEED_KEYS) N[k] = Math.max(0, Math.min(100, N[k]));
@@ -749,7 +797,7 @@ export class Sim {
     this.emit({ t: 'hurt', id: c.id });
     if (attacker) {
       this.adjustMood(c, c.hp <= 0 ? -50 : -25, `${attacker.name}에게 맞음`);
-      this.addGrudge(c, attacker, c.hp <= 0 ? 100 : 40, '폭행');
+      this.addGrudge(c, attacker, c.hp <= 0 ? 100 : 40, c.hp <= 0 ? '살인' : '폭행');
     }
     if (c.hp <= 0) {
       c.hp = 0;
@@ -772,6 +820,10 @@ export class Sim {
     if (c.mode === 'chat' && c.chatWith) this.endChat(c.chatWith);
     c.prevLoc = c.location;
     c.mode = 'flee'; c.fleeT = this.rng.range(7, 11); c.fleeFrom = from.clone ? from.clone() : new THREE.Vector3(from.x, 0, from.z);
+    if (c.location?.type === 'park') c.location = null; // 공원에서는 거리로 달아난다
+    const inBuilding = c.location && c.location.type !== 'park' && this.active.has(c.location.id);
+    c.fleeExit = inBuilding ? this.active.get(c.location.id).exit.clone() : null;
+    if (!inBuilding) this.fleeRoute(c, c.fleeFrom);
     if (!scream || c.hp >= c.maxHp) this.adjustMood(c, -12, '무서운 폭력 장면을 목격함');
     c.emote('scared', 4);
     if (scream) c.say(this.rng.pick(['살려주세요!! 😱', '으악! 경찰 불러요!!', '도망쳐!!! 🏃', '꺄아악!']), 2.5);
@@ -787,16 +839,30 @@ export class Sim {
     }
     if (c.mode === 'flee') {
       c.fleeT -= dt;
-      const dx = pos.x - c.fleeFrom.x, dz = pos.z - c.fleeFrom.z;
-      const d = Math.hypot(dx, dz) || 1;
       const sp = 7.5;
-      pos.x += (dx / d) * sp * dt; pos.z += (dz / d) * sp * dt;
       if (inside) {
-        const I = this.active.get(c.location.id);
-        pos.x = Math.max(I.entry.x - 30, Math.min(I.entry.x + 30, pos.x));
-      } else { pos.x = clampL(pos.x); pos.z = clampL(pos.z); }
-      c.heading = Math.atan2(dx, dz);
-      if (c.fleeT <= 0) this.calm(c);
+        // 건물 안: 출입문으로 달려 나가서 거리로 도망
+        const moving = this.moveTo(c, c.ipos, c.fleeExit || this.active.get(c.location.id).exit, dt, sp);
+        if (!moving) {
+          const b = c.location;
+          c.location = null;
+          c.pos.copy(b.door);
+          c.inside = { state: 'none', target: null, spot: null };
+          this.fleeRoute(c, b.door);
+          c.fleeT = Math.max(c.fleeT, 5);
+        }
+        return sp;
+      }
+      // 거리: 보도를 따라 달아나고, 혹시라도 벽에 닿으면 밀어낸다
+      const moved = c.path.length ? this.followPath(c, dt, sp) : 0;
+      if (!moved) {
+        const dx = c.pos.x - c.fleeFrom.x, dz = c.pos.z - c.fleeFrom.z, d = Math.hypot(dx, dz) || 1;
+        c.pos.x += (dx / d) * sp * dt; c.pos.z += (dz / d) * sp * dt;
+        c.heading = Math.atan2(dx, dz);
+      }
+      if (c.location?.type !== 'park') this.pushOut(c.pos);
+      c.pos.x = clampL(c.pos.x); c.pos.z = clampL(c.pos.z);
+      if (c.fleeT <= 0) { c.path = []; this.calm(c); }
       return sp;
     }
     // fight
@@ -806,12 +872,16 @@ export class Sim {
     if (!tgt || tgt.dead || c.fightT <= 0 || tgt.loc !== tgtLoc) { this.calm(c); return 0; }
     const dx = tgt.pos.x - pos.x, dz = tgt.pos.z - pos.z, d = Math.hypot(dx, dz);
     c.heading = Math.atan2(dx, dz);
-    if (d > 1.4) { const st = Math.min(d - 1.2, 5.5 * dt); pos.x += (dx / d) * st; pos.z += (dz / d) * st; return 5.5; }
+    if (d > 1.4) {
+      const st = Math.min(d - 1.2, 5.5 * dt); pos.x += (dx / d) * st; pos.z += (dz / d) * st;
+      if (!inside && c.location?.type !== 'park') this.pushOut(pos);
+      return 5.5;
+    }
     c.punchT -= dt;
     if (c.punchT <= 0) {
       c.punchT = 1.1;
       this.emit({ t: 'punch', id: c.id });
-      this.onNpcAttack?.(c, tgt.id, c.age < 13 ? 2 : 6);
+      this.onNpcAttack?.(c, tgt.id, (c.age < 13 ? 2 : 6) * (1 + (c.level - 1) * 0.04));
     }
     return 0;
   }
@@ -903,6 +973,7 @@ export class Sim {
   }
 
   followPath(c, dt, speed) {
+    if (c.slowT > 0) { c.slowT -= dt; speed *= 0.35; } // 얼음 마법
     let budget = speed * dt;
     let moved = false;
     while (budget > 0 && c.path.length) {
@@ -1028,6 +1099,7 @@ export class Sim {
     const dx = c.pos.x - from.x, dz = c.pos.z - from.z;
     const d = Math.hypot(dx, dz) || 1;
     c.pos.x += (dx / d) * 2.5; c.pos.z += (dz / d) * 2.5;
+    if (c.location?.type !== 'park') this.pushOut(c.pos);
     c.emote('scared', 2);
     this.emit({ t: 'jump', id: c.id });
     c.say(['으아악! 🚗💨', '깜짝이야!! 😱', '운전 똑바로 해요!! 😠', '휴, 6개 다리 아니었으면...'][Math.floor(Math.random() * 4)], 2.5);
@@ -1059,9 +1131,15 @@ export class Sim {
 }
 
 // 플레이어 길 안내용: 현재 위치에서 건물(또는 지점)까지 보도를 따라가는 경로
-export function routeTo(from, target) {
-  const nl = nearestLine(from);
-  const pts = [nl.point.clone()];
+// blockers: 건물 상자 목록 — 첫 구간이 건물을 가로지르지 않는 보도를 고른다
+export function routeTo(from, target, blockers = []) {
+  const cands = [];
+  for (const x of X_LINES) cands.push({ point: new THREE.Vector3(x, 0, clampL(from.z)), type: 'X' });
+  for (const z of Z_LINES) cands.push({ point: new THREE.Vector3(clampL(from.x), 0, z), type: 'Z' });
+  cands.sort((a, b) => a.point.distanceTo(from) - b.point.distanceTo(from));
+  const clear = (a, b) => !blockers.some((bx) => segHitsBox(a, b, bx));
+  const nl = cands.slice(0, 6).find((c) => clear(from, c.point)) || cands[0];
+  let pts = [nl.point.clone()];
   if (target.walk) {
     pts.push(...lineRoute(nl.point, nl.type, target.walk, 'Z'));
     pts.push(target.door.clone());
@@ -1070,5 +1148,35 @@ export function routeTo(from, target) {
     pts.push(...lineRoute(nl.point, nl.type, tl.point, tl.type));
     pts.push(target.point.clone());
   }
-  return pts;
+  // 겹치는 점과 일직선 위의 중간 점 정리
+  pts = pts.filter((p, i) => i === 0 || p.distanceTo(pts[i - 1]) > 0.3);
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = out[out.length - 1], b = pts[i], c = pts[i + 1];
+    const cross = (b.x - a.x) * (c.z - b.z) - (b.z - a.z) * (c.x - b.x);
+    if (Math.abs(cross) > 0.5) out.push(b);
+  }
+  if (pts.length > 1) out.push(pts[pts.length - 1]);
+  return out;
+}
+
+export function routeLength(from, pts) {
+  let d = 0, p = from;
+  for (const q of pts) { d += Math.hypot(q.x - p.x, q.z - p.z); p = q; }
+  return d;
+}
+
+function segHitsBox(a, b, bx) {
+  // 선분 a→b 와 (조금 줄인) 건물 상자의 교차 (slab)
+  const m = 0.3, minX = bx.minX + m, maxX = bx.maxX - m, minZ = bx.minZ + m, maxZ = bx.maxZ - m;
+  let t0 = 0, t1 = 1;
+  const dx = b.x - a.x, dz = b.z - a.z;
+  for (const [p, d, lo, hi] of [[a.x, dx, minX, maxX], [a.z, dz, minZ, maxZ]]) {
+    if (Math.abs(d) < 1e-9) { if (p < lo || p > hi) return false; continue; }
+    let u0 = (lo - p) / d, u1 = (hi - p) / d;
+    if (u0 > u1) [u0, u1] = [u1, u0];
+    t0 = Math.max(t0, u0); t1 = Math.min(t1, u1);
+    if (t0 > t1) return false;
+  }
+  return true;
 }

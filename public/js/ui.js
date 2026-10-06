@@ -1,15 +1,23 @@
 import * as THREE from 'three';
 import { HALF, CITY } from './config.js';
-import { PERSONALITIES, BODY_COLORS, JOBS, BUILDING_TYPES, EMOTE } from './data.js';
-import { ITEMS, GEMS, SHOPS, ENCHANT_FEE, CLUB_CHARM, itemDef, shopItems, weaponStats, isWeapon } from './items.js';
+import { JOBS, BUILDING_TYPES, EMOTE } from './data.js';
+import { ITEMS, GEMS, SHOPS, ENCHANT_FEE, CLUB_CHARM, RARITY, itemDef, shopItems, weaponStats, isWeapon, ammoName } from './items.js';
 import { SLOTS } from './inventory.js';
-import { housePrice, forSale } from './world-setup.js';
+const SKILL_NAMES = { jump2: '2단 점프', jump3: '3단 점프', dash: '대쉬 거리 강화', jumpboost: '점프력 강화', dashlong: '대쉬 거리 강화' };
+import { LOOK_PARTS, LOOK_COLORS, DEFAULT_LOOK } from './look.js';
+import { PHONE_APPS } from './phone.js';
+import { expNeed } from './level.js';
+import { questDef } from './quests.js';
+import { CAR_COLORS, MODELS } from './traffic.js';
+import { DEALER_CARS } from './items.js';
+import { housePrice, freeUnits, homeLabel, isHomeType } from './world-setup.js';
 import { moodLabel, moodEmoji } from './citizens.js';
 import { Roach } from './roach.js';
 import { settings, saveSettings } from './settings.js';
 import { fmtTime, DAYS, escapeHtml } from './utils.js';
 
 const $ = (id) => document.getElementById(id);
+const CUTE_ROACH = `<svg class="cute-roach" viewBox="0 0 120 130" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">  <path d="M46 34 Q30 6 14 8" stroke="#5d3a24" stroke-width="4" fill="none" stroke-linecap="round"/>  <path d="M74 34 Q90 6 106 8" stroke="#5d3a24" stroke-width="4" fill="none" stroke-linecap="round"/>  <circle cx="14" cy="8" r="6" fill="#a86b3e"/><circle cx="106" cy="8" r="6" fill="#a86b3e"/>  <ellipse cx="60" cy="98" rx="30" ry="28" fill="#8a5634"/>  <ellipse cx="60" cy="102" rx="19" ry="19" fill="#c08a5c"/>  <path d="M30 92 l-14 10 M30 104 l-14 8 M90 92 l14 10 M90 104 l14 8" stroke="#5d3a24" stroke-width="5" stroke-linecap="round"/>  <ellipse cx="60" cy="52" rx="34" ry="31" fill="#8a5634"/>  <ellipse cx="46" cy="52" rx="10" ry="12" fill="#fff"/><ellipse cx="74" cy="52" rx="10" ry="12" fill="#fff"/>  <ellipse cx="47" cy="54" rx="6" ry="7.5" fill="#1d1410"/><ellipse cx="75" cy="54" rx="6" ry="7.5" fill="#1d1410"/>  <circle cx="45" cy="50" r="2.4" fill="#fff"/><circle cx="73" cy="50" r="2.4" fill="#fff"/>  <ellipse cx="34" cy="64" rx="6" ry="3.6" fill="#ff9fb2"/><ellipse cx="86" cy="64" rx="6" ry="3.6" fill="#ff9fb2"/>  <path d="M53 66 Q60 73 67 66" stroke="#1d1410" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`;
 const NEEDS = [
   ['hunger', '🍙', '배고픔', '#ff9f6b'],
   ['energy', '⚡', '에너지', '#ffd54f'],
@@ -38,67 +46,6 @@ export class UI {
   }
 
   // ---------------- 시작 화면 ----------------
-  showStart(saved, onStart) {
-    const sel = $('p-personality');
-    for (const p of PERSONALITIES) sel.insertAdjacentHTML('beforeend', `<option value="${p.id}">${p.name}</option>`);
-    sel.value = 'chatty';
-    const colors = [...BODY_COLORS.slice(0, 5), '#ff9fb2', '#7ec8a9', '#9fa8ff', '#ffd54f'];
-    let color = colors[0];
-    const wrap = $('p-colors');
-    colors.forEach((c, i) => {
-      const s = document.createElement('div');
-      s.className = 'swatch' + (i === 0 ? ' sel' : '');
-      s.style.background = c;
-      s.onclick = () => { wrap.querySelectorAll('.swatch').forEach((x) => x.classList.remove('sel')); s.classList.add('sel'); color = c; this.updatePreview(color); };
-      wrap.appendChild(s);
-    });
-    // 미리보기
-    const pv = $('start-preview');
-    this.pvRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    this.pvRenderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
-    this.pvRenderer.setSize(200, 160);
-    this.pvRenderer.outputColorSpace = THREE.SRGBColorSpace;
-    pv.appendChild(this.pvRenderer.domElement);
-    this.pvRenderer.domElement.style.margin = '0 auto';
-    this.pvRenderer.domElement.style.display = 'block';
-    this.pvScene = new THREE.Scene();
-    this.pvScene.add(new THREE.HemisphereLight('#fff6e8', '#c9a28a', 1.4));
-    const dl = new THREE.DirectionalLight('#ffffff', 1.6); dl.position.set(2, 4, 5); this.pvScene.add(dl);
-    this.pvCam = new THREE.PerspectiveCamera(35, 200 / 160, 0.1, 50);
-    this.pvCam.position.set(0, 1.6, 6.2); this.pvCam.lookAt(0, 1.15, 0);
-    this.updatePreview(color);
-
-    const st = $('start-btn');
-    const pw = () => $('p-password').value;
-    try { $('p-password').value = localStorage.getItem('roachcity.pw') || ''; } catch { /* 무시 */ }
-    const go = (profile, cont) => {
-      try { localStorage.setItem('roachcity.pw', pw()); } catch { /* 무시 */ }
-      $('start').classList.add('hidden');
-      onStart(profile, cont, pw());
-    };
-    if (saved) {
-      const cont = document.createElement('button');
-      cont.id = 'continue-btn';
-      cont.textContent = `이어하기 (${saved.name}) ▶`;
-      cont.style.cssText = 'display:block;margin:10px auto 0;background:#7ec8a9;color:#fff;border:0;border-radius:16px;padding:10px 20px;font-size:17px;';
-      st.after(cont);
-      cont.onclick = () => go(saved, true);
-      st.textContent = '새 캐릭터로 시작 🏠';
-    }
-    st.onclick = () => {
-      const name = ($('p-name').value || '바퀴').trim().slice(0, 8);
-      const age = Math.max(18, Math.min(80, parseInt($('p-age').value, 10) || 25));
-      const pers = PERSONALITIES.find((p) => p.id === sel.value);
-      go({ name, gender: $('p-gender').value, age, personality: pers.name, color, accessories: [] }, false);
-    };
-    $('p-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') (saved ? $('continue-btn') : st).click(); });
-  }
-
-  startError(msg) {
-    $('start').classList.remove('hidden');
-    $('start-error').textContent = msg;
-    $('start-error').classList.remove('hidden');
-  }
 
   updatePreview(color) {
     if (this.pvRoach) this.pvScene.remove(this.pvRoach.root);
@@ -125,19 +72,64 @@ export class UI {
     $('pw-row').classList.toggle('hidden', !s.password);
   }
 
+  // 로그인 화면 배경 투어
+  tourCaption(label, npcs, players, hour) {
+    let el = $('tour-cap');
+    if (!el) { el = document.createElement('div'); el.id = 'tour-cap'; $('start').appendChild(el); }
+    const hh = Math.floor(hour), mm = Math.floor((hour % 1) * 60);
+    el.innerHTML = `<b>LIVE</b> ${label}<small>${hh < 12 ? '오전' : '오후'} ${((hh + 11) % 12) + 1}:${String(mm).padStart(2, '0')} · 근처 시민 ${npcs}명 · 접속 중 플레이어 ${players}명</small>`;
+  }
+  tourFade() {
+    let f = $('tour-fade');
+    if (!f) { f = document.createElement('div'); f.id = 'tour-fade'; document.body.appendChild(f); }
+    f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+  }
+
   showLoading(text) { $('loading').classList.remove('hidden'); $('loading-text').textContent = text; }
   hideLoading() { $('loading').classList.add('hidden'); }
   showHUD() {
-    for (const id of ['hud', 'minimap-wrap', 'help-hint', 'pchat', 'hotbar-wrap']) $(id).classList.remove('hidden');
+    for (const id of ['hud', 'minimap-wrap', 'help-hint', 'pchat', 'hotbar-wrap', 'keys-btn', 'topbar']) $(id).classList.remove('hidden');
+    $('keys-btn').onclick = () => this.openKeys();
+    $('tb-phone').onclick = () => this.togglePhone();
+    $('tb-feedback').onclick = () => this.openPhone('feedback');
+    $('tb-exit').onclick = async () => { if (await this.confirm('저장하고 캐릭터 선택 화면으로 나갈까요?<br><small>돈·아이템·집은 서버에 저장돼요</small>')) this.game.resetSave(); };
+    $('bag-btn').onclick = () => this.toggleInventory();
+    $('quest-card').onclick = () => this.openPhone('quests');
+    $('tab-admin').classList.toggle('hidden', !this.game.admin);
+    this.renderQuests();
+    let seen = false;
+    try { seen = localStorage.getItem('roachcity.keysSeen') === '1'; } catch { /* 무시 */ }
+    if (!seen) setTimeout(() => this.openKeys(), 800);
     this.disposePreview();
     setTimeout(() => $('help-hint').classList.add('hidden'), 25000);
   }
-  toggleHelp() { $('help-hint').classList.toggle('hidden'); }
+  toggleHelp() {
+    if (!$('modal').classList.contains('hidden') && this.modalKind === 'keys') this.closeModal();
+    else this.openKeys();
+  }
+
+  // 조작법 안내
+  openKeys() {
+    const K = (k) => k.split('+').map((x) => `<kbd>${x}</kbd>`).join('');
+    const groups = [
+      ['🚶 이동', [['W A S D', '걷기 (방향키도 OK)'], ['Shift', '달리기 — 여섯 다리로 바퀴처럼 기어 달려요!'], ['Space', '점프 · 공중에서 한 번 더 2단 점프 (3단은 수련*)'], ['C', '대쉬 (거리 강화는 수련*)'], ['G', '🪽 날기 — Space 위로 · X 아래로 · G 착지'], ['V', '1인칭 ↔ 3인칭'], ['마우스', '화면 클릭 후 움직이면 시점 회전 · 휠로 확대/축소'], ['R', '지도에 찍은 목적지까지 자동으로 걷기']]],
+      ['💬 생활', [['E', '대화하기 · 건물 들어가기/나가기 · 행동하기 · 아이템 줍기'], ['B', '💘 플러팅 — 앞에 있는 상대에게 하트 날리기'], ['P', '📷 사진 찍기 (갤러리·인스타는 휴대폰)'], ['Enter', '전체 채팅 (T도 가능)'], ['I', '가방'], ['M', '도시 전체 지도'], ['Tab', '휴대폰 — 퀘스트·카메라·인스타·연락처·문자·112'], ['Esc', '창 닫기']]],
+      ['⚔️ 전투 · 아이템', [['1 ~ 0', '핫바 칸 선택 (무기, 마법봉, 음식, 차 키)'], ['왼쪽 클릭', '공격 / 마법 / 먹기 · 활은 꾹 눌러 당겼다가 놓기!'], ['오른쪽 클릭', '🔭 조준 줌 (저격총은 스코프)'], ['Q', '선택한 아이템 바닥에 버리기'], ['← →', '차에 치여 뒤집히면 번갈아 연타해서 일어나기']]],
+      ['🚗 자동차', [['F', '차 타기 · 빼앗기 · 내리기'], ['W / S', '가속 / 후진'], ['A / D', '핸들'], ['Space', '브레이크 (헬기는 상승)'], ['Shift', '부스트 (헬기는 하강)'], ['왼쪽 클릭', '전차 주포 · 헬기 미사일']]],
+    ];
+    this.openModal(`<h3 class="mh">⌨️ 조작법 <small>H 키로 언제든 다시 볼 수 있어요</small></h3>
+      <div class="keys">${groups.map(([t, rows]) => `<div class="keygroup"><b>${t}</b>${rows.map(([k, d]) => `<div class="keyrow"><span class="kk">${K(k)}</span><span>${d}</span></div>`).join('')}</div>`).join('')}</div>
+      <div class="keynote">* 3단 점프 · 대쉬 거리 강화 · 점프력 강화는 무릉도장 🥋 수련으로 배워요. 처음 화면을 클릭하면 마우스가 화면에 고정되고, Esc로 풀 수 있어요.</div>
+      <div style="margin-top:12px"><button class="btn" id="keys-ok">알겠어요! 🎮</button></div>`, 'keys');
+    $('modal-inner').classList.add('wide');
+    $('keys-ok').onclick = () => this.closeModal();
+    try { localStorage.setItem('roachcity.keysSeen', '1'); } catch { /* 무시 */ }
+  }
   setLocked(v) { this.locked = v; }
 
   buildNeeds() {
     const el = $('needs-card');
-    el.innerHTML = `<div class="need hp"><span>❤️</span><span>체력 <b id="hp-num">100</b></span><div class="bar"><div id="need-hp" style="background:#ff5252"></div></div></div>` + NEEDS.map(([k, ic, nm, col]) => `<div class="need"><span>${ic}</span><span>${nm}</span><div class="bar"><div id="need-${k}" style="background:${col}"></div></div></div>`).join('');
+    el.innerHTML = `<div class="need hp"><span>❤️</span><span>체력 <b id="hp-num">100</b></span><div class="bar"><div id="need-hp" style="background:#ff5252"></div></div></div><div class="need mana-row"><span>💧</span><span>마나</span><div class="bar"><div id="need-mana"></div></div></div>` + NEEDS.map(([k, ic, nm, col]) => `<div class="need"><span>${ic}</span><span>${nm}</span><div class="bar"><div id="need-${k}" style="background:${col}"></div></div></div>`).join('');
   }
 
   toast(text) {
@@ -196,6 +188,13 @@ export class UI {
     $('job-label').textContent = job ? `${job.name}` : '무직';
     for (const [k] of NEEDS) { const el = $('need-' + k); if (el) el.style.width = `${S.needs[k]}%`; }
     $('need-hp').style.width = `${(g.hp / g.maxHp) * 100}%`;
+    $('need-mana').style.width = `${((g.mana || 0) / (g.maxMana || 100)) * 100}%`;
+    const L = S.level || 1, need = expNeed(L);
+    $('lv').textContent = `Lv.${L}`;
+    $('xp-fill').style.width = `${Math.min(100, ((S.exp || 0) / need) * 100)}%`;
+    $('xp-txt').textContent = `${S.exp || 0}/${need}`;
+    // 오래된 채팅은 흐리게
+    if ((this.chatAgeT = (this.chatAgeT || 0) - dt) <= 0) { this.chatAgeT = 1; const now = Date.now(); for (const el of $('pchat-log').children) el.classList.toggle('old', now - (+el.dataset.t || 0) > 20000); }
     $('hp-num').textContent = Math.round(g.hp);
     const charm = g.charm();
     $('charm').textContent = `✨ 매력 ${charm}${charm >= CLUB_CHARM ? ' 🪩' : ''}`;
@@ -203,9 +202,12 @@ export class UI {
     $('stars').classList.toggle('hidden', !g.stars);
     const sel = g.inv.selected();
     const d = sel ? itemDef(sel.id) : ITEMS.fist;
-    const aim = !!g.player.inCar ? ['tank', 'heli'].includes(g.player.inCar.kind) : ['gun', 'launcher', 'throw'].includes(d.cat);
+    const aim = !!g.player.inCar ? ['tank', 'heli'].includes(g.player.inCar.kind) : ['gun', 'launcher', 'throw', 'wand'].includes(d.cat);
     $('crosshair').classList.toggle('hidden', !(aim && this.locked));
-    $('weapon-name').textContent = g.player.inCar ? (g.player.inCar.kind === 'tank' ? '🪖 전차 주포' : g.player.inCar.kind === 'heli' ? '🚀 헬기 미사일' : '🚗 운전 중') : `${d.emoji} ${d.name}${sel?.gems?.length ? ' ' + sel.gems.map((x) => GEMS[x] ? '◆' : '').join('') : ''}`;
+    const ammoTxt = d.ammo ? ` · ${ammoName(d.ammo)} ${g.inv.count(d.ammo)}발` : d.cat === 'wand' ? ` · 💧${d.mana} · ${d.skill}` : '';
+    const tmpTxt = sel?.expiresAt ? ` · ⏳ ${Math.max(0, Math.ceil((sel.expiresAt - Date.now()) / 60000))}분 남음` : '';
+    $('weapon-name').textContent = g.player.inCar ? (g.player.inCar.kind === 'tank' ? '🪖 전차 주포' : g.player.inCar.kind === 'heli' ? '🚀 헬기 미사일' : '🚗 운전 중') : `${d.emoji} ${d.name}${sel?.gems?.length ? ' ' + sel.gems.map((x) => GEMS[x] ? '◆' : '').join('') : ''}${ammoTxt}${tmpTxt}`;
+    if (this.hotbarT === undefined || (this.hotbarT -= dt) <= 0) { this.hotbarT = 10; this.renderHotbar(); } // 남은 시간 갱신
     // 위치
     $('location-label').textContent = g.mode === 'interior' ? `${g.interior.building.def.emoji} ${g.interior.building.name}` : `📍 ${g.placeText()}`;
     this.updateLabels();
@@ -252,7 +254,7 @@ export class UI {
         const heart = c.affinity >= 65 ? ' 💗' : '';
         const hpBar = c.hp < c.maxHp ? `<div class="hpbar"><div style="width:${(c.hp / c.maxHp) * 100}%"></div></div>` : '';
         const mood = c.mood < 38 || c.mood > 78 ? ' ' + moodEmoji(c.mood) : '';
-        place('t' + c.id, top, `${escapeHtml(c.name)}${heart}${mood}<small>${c.mode === 'dead' ? '💫 기절' : `${escapeHtml(c.job.name)} · ${c.age}세`}</small>${hpBar}`, 'tag');
+        place('t' + c.id, top, `<span class="lvb">Lv.${c.level}</span>${escapeHtml(c.name)}${heart}${mood}<small>${c.mode === 'dead' ? '💫 기절' : `${escapeHtml(c.job.name)} · ${c.age}세`}</small>${hpBar}`, 'tag');
       }
       if (c.bubble && d < 35) {
         const b = top.clone(); b.y += d < 13 ? 0.9 : 0.2;
@@ -263,8 +265,15 @@ export class UI {
       if (!o.visible) continue;
       const top = o.pos.clone(); top.y += o.roach.height + 0.35;
       const d = top.distanceTo(pp);
-      if (d < 40) place('p' + o.id, top, `🎮 ${escapeHtml(o.name)}${o.stars ? ' <span style="color:#ffd600">' + '★'.repeat(o.stars) + '</span>' : ''}<small>${o.dead ? '💀' : escapeHtml(o.profile.jobName || '플레이어')}</small><div class="hpbar"><div style="width:${o.hp}%"></div></div>`, 'tag player');
+      const badges = (o.profile.badges || []).map((b) => `<span class="bdg">${escapeHtml(b)}</span>`).join('');
+      if (d < 40) place('p' + o.id, top, `<span class="lvb">Lv.${o.profile.level || 1}</span>🎮 ${escapeHtml(o.name)}${o.stars ? ' <span style="color:#ffd600">' + '★'.repeat(o.stars) + '</span>' : ''}<small>${o.dead ? '💀' : escapeHtml(o.profile.jobName || '플레이어')}</small>${badges ? `<div class="bdgs">${badges}</div>` : ''}<div class="hpbar"><div style="width:${Math.min(100, (o.hp / (100 + ((o.profile.level || 1) - 1) * 6)) * 100)}%"></div></div>`, 'tag player');
       if (o.bubble && d < 40) { const b = top.clone(); b.y += 0.9; place('pb' + o.id, b, escapeHtml(o.bubble.text), 'bubble player'); }
+    }
+    // 내 이름표 (레벨 + 훈장)
+    if (!g.player.fp && !g.player.inCar) {
+      const top = g.player.pos.clone(); top.y += g.player.roach.height + 0.35;
+      const badges = (g.profile.badges || []).map((b) => `<span class="bdg">${escapeHtml(b)}</span>`).join('');
+      place('mytag', top, `<span class="lvb">Lv.${g.stats.level || 1}</span>${escapeHtml(g.profile.name)}${badges ? `<div class="bdgs">${badges}</div>` : ''}`, 'tag player mine');
     }
     if (g.myBubble && !g.player.inCar) {
       const top = g.player.pos.clone(); top.y += g.player.roach.height + 0.6;
@@ -288,8 +297,7 @@ export class UI {
       }
       if (g.waypoint) {
         const p = g.waypoint.pos.clone(); p.y = 4;
-        place('wp', p, `📍 ${escapeHtml(g.waypoint.label)}<small>${Math.round(g.waypoint.pos.distanceTo(pp))}m</small>`, 'tag');
-        if (g.waypoint.pos.distanceTo(pp) < 4 && !g.autoWalk) { g.waypoint = null; g.route = null; }
+        place('wp', p, `📍 ${escapeHtml(g.waypoint.label)}<small>${Math.round(g.routeLen || g.waypoint.pos.distanceTo(pp))}m</small>`, 'tag');
       }
     }
     for (const [k, el] of this.labels) if (!seen.has(k)) el.style.display = 'none';
@@ -307,7 +315,7 @@ export class UI {
     ctx.save();
     ctx.fillStyle = '#9fd38a'; ctx.fillRect(0, 0, S, S);
     ctx.translate(S / 2, S / 2);
-    ctx.rotate(yaw - Math.PI); // 카메라가 보는 방향이 위쪽
+    ctx.rotate(yaw); // 카메라가 보는 방향이 위쪽
     ctx.scale(zoom / scale, zoom / scale);
     ctx.translate(-(p.x + HALF) * scale, -(p.z + HALF) * scale);
     ctx.drawImage(g.mapImage, 0, 0);
@@ -332,6 +340,12 @@ export class UI {
       ctx.fillStyle = '#ff1744';
       ctx.beginPath(); ctx.arc((un.pos.x + HALF) * u, (un.pos.z + HALF) * u, 3.5 / zoom * u, 0, Math.PI * 2); ctx.fill();
     }
+    for (const gi of g.ground.list.values()) {
+      if (!gi.rarity || gi.loc !== -1) continue;
+      ctx.fillStyle = gi.rarity.color; ctx.strokeStyle = '#000'; ctx.lineWidth = 1 * u / zoom;
+      const x = (gi.x + HALF) * u, y = (gi.z + HALF) * u, r = 4 / zoom * u;
+      ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
     if (g.route?.length) {
       ctx.strokeStyle = '#2979ff'; ctx.lineWidth = 3 * u / zoom; ctx.setLineDash([6 * u / zoom, 4 * u / zoom]);
       ctx.beginPath(); ctx.moveTo((p.x + HALF) * u, (p.z + HALF) * u);
@@ -354,9 +368,10 @@ export class UI {
     ctx.beginPath(); ctx.moveTo(0, -9); ctx.lineTo(7, 7); ctx.lineTo(0, 3); ctx.lineTo(-7, 7); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.restore();
     // 북쪽 표시
-    ctx.save(); ctx.translate(S / 2, S / 2); ctx.rotate(yaw - Math.PI);
-    ctx.fillStyle = '#e53935'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('N', 0, -S / 2 + 18);
+    ctx.save(); ctx.translate(S / 2, S / 2); ctx.rotate(yaw);
+    ctx.fillStyle = '#e53935'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.translate(0, -S / 2 + 16); ctx.rotate(-yaw);
+    ctx.fillText('N', 0, 0);
     ctx.restore();
   }
 
@@ -392,7 +407,7 @@ export class UI {
     g.player.cam.dist = 5.5;
     $('chat').classList.remove('hidden');
     $('chat-avatar').style.background = c.color;
-    $('chat-avatar').textContent = '🪳';
+    $('chat-avatar').innerHTML = CUTE_ROACH;
     $('chat-name').textContent = c.name;
     $('chat-sub').textContent = `${c.age}세 · ${c.gender} · ${c.job.name} · ${c.personality.name} · 기분 ${moodEmoji(c.mood)}`;
     this.renderProfile(c);
@@ -564,6 +579,13 @@ export class UI {
       : `😴 자는 중... <b>${n}/${total}명</b>이 잠들었어요<br><small>${night ? '모두 잠들면 아침이 와요' : '밤 8시 이후에 모두 자면 아침으로 넘어가요'}</small>`;
   }
 
+  kickedOut() {
+    $('fade').classList.remove('hidden');
+    $('fade').style.opacity = '1';
+    $('fade-text').innerHTML = '🔌 다른 창이나 기기에서 이 캐릭터로 접속해서 연결을 끊었어요<br><small><a href="/" style="color:#ff8a65">처음 화면으로</a></small>';
+    $('fade-bar').style.display = 'none';
+  }
+
   // 서버가 재시작(배포)되면 다시 살아날 때까지 기다렸다가 자동으로 재접속
   disconnected() {
     $('fade').classList.remove('hidden');
@@ -603,6 +625,7 @@ export class UI {
     document.querySelectorAll('#phone-tabs button[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
     const body = $('phone-body');
     const g = this.game;
+    if (PHONE_APPS[tab]) { PHONE_APPS[tab](this, body, g); return; }
     if (tab === 'citizens') {
       body.innerHTML = `<input class="search" id="cit-search" placeholder="이름, 직업, 성격으로 검색... (총 ${g.sim.citizens.length}명)" /><div class="grid" id="cit-grid"></div>`;
       const render = (q) => {
@@ -610,7 +633,7 @@ export class UI {
         list.sort((a, b) => b.affinity - a.affinity);
         $('cit-grid').innerHTML = list.map((c) => `
           <div class="cit" data-id="${c.id}">
-            <div class="av" style="background:${c.color}">🪳</div>
+            <div class="av" style="background:${c.color}">${CUTE_ROACH}</div>
             <div><div class="nm">${escapeHtml(c.name)} ${c.affinity >= 65 ? '💗' : ''}</div>
             <div class="sb">${c.age}세 ${c.gender} · ${escapeHtml(c.job.name)}<br>${escapeHtml(c.personality.name)} · 친밀도 ${Math.round(c.affinity)}</div></div>
           </div>`).join('');
@@ -624,12 +647,12 @@ export class UI {
       const job = g.playerJob();
       const friends = [...g.sim.citizens].sort((a, b) => b.affinity - a.affinity).slice(0, 5);
       body.innerHTML = `<div class="profile-big">
-        <h3>🪳 ${escapeHtml(P.name)}</h3>
+        <h3>🙂 ${escapeHtml(P.name)}</h3>
         ${P.age}세 · ${escapeHtml(P.gender)} · ${escapeHtml(P.personality)}<br>
         💰 소지금 <b>₩${Math.floor(S.money)}</b><br>
         💼 직업 <b>${job ? `${escapeHtml(job.name)} @ ${escapeHtml(g.workBuilding().name)} (시급 ₩${job.wage})` : '무직 — 시청에서 일자리를 구해보세요'}</b><br>
         🏠 집 <b>${S.homeId != null ? escapeHtml(g.city.buildings[S.homeId].name) : '없음 (호텔 생활 중 · 부동산에서 구매)'}</b><br>
-        🎒 가방 ${S.items.length}종 (I키로 열기) · ✨ 매력 ${g.charm()} · 🥋 무공 ${S.skills.length ? S.skills.map((k) => ({ jump2: '2단 점프', jump3: '3단 점프', dash: '대쉬' }[k])).join(', ') : '없음'}<br>
+        🎒 가방 ${S.items.length}종 (I키로 열기) · ✨ 매력 ${g.charm()} · 🥋 무공 ${S.skills.length ? S.skills.map((k) => (SKILL_NAMES[k] || k)).join(', ') : '없음'}<br>
         💗 친한 이웃 ${friends.map((c) => `${escapeHtml(c.name)}(${Math.round(c.affinity)})`).join(', ')}
       </div>
       <div style="margin-top:12px">
@@ -670,25 +693,28 @@ export class UI {
         <div class="set-row"><b>⏱️ 시간 속도</b><span>현실 1초 = 게임 ${g.timeSpeed}분 (서버 설정, 모든 플레이어 공통)</span></div>
         <div class="set-row"><label><input type="checkbox" id="set-shadow" ${settings.shadows ? 'checked' : ''}/> 그림자 (끄면 더 빨라요)</label></div>
         <button class="btn" id="set-save">저장</button>
-        <button class="btn ghost" id="set-reset">🗑️ 이 브라우저의 캐릭터 연결 끊기 (새 캐릭터)</button>`;
+        <button class="btn ghost" id="set-reset">👥 캐릭터 선택 화면으로</button>`;
       $('set-save').onclick = () => {
         settings.shadows = $('set-shadow').checked;
         saveSettings();
         g.applySettings();
         this.toast('⚙️ 설정을 저장했어요');
       };
-      $('set-reset').onclick = () => { if (confirm('이 브라우저에 저장된 캐릭터 연결을 지우고 새로 시작할까요? (서버의 이웃 기억은 남아요)')) g.resetSave(); };
+      $('set-reset').onclick = () => g.resetSave();
     } else if (tab === 'help') {
       body.innerHTML = `<div class="profile-big">
-        <h3>🪳 바퀴시티 생활 가이드</h3>
+        <h3>📘 바퀴시티 생활 가이드</h3>
         <b>조작</b>: WASD 이동 · Shift 달리기 · Space 점프(배우면 2·3단) · C 대쉬 · 마우스(클릭 후) 시점 · 클릭 공격/먹기 · 1~0 핫바 · E 대화/입장/줍기 · F 차 타기/빼앗기 · Q 버리기 · I 가방 · M 지도 · R 자동 이동 · Enter 채팅 · Tab 휴대폰 · Esc 닫기<br>
         <b>생활</b>: 배고픔·에너지·재미·사교·청결과 체력을 관리하세요. NPC들도 똑같은 욕구가 있어서 배고프면 밥을 먹으러 가고, 다치면 병원에 가요.<br>
         <b>직업</b>: 시청 🏛️ 일자리 게시판에서 직업을 골라 직장에서 일하세요.<br>
         <b>집</b>: 처음엔 호텔에서 지내요. 부동산 🏘️ 에서 집을 사면 그 집에서 자고 부활해요.<br>
         <b>무기 상점</b>: 관우네 병기점(삼국지), 바퀴 택티컬(밀리터리·전차·헬기), 은하 무기상(광선검·블래스터). 보석상 💎 에서 보석을 사서 무기와 방어구에 박을 수 있어요.<br>
         <b>치장</b>: 모자 가게·안경원·옷가게의 아이템을 장착하면 매력이 올라가요. 매력 ${CLUB_CHARM} 이상이면 클럽 🪩 에 들어갈 수 있어요.<br>
-        <b>무릉도장</b> 🥋: 점프맵을 통과하면 2단 점프, 고급 점프맵은 3단 점프, 용암 징검다리는 대쉬를 배워요.<br>
-        <b>범죄</b>: 시민을 공격하면 수배 별이 올라가요. 별 1~3개는 경찰, 4~5개는 군대와 전차·헬기가 출동해요. 죽으면 집에서 부활하고 수배가 풀려요.<br>
+        <b>무릉도장</b> 🥋: 점프맵은 점프력 강화, 고급 점프맵은 3단 점프, 용암 징검다리는 대쉬 거리 강화를 배워요.<br>
+        <b>범죄 · 112</b>: 경찰은 누군가 112에 신고해야만 출동해요. 시민은 맞으면 화가 나서 신고하고, 플레이어는 휴대폰 🚨 112에서 나를 공격한 사람을 신고할 수 있어요. 신고가 쌓이면 별 4~5개에 군대가 출동해요.<br>
+        <b>레벨</b>: 일하기·퀘스트·수련·사격장·플레이어 쓰러뜨리기로 경험치를 얻어 레벨업! 레벨이 오르면 체력·파워·명중률이 좋아져요 (만렙 없음).<br>
+        <b>마법</b>: 마법봉 공방 🪄 에서 화염·얼음·번개·바람·독·빛·어둠 지팡이를 팔아요. 마나 💧 를 써요.<br>
+        <b>자동차</b>: 자동차 쇼룸 🏎️ 에서 스포츠카 5종 등 18종을 살 수 있어요. 차 키를 핫바에서 쓰면 내 앞으로 불러와요.<br>
         <b>멀티플레이</b>: 같은 서버의 동료들과 같은 도시, 같은 시간, 같은 이웃을 공유해요. 밤에 모두 잠들면 아침이 와요.      </div>`;
     }
   }
@@ -705,7 +731,7 @@ export class UI {
     const rels = [...c.relations.entries()].map(([id, r]) => `${escapeHtml(g.sim.citizens[id].name)}(${r.label})`).join(', ');
     const where = c.location ? c.location : null;
     $('phone-body').innerHTML = `<div class="profile-big">
-      <div style="display:flex;gap:14px;align-items:center"><div class="av" style="width:70px;height:70px;border-radius:50%;background:${c.color};display:grid;place-items:center;font-size:40px">🪳</div>
+      <div style="display:flex;gap:14px;align-items:center"><div class="av" style="width:70px;height:70px;border-radius:50%;background:${c.color};display:grid;place-items:center;font-size:40px">${CUTE_ROACH}</div>
       <div><h3>${escapeHtml(c.name)} ${c.affinity >= 65 ? '💗' : ''}</h3>${c.age}세 · ${c.gender} · 친밀도 ${Math.round(c.affinity)}/100</div></div>
       <b>직업</b> ${escapeHtml(c.job.name)} — ${escapeHtml(c.job.duty)} ${c.work ? `(${escapeHtml(c.work.name)})` : ''}<br>
       ${c.shift ? `<b>근무시간</b> ${fmtH(c.shift[0])} ~ ${fmtH(c.shift[1])}<br>` : ''}
@@ -735,7 +761,10 @@ export class UI {
     el.innerHTML = S.hotbar.map((u, i) => {
       const it = u ? g.inv.find(u) : null;
       const d = it ? itemDef(it.id) : null;
-      return `<div class="slot${i === S.sel ? ' sel' : ''}" data-i="${i}"><span class="num">${(i + 1) % 10}</span>${d ? `<span class="ic">${d.emoji}</span>${(it.n || 1) > 1 ? `<span class="cnt">${it.n}</span>` : ''}${it.gems?.length ? '<span class="gem">◆</span>' : ''}` : ''}</div>`;
+      const rar = it?.expiresAt ? RARITY[it.rarity] : null;
+      const ammo = d?.ammo ? g.inv.count(d.ammo) : null;
+      const mins = it?.expiresAt ? Math.max(0, Math.ceil((it.expiresAt - Date.now()) / 60000)) : null;
+      return `<div class="slot${i === S.sel ? ' sel' : ''}" data-i="${i}" ${rar ? `style="box-shadow:0 0 0 2px ${rar.color} inset, 0 0 10px ${rar.color}"` : ''}><span class="num">${(i + 1) % 10}</span>${d ? `<span class="ic">${d.emoji}</span>${(it.n || 1) > 1 ? `<span class="cnt">${it.n}</span>` : ''}${ammo !== null ? `<span class="cnt${ammo ? '' : ' empty'}">${ammo}</span>` : ''}${mins !== null ? `<span class="tmr">⏳${mins}분</span>` : ''}${it.gems?.length ? '<span class="gem">◆</span>' : ''}` : ''}</div>`;
     }).join('');
     el.querySelectorAll('.slot').forEach((s) => { s.onclick = () => g.inv.select(+s.dataset.i); });
     if (!$('modal').classList.contains('hidden') && this.modalKind === 'inv') this.renderInventory();
@@ -750,42 +779,68 @@ export class UI {
   renderInventory() {
     const g = this.game, S = g.stats, inv = g.inv;
     const t = inv.totals();
+    const CATS = { all: '전체', weapon: '⚔️ 무기', gear: '🛡️ 장비', food: '🍔 음식', key: '🔑 열쇠', etc: '🎁 기타' };
+    const catOf = (d) => (isWeapon(d) || d.cat === 'ammo' ? 'weapon' : d.slot ? 'gear' : d.cat === 'food' ? 'food' : d.cat === 'key' || d.cat === 'carkey' ? 'key' : 'etc');
+    this.invCat ||= 'all';
     const statLine = (d, it) => {
       const parts = [];
-      if (isWeapon(d)) { const w = weaponStats(it.id, it.gems || []); parts.push(`공격 ${Math.round(w.dmg)}${d.pellets ? `×${d.pellets}` : ''}`, `사거리 ${Math.round(w.range)}`); }
+      if (isWeapon(d) && d.dmg) { const w = weaponStats(it.id, it.gems || []); parts.push(`공격 ${Math.round(w.dmg)}${d.pellets ? `×${d.pellets}` : ''}`, `사거리 ${Math.round(w.range)}`); }
+      if (d.cat === 'wand') parts.push(`💧${d.mana} · ${d.skill}`);
+      if (d.zoom) parts.push(`조준 ×${d.zoom}`);
       if (d.def) parts.push(`방어 ${d.def}`);
       if (d.charm) parts.push(`매력 ${d.charm}`);
       if (d.sockets) parts.push(`보석 ${(it.gems || []).length}/${d.sockets}${(it.gems || []).length ? ' ' + it.gems.map((x) => `<span style="color:${GEMS[x].color}">◆</span>`).join('') : ''}`);
-      if (d.food) parts.push(`체력 +${d.heal || 0}`);
+      if (d.food) parts.push(Object.entries(d.food).map(([k, v]) => `${{ hunger: '🍚', energy: '⚡', fun: '🎉' }[k] || k}+${v}`).join(' ') + (d.heal ? ` ❤️+${d.heal}` : '') + (d.mana ? ` 💧+${d.mana}` : ''));
+      if (d.ammo) parts.push(`탄약 ${ammoName(d.ammo)} ${inv.count(d.ammo)}발`);
+      if (it.car) parts.push(`${MODELS[it.car.kind]?.name || it.car.kind} · 핫바에서 쓰면 호출`);
+      if (it.expiresAt) parts.push(`<span style="color:${RARITY[it.rarity]?.color || '#999'}">[${RARITY[it.rarity]?.name || ''}] ⏳ ${Math.max(0, Math.ceil((it.expiresAt - Date.now()) / 60000))}분 남음</span>`);
       return parts.join(' · ');
     };
+    const nameOf = (it, d) => (it.key ? `${d.name} · ${g.homeLabelOf(it.key)}` : it.car ? `🔑 ${MODELS[it.car.kind]?.name || '차'} 키` : d.name);
     const slotsHtml = Object.entries(SLOTS).map(([k, nm]) => {
       const it = S.equip[k] ? inv.find(S.equip[k]) : null;
       const d = it ? itemDef(it.id) : null;
-      return `<div class="eq">${nm}<b>${d ? `${d.emoji} ${escapeHtml(d.name)}` : '—'}</b></div>`;
+      return `<div class="eq" ${it ? `data-pick="${it.uid}"` : ''}><span class="eqn">${nm}</span><span class="eqi">${d ? d.emoji : '·'}</span><b>${d ? escapeHtml(d.name) : '비어 있음'}</b></div>`;
     }).join('');
-    const items = S.items.map((it) => {
+    const items = S.items.filter((it) => this.invCat === 'all' || catOf(itemDef(it.id)) === this.invCat);
+    const sel = items.find((it) => it.uid === this.invPick) || items[0] || null;
+    this.invPick = sel?.uid;
+    const grid = items.map((it) => {
       const d = itemDef(it.id);
       const hb = S.hotbar.indexOf(it.uid);
-      const eq = inv.isEquipped(it.uid);
-      return `<div class="item">
-        <div class="ic">${d.emoji}</div>
-        <div class="info"><b>${escapeHtml(d.name)}${(it.n || 1) > 1 ? ` x${it.n}` : ''}${eq ? ' <span class="badge">장착</span>' : ''}${hb >= 0 ? ` <span class="badge">${(hb + 1) % 10}번</span>` : ''}</b><small>${statLine(d, it)}</small></div>
+      const rar = it.expiresAt ? RARITY[it.rarity] : null;
+      return `<div class="ic-card ${it === sel ? 'sel' : ''}" data-pick="${it.uid}" ${rar ? `style="box-shadow:0 0 0 2px ${rar.color} inset"` : ''}>
+        <span class="e">${d.emoji}</span>${(it.n || 1) > 1 ? `<span class="n">${it.n}</span>` : ''}${inv.isEquipped(it.uid) ? '<span class="eqb">장착</span>' : ''}${hb >= 0 ? `<span class="hb">${(hb + 1) % 10}</span>` : ''}
+        <small>${escapeHtml(nameOf(it, d)).slice(0, 14)}</small></div>`;
+    }).join('') || '<div style="padding:20px;color:var(--ink-soft)">비어 있어요</div>';
+    let detail = '<div class="inv-detail empty">아이템을 골라보세요</div>';
+    if (sel) {
+      const d = itemDef(sel.id);
+      const hb = S.hotbar.indexOf(sel.uid);
+      const eq = inv.isEquipped(sel.uid);
+      const usable = isWeapon(d) || ['food', 'doll', 'carkey', 'key'].includes(d.cat);
+      detail = `<div class="inv-detail"><div class="big">${d.emoji}</div><b>${escapeHtml(nameOf(sel, d))}${(sel.n || 1) > 1 ? ` ×${sel.n}` : ''}</b><small>${statLine(d, sel) || (d.price ? `가격 ₩${d.price}` : '')}</small>
         <div class="acts">
-          ${d.slot ? `<button class="btn mini" data-eq="${it.uid}">${eq ? '해제' : '장착'}</button>` : ''}
-          ${isWeapon(d) || ['food', 'doll'].includes(d.cat) ? `<select class="mini" data-hb="${it.uid}"><option value="">핫바</option>${[...Array(10)].map((_, i) => `<option value="${i}" ${hb === i ? 'selected' : ''}>${(i + 1) % 10}번</option>`).join('')}</select>` : ''}
-          <button class="btn mini ghost" data-drop="${it.uid}">버리기</button>
+          ${d.slot ? `<button class="btn" data-eq="${sel.uid}">${eq ? '장착 해제' : '장착하기'}</button>` : ''}
+          ${usable ? `<div class="hbpick">핫바 ${[...Array(10)].map((_, i) => `<button class="hbb ${hb === i ? 'on' : ''}" data-hb="${sel.uid}" data-i="${i}">${(i + 1) % 10}</button>`).join('')}</div>` : ''}
+          ${sel.key ? `<button class="btn" data-keyloc="${sel.uid}">📍 집 위치</button>` : sel.car ? '' : `<button class="btn ghost" data-drop="${sel.uid}">버리기</button>`}
         </div></div>`;
-    }).join('') || '<div style="padding:20px;text-align:center;color:var(--ink-soft)">가방이 비어 있어요. 상점에서 물건을 사보세요!</div>';
-    $('inv-body').innerHTML = `<h3 class="mh">🎒 가방 <small>💰 ₩${Math.floor(S.money)} · 🛡️ 방어력 ${t.def} · ✨ 매력 ${t.charm} · ❤️ 체력 ${Math.round(g.hp)}/${g.maxHp}</small></h3>
+    }
+    $('inv-body').innerHTML = `<h3 class="mh">🎒 가방 <small>💰 ₩${Math.floor(S.money).toLocaleString()} · ⭐ Lv.${S.level || 1} · 🛡️ 방어 ${t.def} · ✨ 매력 ${t.charm} · ❤️ ${Math.round(g.hp)}/${g.maxHp}</small></h3>
       <div class="eqrow">${slotsHtml}</div>
-      <div class="skills">🥋 무공: ${S.skills.length ? S.skills.map((k) => ({ jump2: '2단 점프', jump3: '3단 점프', dash: '대쉬(C)' }[k])).join(', ') : '없음 (무릉도장에서 수련)'}</div>
-      <div class="itemlist">${items}</div>
+      <div class="skills">🥋 무공: 2단 점프 · 대쉬(C)${S.skills.length ? ' · ' + S.skills.map((k) => (SKILL_NAMES[k] || k)).join(', ') : ''} <small>(무릉도장에서 3단 점프·대쉬 거리·점프력 수련)</small></div>
+      <div class="tabs-row">${Object.entries(CATS).map(([k, v]) => `<button class="btn mini ${k === this.invCat ? '' : 'ghost'}" data-cat="${k}">${v}</button>`).join('')}</div>
+      <div class="inv-wrap"><div class="inv-grid">${grid}</div>${detail}</div>
       <div style="margin-top:10px"><button class="btn ghost" id="inv-close">닫기 (I)</button></div>`;
+    $('modal-inner').classList.add('wide');
+    const B = $('inv-body');
     $('inv-close').onclick = () => this.closeModal();
-    $('inv-body').querySelectorAll('[data-eq]').forEach((b) => { b.onclick = () => { inv.equip(b.dataset.eq); this.renderInventory(); }; });
-    $('inv-body').querySelectorAll('[data-hb]').forEach((s) => { s.onchange = () => { if (s.value !== '') inv.setHotbar(+s.value, s.dataset.hb); }; s.addEventListener('keydown', (e) => e.stopPropagation()); });
-    $('inv-body').querySelectorAll('[data-drop]').forEach((b) => { b.onclick = async () => { await g.dropItem(b.dataset.drop); if (this.modalKind === 'inv' && !$('modal').classList.contains('hidden')) this.renderInventory(); }; });
+    B.querySelectorAll('[data-cat]').forEach((b) => { b.onclick = () => { this.invCat = b.dataset.cat; this.invPick = null; this.renderInventory(); }; });
+    B.querySelectorAll('[data-pick]').forEach((b) => { b.onclick = () => { this.invPick = b.dataset.pick; this.renderInventory(); }; });
+    B.querySelectorAll('[data-eq]').forEach((b) => { b.onclick = () => { inv.equip(b.dataset.eq); this.renderInventory(); }; });
+    B.querySelectorAll('[data-hb]').forEach((b) => { b.onclick = () => { inv.setHotbar(+b.dataset.i, b.dataset.hb); this.renderInventory(); }; });
+    B.querySelectorAll('[data-keyloc]').forEach((b) => { b.onclick = () => { const k = inv.find(b.dataset.keyloc).key; g.setWaypoint(g.city.buildings[k.bid], `🔑 ${g.homeLabelOf(k)}`); this.closeModal(); this.toast('📍 지도에 우리 집을 표시했어요'); }; });
+    B.querySelectorAll('[data-drop]').forEach((b) => { b.onclick = async () => { await g.dropItem(b.dataset.drop); if (this.modalKind === 'inv' && !$('modal').classList.contains('hidden')) this.renderInventory(); }; });
   }
 
   // ---------------- 상점 ----------------
@@ -804,6 +859,8 @@ export class UI {
       if (d.gem) p.push(`무기: ${GEMS[d.gem].weapon} / 방어구: ${GEMS[d.gem].armor}`);
       if (d.food) p.push(Object.entries(d.food).map(([k, v]) => `${{ hunger: '배고픔', energy: '에너지', fun: '재미' }[k]} +${v}`).join(' '), d.heal ? `체력 +${d.heal}` : '');
       if (d.stack && d.cat === 'throw') p.push('3개 묶음');
+      if (d.ammo) p.push(`탄약: ${ammoName(d.ammo)} (첫 ${ITEMS[d.ammo].pack}발 증정)`);
+      if (d.cat === 'ammo') p.push(`${d.pack}발 묶음`);
       return p.filter(Boolean).join(' · ');
     };
     const html = `<h3 class="mh">${escapeHtml(info.title)} <small>${escapeHtml(info.subtitle)}</small></h3>
@@ -846,19 +903,144 @@ export class UI {
   }
 
   // ---------------- 부동산 ----------------
-  openHouses() {
+  openHouses(tab = 'house') {
     const g = this.game;
-    const owned = new Set(Object.keys(g.homes || {}).map(Number));
-    const list = g.city.buildings.filter((b) => forSale(b) && !owned.has(b.id)).sort((a, b) => housePrice(b) - housePrice(a));
-    const html = `<h3 class="mh">🏘️ 틈새 부동산 <small>집을 사면 그 집에서 부활하고, 잠자고, 씻을 수 있어요</small></h3>
-      <div class="money-line">💰 소지금 <b>₩${Math.floor(g.stats.money)}</b>${g.stats.homeId != null ? ` · 현재 집: ${escapeHtml(g.city.buildings[g.stats.homeId].name)}` : ' · 현재 집 없음 (호텔에서 부활)'}</div>
-      <div class="itemlist">${list.map((b) => `<div class="item"><div class="ic">🏠</div><div class="info"><b>${b.floors}층 주택 · ${{ 0: '북', 1: '남' }[b.dir === 1 ? 1 : 0]}향</b><small>도심까지 ${Math.round(Math.hypot(b.x, b.z))}m · ${Math.round(b.w * b.d)}㎡</small></div>
-        <div class="acts"><button class="btn mini ghost" data-see="${b.id}">위치</button><button class="btn mini" data-house="${b.id}">₩${housePrice(b).toLocaleString()} 구매</button></div></div>`).join('') || '<div style="padding:16px">지금은 매물이 없어요</div>'}</div>
+    const owned = g.owned || {};
+    const typeName = { house: '🏡 주택', villa: '🏘️ 빌라', apartment: '🏢 아파트', mine: '🔑 내 집' };
+    const here = g.interior?.building || g.player.pos;
+    const dist = (b) => Math.round(Math.hypot(b.x - here.x, b.z - here.z));
+    let body = '';
+    if (tab === 'mine') {
+      body = g.myHomes.map((h) => {
+        const b = g.city.buildings[h.bid];
+        const main = h.bid === g.stats.homeId && h.unit === g.stats.homeUnit;
+        return `<div class="item"><div class="ic">${b.def.emoji}</div><div class="info"><b>${escapeHtml(homeLabel(b, h.unit))}${main ? ' <span class="badge">대표 집</span>' : ''}</b><small>${b.suburb ? '🌳 교외' : '🏙️ 도심'} · 여기서 ${dist(b)}m · 되팔면 ₩${Math.round(housePrice(b, h.unit) * 0.8).toLocaleString()}</small></div>
+          <div class="acts"><button class="btn mini ghost" data-see="${b.id}">위치</button>${main ? '' : `<button class="btn mini" data-main="${b.id}" data-unit="${escapeHtml(h.unit)}">대표 집으로</button>`}<button class="btn mini ghost" data-sell="${b.id}" data-unit="${escapeHtml(h.unit)}">팔기</button></div></div>`;
+      }).join('') || '<div style="padding:16px">아직 집이 없어요. 매물을 둘러보세요!</div>';
+    } else {
+      const list = g.city.buildings.filter((b) => b.type === tab).map((b) => ({ b, free: freeUnits(b, owned[b.id] || []) })).filter((x) => x.free.length).sort((a, b) => dist(a.b) - dist(b.b));
+      body = list.map(({ b, free }) => {
+        const prices = free.map((u) => housePrice(b, u));
+        const lo = Math.min(...prices), hi = Math.max(...prices);
+        const size = tab === 'house' ? `${b.floors}층 단독 · ${Math.round(b.w * b.d)}㎡${b.suburb ? ' · 마당' : ''}` : `${b.floors}층 건물 · 빈 호수 ${free.length}개`;
+        const pick = tab === 'house' ? '' : `<select class="mini" data-unitsel="${b.id}">${free.map((u) => `<option value="${u}">${u} · ₩${housePrice(b, u).toLocaleString()}</option>`).join('')}</select>`;
+        return `<div class="item"><div class="ic">${b.def.emoji}</div><div class="info"><b>${escapeHtml(b.name)}</b><small>${b.suburb ? '🌳 교외 주택단지' : '🏙️ 도심'} · ${size} · 여기서 ${dist(b)}m</small></div>
+          <div class="acts"><button class="btn mini ghost" data-see="${b.id}">위치</button>${pick}<button class="btn mini" data-house="${b.id}">${tab === 'house' ? `₩${lo.toLocaleString()}` : lo === hi ? `₩${lo.toLocaleString()}` : `₩${lo.toLocaleString()}~`} 구매</button></div></div>`;
+      }).join('') || '<div style="padding:16px">지금은 매물이 없어요</div>';
+    }
+    const cur = g.stats.homeId != null ? homeLabel(g.city.buildings[g.stats.homeId], g.stats.homeUnit) : null;
+    const html = `<h3 class="mh">🏘️ 부동산 <small>집을 사면 🔑 열쇠를 받아요. 대표 집에서 부활하고, 자고, 씻을 수 있어요</small></h3>
+      <div class="money-line">💰 소지금 <b>₩${Math.floor(g.stats.money).toLocaleString()}</b> · ${cur ? `대표 집: ${escapeHtml(cur)}` : '집 없음 (호텔에서 부활)'} · 집 ${g.myHomes.length}/5채</div>
+      <div class="tabs-row">${Object.entries(typeName).map(([k, v]) => `<button class="btn mini ${k === tab ? '' : 'ghost'}" data-tab="${k}">${v}</button>`).join('')}</div>
+      <div class="itemlist">${body}</div>
       <div style="margin-top:12px"><button class="btn ghost" id="house-close">닫기</button></div>`;
     this.openModal(html, 'house');
+    const M = $('modal-inner');
     $('house-close').onclick = () => this.closeModal();
-    $('modal-inner').querySelectorAll('[data-see]').forEach((b) => { b.onclick = () => { g.setWaypoint(g.city.buildings[+b.dataset.see]); this.toast('📍 지도에 표시했어요'); }; });
-    $('modal-inner').querySelectorAll('[data-house]').forEach((b) => { b.onclick = () => { g.buyHouse(g.city.buildings[+b.dataset.house]); this.closeModal(); }; });
+    M.querySelectorAll('[data-tab]').forEach((b) => { b.onclick = () => this.openHouses(b.dataset.tab); });
+    M.querySelectorAll('[data-see]').forEach((b) => { b.onclick = () => { const bd = g.city.buildings[+b.dataset.see]; g.setWaypoint(bd, `${bd.def.emoji} ${bd.name}`); this.toast('📍 지도에 표시했어요'); }; });
+    M.querySelectorAll('[data-house]').forEach((b) => {
+      b.onclick = async () => {
+        const bd = g.city.buildings[+b.dataset.house];
+        const unit = bd.type === 'house' ? '단독' : M.querySelector(`[data-unitsel="${bd.id}"]`).value;
+        const price = housePrice(bd, unit);
+        if (!(await this.confirm(`${bd.def.emoji} <b>${escapeHtml(homeLabel(bd, unit))}</b><br>₩${price.toLocaleString()}에 살까요?`))) { this.openHouses(tab); return; }
+        g.buyHouse(bd, unit); this.closeModal();
+      };
+    });
+    M.querySelectorAll('[data-main]').forEach((b) => { b.onclick = () => { g.setMainHome(+b.dataset.main, b.dataset.unit); setTimeout(() => this.openHouses('mine'), 300); }; });
+    M.querySelectorAll('[data-sell]').forEach((b) => {
+      b.onclick = async () => {
+        const bd = g.city.buildings[+b.dataset.sell];
+        if (!(await this.confirm(`${escapeHtml(homeLabel(bd, b.dataset.unit))}을(를) ₩${Math.round(housePrice(bd, b.dataset.unit) * 0.8).toLocaleString()}에 팔까요?<br><small>열쇠가 사라져요</small>`))) { this.openHouses('mine'); return; }
+        g.sellHouse(+b.dataset.sell, b.dataset.unit); setTimeout(() => this.openHouses('mine'), 300);
+      };
+    });
+  }
+
+  // ---------------- 미용실: 얼굴·더듬이·날개 바꾸기 ----------------
+  openStyle(cost = 30) {
+    const g = this.game;
+    const orig = JSON.stringify(g.profile.look || DEFAULT_LOOK);
+    const look = JSON.parse(orig);
+    const p = g.player;
+    this.prevCam = { yaw: p.cam.yaw, dist: p.cam.dist, pitch: p.cam.pitch };
+    p.cam.yaw = p.heading - 0.5; p.cam.dist = 4.2; p.cam.pitch = 0.1;
+    const render = () => {
+      const chips = (key, part) => `<div class="opt-row"><div class="opt-label">${part.label}</div><div class="chips">${part.options.map((o, i) => `<button class="chip ${look[key] === i ? 'sel' : ''}" data-look="${key}" data-v="${i}">${o}</button>`).join('')}</div></div>`;
+      const colors = (key, part) => `<div class="opt-row"><div class="opt-label">${part.label}</div><div class="chips">${part.options.map((c) => `<span class="swatch ${look[key] === c ? 'sel' : ''} ${c.startsWith('#') ? '' : 'sw-word'}" data-lookc="${key}" data-v="${c}" style="${c.startsWith('#') ? `background:${c}` : ''}">${c === 'auto' ? '자동' : c === 'none' ? '없음' : ''}</span>`).join('')}</div></div>`;
+      this.openModal(`<h3 class="mh">💇 미용실 <small>거울을 보며 골라보세요 · ₩${cost}</small></h3>
+        <div class="style-body">${chips('eyes', LOOK_PARTS.eyes)}${colors('pupil', LOOK_COLORS.pupil)}${chips('nose', LOOK_PARTS.nose)}${chips('mouth', LOOK_PARTS.mouth)}${colors('cheek', LOOK_COLORS.cheek)}${chips('antenna', LOOK_PARTS.antenna)}${chips('wings', LOOK_PARTS.wings)}${colors('belly', LOOK_COLORS.belly)}</div>
+        <div style="margin-top:10px"><button class="btn" id="st-ok">이 스타일로! (₩${cost})</button> <button class="btn ghost" id="st-cancel">취소</button></div>`, 'recolor');
+      const M = $('modal-inner');
+      M.querySelectorAll('[data-look]').forEach((b) => { b.onclick = () => { look[b.dataset.look] = +b.dataset.v; g.setLook({ ...look }); render(); }; });
+      M.querySelectorAll('[data-lookc]').forEach((b) => { b.onclick = () => { look[b.dataset.lookc] = b.dataset.v; g.setLook({ ...look }); render(); }; });
+      const done = (apply) => {
+        Object.assign(p.cam, this.prevCam);
+        this.closeModal();
+        if (!apply) { if (JSON.stringify(look) !== orig) g.setLook(JSON.parse(orig)); return; }
+        if (JSON.stringify(look) === orig) return;
+        if (g.stats.money < cost) { g.setLook(JSON.parse(orig)); this.toast('💸 돈이 부족해요!'); return; }
+        g.stats.money -= cost;
+        this.toast('💇 새 스타일 완성! 다들 알아볼까요? ✨');
+      };
+      $('st-ok').onclick = () => done(true);
+      $('st-cancel').onclick = () => done(false);
+    };
+    render();
+  }
+
+  // ---------------- 식당 메뉴 ----------------
+  openMenu(type, microwave = false) {
+    const g = this.game;
+    const info = SHOPS[type] || { title: '메뉴', subtitle: '' };
+    const ids = shopItems(type).filter((id) => ITEMS[id].cat === 'food' && (!microwave || ['dosirak', 'cup_ramen', 'kimbap', 'sandwich'].includes(id)));
+    const fx = (d) => Object.entries(d.food || {}).map(([k, v]) => `${{ hunger: '🍚', energy: '⚡', fun: '🎉' }[k]}+${v}`).join(' ') + (d.heal ? ` ❤️+${d.heal}` : '');
+    const motion = { bite: '냠냠 베어 물기', slurp: '후루룩 젓가락질', spoon: '숟가락으로 호호', drink: '꿀꺽꿀꺽', slice: '치즈 쭈욱~', drumstick: '두 손으로 와구와구' };
+    const html = `<h3 class="mh">${microwave ? '♨️ 전자레인지' : escapeHtml(g.interior.building.name)} <small>${escapeHtml(microwave ? '데워서 바로 먹어요' : info.subtitle)}</small></h3>
+      <div class="money-line">💰 소지금 <b>₩${Math.floor(g.stats.money)}</b> · 매장에서 먹으면 배가 20% 더 불러요 · 포장은 가방에 보관돼요</div>
+      <div class="itemlist">${ids.map((id) => { const d = ITEMS[id]; return `<div class="item"><div class="ic">${d.emoji}</div><div class="info"><b>${escapeHtml(d.name)} <span style="color:var(--accent)">₩${d.price}</span></b><small>${fx(d)} · ${motion[d.eat?.[0]] || ''}</small></div>
+        <div class="acts"><button class="btn mini" data-eat="${id}">🍽️ 먹고 가기</button>${microwave ? '' : `<button class="btn mini ghost" data-take="${id}">🥡 포장</button>`}</div></div>`; }).join('')}</div>
+      <div style="margin-top:12px"><button class="btn ghost" id="menu-close">닫기</button></div>`;
+    this.openModal(html, 'menu');
+    $('menu-close').onclick = () => this.closeModal();
+    $('modal-inner').querySelectorAll('[data-eat]').forEach((b) => { b.onclick = () => g.eatIn(b.dataset.eat); });
+    $('modal-inner').querySelectorAll('[data-take]').forEach((b) => { b.onclick = () => { if (g.takeout(b.dataset.take)) this.openMenu(type, microwave); }; });
+  }
+
+  // ---------------- 몸 색깔 ----------------
+  openRecolor() {
+    const g = this.game;
+    const colors = [
+      ['#8a5634', '초콜릿'], ['#a86b3e', '캐러멜'], ['#6e3f25', '다크 브라운'], ['#b07945', '꿀'], ['#c9a27e', '밀크티'],
+      ['#ff9fb2', '딸기 우유'], ['#f48fb1', '핫핑크'], ['#ffab91', '복숭아'], ['#ffd54f', '레몬'], ['#e0b84a', '황금'],
+      ['#7ec8a9', '민트'], ['#81c784', '연두'], ['#4db6ac', '청록'], ['#90caf9', '하늘'], ['#9fa8ff', '라벤더'],
+      ['#b39ddb', '보라'], ['#eceff1', '눈사람'], ['#9e9e9e', '회색'], ['#37474f', '밤하늘'], ['#5d4037', '원조 바퀴'],
+    ];
+    const orig = g.profile.color;
+    let pick = orig;
+    this.openModal(`<h3 class="mh">🎨 몸 색깔 바꾸기 <small>거울에 비친 모습을 보며 골라보세요</small></h3>
+      <div class="swatches">${colors.map(([c, n]) => `<div class="swatch-big${c === orig ? ' sel' : ''}" data-c="${c}"><span style="background:${c}"></span>${n}</div>`).join('')}</div>
+      <div style="margin-top:12px"><button class="btn" id="rc-ok">이 색으로 할래요</button> <button class="btn ghost" id="rc-cancel">취소</button></div>`, 'recolor');
+    // 카메라를 정면으로 돌려 미리보기
+    const p = g.player;
+    this.prevCam = { yaw: p.cam.yaw, dist: p.cam.dist, pitch: p.cam.pitch };
+    p.cam.yaw = p.heading - 0.5; p.cam.dist = 5; p.cam.pitch = 0.12; // 캐릭터가 화면 왼쪽에 보이도록
+    const done = (apply) => {
+      if (!apply && pick !== orig) g.setBodyColor(orig);
+      Object.assign(p.cam, this.prevCam);
+      this.closeModal();
+      if (apply && pick !== orig) this.toast('🎨 새 몸 색깔이 마음에 들어요!');
+    };
+    $('modal-inner').querySelectorAll('[data-c]').forEach((el) => {
+      el.onclick = () => {
+        pick = el.dataset.c;
+        $('modal-inner').querySelectorAll('.swatch-big').forEach((x) => x.classList.toggle('sel', x === el));
+        g.setBodyColor(pick);
+      };
+    });
+    $('rc-ok').onclick = () => done(true);
+    $('rc-cancel').onclick = () => done(false);
   }
 
   // ---------------- 월드맵 ----------------
@@ -878,7 +1060,7 @@ export class UI {
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.font = 'bold 13px sans-serif';
       for (const b of g.city.buildings) {
-        if (b.type === 'house' || b.type === 'apartment') continue;
+        if (isHomeType(b) && !g.ownsHome?.(b)) continue;
         ctx.fillStyle = 'rgba(255,255,255,.85)';
         const w = ctx.measureText(b.name).width + 8;
         ctx.fillRect(X(b.x) - w / 2, X(b.z) + 9, w, 16);
@@ -900,7 +1082,7 @@ export class UI {
       const pp = g.mode === 'interior' ? g.interior.building.door : g.player.pos;
       ctx.fillStyle = '#ff1744'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4;
       ctx.beginPath(); ctx.arc(X(pp.x), X(pp.z), 11, 0, 7); ctx.fill(); ctx.stroke();
-      $('wm-info').innerHTML = g.waypoint ? `📍 목적지: <b>${escapeHtml(g.waypoint.label)}</b> · ${Math.round(g.waypoint.pos.distanceTo(pp))}m` : '목적지를 클릭하세요';
+      $('wm-info').innerHTML = g.waypoint ? `📍 목적지: <b>${escapeHtml(g.waypoint.label)}</b> · 걸어서 ${Math.round(g.routeLen || g.waypoint.pos.distanceTo(pp))}m (약 ${Math.max(1, Math.round((g.routeLen || 0) / 9.5 / 6) / 10)}분)` : '목적지를 클릭하세요';
     };
     draw();
     cv.onclick = (e) => {
@@ -938,6 +1120,66 @@ export class UI {
     $('course').classList.toggle('hidden', !text);
     if (text) $('course').textContent = '🥋 ' + text;
   }
+  xpPop(text) {
+    const el = document.createElement('div');
+    el.className = 'xp-pop'; el.textContent = text;
+    $('xp-pops').appendChild(el);
+    setTimeout(() => el.remove(), 1700);
+  }
+  renderQuests() {
+    const g = this.game, el = $('quest-card');
+    const list = g.stats?.quests?.list || [];
+    if (!list.length) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    el.innerHTML = `<b>📋 오늘의 퀘스트</b>` + list.map((q) => { const d = questDef(q.id); return `<div class="q ${q.done ? 'done' : ''}">${escapeHtml(d.text)}<span class="qp">${q.done ? '✅' : `${Math.floor(q.p)}/${d.n}`}</span></div>`; }).join('');
+    if (!$('phone').classList.contains('hidden') && this.phoneTab === 'quests') this.openPhone('quests');
+  }
+  flipHud(n, need) {
+    if (n === null || n === undefined) { $('flip').classList.add('hidden'); return; }
+    $('flip').classList.remove('hidden');
+    $('flip-fill').style.width = `${(n / need) * 100}%`;
+  }
+  setScope(on) { if (this.scopeOn !== on) { this.scopeOn = on; $('scope').classList.toggle('hidden', !on); $('crosshair').style.opacity = on ? '0' : ''; } }
+  drawMeter(k) {
+    if (k === null) { if (!this.drawHidden) { $('draw-meter').classList.add('hidden'); this.drawHidden = true; } return; }
+    this.drawHidden = false;
+    $('draw-meter').classList.remove('hidden');
+    $('draw-fill').style.width = `${k * 100}%`;
+  }
+  scorePop(text, color) {
+    const el = $('score-pop');
+    el.textContent = text; el.style.color = color || '#fff';
+    el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+  }
+  rangeHud(text) { $('range-hud').classList.toggle('hidden', !text); if (text) $('range-hud').innerHTML = text; }
+  shutter() { const f = $('shutter'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
+
+  // ---------------- 자동차 쇼룸 ----------------
+  openDealer() {
+    const g = this.game;
+    let pick = {};
+    const render = () => {
+      this.openModal(`<h3 class="mh">🏎️ 바퀴 모터스 쇼룸 <small>사면 🔑 차 키를 받아요 · 핫바에서 키를 쓰면 언제든 내 앞으로 호출</small></h3>
+        <div class="money-line">💰 소지금 <b>₩${Math.floor(g.stats.money).toLocaleString()}</b></div>
+        <div class="itemlist">${DEALER_CARS.map(([kind, emoji, price]) => { const md = MODELS[kind]; const c = pick[kind] || CAR_COLORS[0]; return `<div class="item"><div class="ic">${emoji}</div><div class="info"><b>${escapeHtml(md.name)} <span style="color:var(--accent)">₩${price.toLocaleString()}</span></b><small>최고속도 ${Math.round(md.max * 1.4 * 3.6 * 1.35)}km/h${md.sport ? ' · 🏁 스포츠카' : ''}</small><div class="carcols">${CAR_COLORS.map((cc) => `<span class="cc ${cc === c ? 'sel' : ''}" data-k="${kind}" data-c="${cc}" style="background:${cc}"></span>`).join('')}</div></div><div class="acts"><button class="btn mini" data-buy="${kind}" data-p="${price}">구매</button></div></div>`; }).join('')}</div>
+        <div style="margin-top:10px"><button class="btn ghost" id="dl-close">닫기</button></div>`, 'dealer');
+      const M = $('modal-inner');
+      $('dl-close').onclick = () => this.closeModal();
+      M.querySelectorAll('.cc').forEach((el) => { el.onclick = () => { pick[el.dataset.k] = el.dataset.c; const y = M.querySelector('.itemlist').scrollTop; render(); $('modal-inner').querySelector('.itemlist').scrollTop = y; }; });
+      M.querySelectorAll('[data-buy]').forEach((b) => { b.onclick = async () => { const k = b.dataset.buy; if (await this.confirm(`${escapeHtml(MODELS[k].name)}을(를) ₩${(+b.dataset.p).toLocaleString()}에 살까요?`)) g.buyCar(k, pick[k] || CAR_COLORS[0], +b.dataset.p); else render(); }; });
+    };
+    render();
+  }
+
+  lootBanner(title, sub, color, bonus) {
+    const el = $('loot');
+    el.style.setProperty('--rc', color);
+    el.innerHTML = `<div class="lt">${escapeHtml(title)}</div><div class="ls">${escapeHtml(sub)}</div>${bonus ? `<div class="lb">${escapeHtml(bonus)}</div>` : ''}`;
+    el.classList.remove('hidden', 'show'); void el.offsetWidth; el.classList.add('show');
+    clearTimeout(this.lootT);
+    this.lootT = setTimeout(() => el.classList.add('hidden'), 3600);
+  }
+
   celebrate(title, sub) {
     const el = $('celebrate');
     el.innerHTML = `<div>${escapeHtml(title)}</div><small>${escapeHtml(sub)}</small>`;
