@@ -1229,6 +1229,8 @@ export class Roach {
       this.legs[0].rotation.x = this.legs[1].rotation.x = -1.5;
       this.inner.position.y = 0;
       this.torso.rotation.x = 0;
+      // 차 안에서는 더듬이를 뒤로 눕힌다 (지붕에 닿지 않게)
+      for (const a of this.antennae) a.rotation.x = -1.3 + Math.sin(this.t * 3 + a.userData.phase) * 0.08;
     }
     // 쓰러짐
     this.inner.rotation.z = this.dead ? Math.PI / 2 * 0.92 : 0;

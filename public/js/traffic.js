@@ -55,6 +55,7 @@ const AI_KINDS = ['bus', 'bus', 'bus', 'police', 'police', 'taxi', 'taxi', 'taxi
   'sport_f', 'sport_l', 'sport_p', 'sport_m', 'sport_b', 'limo', 'jeep', 'jeep', 'convertible', 'convertible', 'ev', 'ev', 'mini', 'mini', 'suv', 'suv', 'suv', 'wagon', 'hatch', 'hatch'];
 
 // 차 안에 앉아 있는 작은 바퀴벌레 (창문으로 보임)
+const MINI_H = 1.12; // miniRoach 바닥(-0.28)~더듬이 끝(+0.84)
 function miniRoach(parent, color, x, y, z) {
   const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g);
   sph(g, 0.22, 0.28, 0.2, color, 0, 0, 0, { low: true });
@@ -184,14 +185,16 @@ function buildCar(kind, color, occColors, glassMat) {
   // 좌석 & 탑승자
   const seats = [], occ = [];
   const zs = md.cargo ? [(zA + zD) / 2] : kind === 'limo' ? [zB - 0.2, -0.6, -1.7] : md.sport ? [(zB + zC) / 2 + 0.1] : [(zB + zC) / 2 + 0.45, (zB + zC) / 2 - 0.5];
-  const sy = h1 + 0.02;
+  // 좌석은 바닥 가까이 (예전엔 차체 윗선 높이라 머리·더듬이가 지붕을 뚫었다)
+  const sy = c + 0.2, roof = h2 - 0.05;
   for (const z of zs) for (const x of [0.42, -0.42]) {
     box(body, 0.55, 0.14, 0.55, '#455a64', x, sy - 0.05, z, { cast: false });
     box(body, 0.55, 0.55, 0.1, '#455a64', x, sy + 0.25, z - 0.3, { cast: false });
     seats.push(new THREE.Vector3(x, sy, z));
   }
-  for (let i = 0; i < seats.length; i++) { const r = miniRoach(body, occColors[i % 4] || OCC_COLORS[i % 8], seats[i].x, seats[i].y + 0.25, seats[i].z); r.visible = false; occ.push(r); }
-  return { g, body, seats, occ, glass: gl, ...vehicleInfo(kind) };
+  const ms = md.open ? 1 : Math.min(1, (roof - sy) / MINI_H);
+  for (let i = 0; i < seats.length; i++) { const r = miniRoach(body, occColors[i % 4] || OCC_COLORS[i % 8], seats[i].x, seats[i].y + 0.28 * ms, seats[i].z); r.scale.setScalar(ms); r.visible = false; occ.push(r); }
+  return { g, body, seats, occ, glass: gl, roof: md.open ? 0 : roof, ...vehicleInfo(kind) };
 }
 
 export function makeCarMesh(kind, color, occColors = []) {

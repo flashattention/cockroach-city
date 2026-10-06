@@ -251,12 +251,27 @@ export function seatRoach(roach, car) {
   const m = car.mesh;
   if (!m.seats?.length) return;
   roach.setSeated(true);
-  roach.root.scale.setScalar(SEAT_SCALE[car.kind] || 0.42);
+  // 지붕이 있는 차는 앉은 키(모자·더듬이 포함)가 지붕 아래에 들어오도록 크기를 맞춘다
+  let sc = SEAT_SCALE[car.kind] || 0.42;
+  if (m.roof) sc = Math.min(sc, (m.roof - m.seats[0].y) / seatedHeight(roach));
+  roach.root.scale.setScalar(sc);
   m.body.updateMatrixWorld(true);
   const p = m.seats[0].clone();
   m.body.localToWorld(p);
   roach.root.position.copy(p);
   roach.root.rotation.y = car.heading;
+}
+// 앉은 자세의 키 (크기 1 기준). 액세서리가 바뀔 수 있으니 1초마다 다시 잰다
+const _box = new THREE.Box3();
+function seatedHeight(roach) {
+  const now = performance.now();
+  if (roach._seatH && now - roach._seatHT < 1000) return roach._seatH;
+  const r = roach.root;
+  r.updateMatrixWorld(true);
+  _box.setFromObject(r);
+  roach._seatH = Math.max(1, (_box.max.y - r.position.y) / r.scale.y);
+  roach._seatHT = now;
+  return roach._seatH;
 }
 export function unseatRoach(roach) {
   roach.setSeated(false);
