@@ -823,6 +823,28 @@ const BUILDERS = {
     }
   },
 
+  prison(g, b, ctx) {
+    const h = shell(g, b.w, b.d, b.floors, '#b0bec5', { roofColor: '#607d8b', bands: true, winKind: 'dark', frontStart: 1 });
+    // 높은 담장 + 철조망 + 감시탑
+    const W = b.w + 16, D = b.d + 16;
+    for (const [x, z, w, d] of [[0, -D / 2, W, 0.8], [-W / 2, 0, 0.8, D], [W / 2, 0, 0.8, D], [-W / 4 - 2, D / 2, W / 2 - 4, 0.8], [W / 4 + 2, D / 2, W / 2 - 4, 0.8]]) {
+      box(g, w, 5, d, '#90a4ae', x, 2.5, z);
+      box(g, w + 0.2, 0.3, d + 0.2, '#546e7a', x, 5.4, z, { cast: false });
+    }
+    for (const [x, z] of [[-W / 2, -D / 2], [W / 2, -D / 2], [-W / 2, D / 2], [W / 2, D / 2]]) {
+      box(g, 2.4, 9, 2.4, '#78909c', x, 4.5, z);
+      box(g, 3.4, 2, 3.4, '#455a64', x, 10, z);
+      const lamp = sph(g, 0.4, 0.4, 0.4, toon('#fff59d', { emissive: '#ffeb3b', emissiveIntensity: 0.8 }), x, 11.2, z, { low: true }); void lamp;
+    }
+    // 정문 철창
+    for (let i = 0; i < 8; i++) box(g, 0.1, 4.5, 0.1, '#37474f', -3.5 + i, 2.25, D / 2);
+    box(g, 8, 0.3, 0.2, '#37474f', 0, 4.5, D / 2);
+    door(g, b.d, '#37474f', { w: 2.4 });
+    sign(g, b, 3.4, 8, '#263238', '#ffffff');
+    // 경찰차 두 대
+    simpleCar(g, '#ffffff', -6, b.d / 2 + 4, 0.3, 'police'); simpleCar(g, '#ffffff', 6, b.d / 2 + 4, -0.3, 'police');
+    void h; void ctx;
+  },
 
   hunter(g, b, ctx) {
     // 통나무 오두막

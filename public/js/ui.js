@@ -1214,6 +1214,14 @@ export class UI {
     $('modal-inner').querySelectorAll('[data-take]').forEach((b) => { b.onclick = () => { g.cookFish(b.dataset.take, kind, false); this.openCookFish(kind); }; });
   }
 
+
+    jailHud(left) {
+    let el = $('jail-hud');
+    if (!el) { el = document.createElement('div'); el.id = 'jail-hud'; document.body.appendChild(el); }
+    if (left === null) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    el.innerHTML = `🔒 수감 중 · 석방까지 <b>${left}</b>초`;
+  }
     rangeHud(text) { $('range-hud').classList.toggle('hidden', !text); if (text) $('range-hud').innerHTML = text; }
   shutter() { const f = $('shutter'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
 

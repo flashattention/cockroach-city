@@ -240,6 +240,7 @@ export class World {
 
   leave(p) {
     if (!this.players.has(p.id)) return;
+    clearTimeout(p.jailTimer);
     if (p.talking !== null) this.endTalk(p, p.talking);
     if (p.car >= 0) { const car = this.traffic.cars[p.car]; if (car) this.traffic.exit(car); }
     this.players.delete(p.id);

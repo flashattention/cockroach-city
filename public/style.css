@@ -464,6 +464,9 @@ kbd { background: #fff; color: #4a3428; border-radius: 5px; padding: 0 6px; bord
 .cc { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); cursor: pointer; }
 .cc.sel { outline: 2px solid var(--accent); }
 
+#jail-hud { position: fixed; top: 130px; left: 50%; transform: translateX(-50%); background: rgba(38,50,56,.92); color: #fff; padding: 10px 22px; border-radius: 16px; font-family: 'Jua'; font-size: 22px; z-index: 31; box-shadow: 0 6px 18px rgba(0,0,0,.35); border: 3px solid #90a4ae; }
+#jail-hud b { color: #ffd54f; font-size: 26px; }
+
 #tv-remote { position: fixed; bottom: 130px; left: 50%; transform: translateX(-50%); background: rgba(33,33,33,.9); color: #fff; padding: 12px 18px; border-radius: 20px; z-index: 30; text-align: center; box-shadow: 0 8px 22px rgba(0,0,0,.4); }
 #tv-remote .tvr-ch { font-family: 'Jua'; font-size: 20px; margin-bottom: 8px; }
 #tv-remote .tvr-btns { display: flex; gap: 6px; justify-content: center; margin-bottom: 4px; }

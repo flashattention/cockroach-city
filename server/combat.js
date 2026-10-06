@@ -45,7 +45,7 @@ export class Combat {
   // ---------------- 피해 ----------------
   // 플레이어가 보낸 타격 처리
   hit(p, msg) {
-    if (p.dead) return;
+    if (p.dead || p.jailed) return;
     const stats = weaponStats(msg.w, Array.isArray(msg.gems) ? msg.gems.slice(0, 3) : []);
     if (!stats.dmg) return;
     const pellets = Math.max(1, Math.min(10, msg.n || 1));
@@ -280,9 +280,31 @@ export class Combat {
     this.w.handlePlayerReport(v, { token, name: a.name, reason: a.reason });
   }
 
+  // 체포 → 경찰차로 이송 → 교도소 60초
+  arrest(p, cop) {
+    if (p.jailed || p.dead) return;
+    const prison = this.w.city.byType.prison?.[0];
+    if (!prison) return;
+    p.jailed = true;
+    const reason = p.crimeReason || '경범죄';
+    p.heat = 0; this.updateStars(p);
+    this.units = this.units.filter((u) => u.target !== p.id);
+    if (p.talking !== null) this.w.endTalk(p, p.talking);
+    const secs = 60;
+    this.w.send(p, { t: 'arrested', prison: prison.id, secs, reason, cop: cop ? [cop.pos.x, cop.pos.z] : null });
+    this.w.broadcast({ t: 'sys', text: `🚔 ${p.name}님이 체포되어 바퀴 교도소로 이송됩니다! (사유: ${reason})` });
+    const acc = this.w.accounts[p.token];
+    if (acc) { acc.arrests = (acc.arrests || 0) + 1; this.w.dirty = true; }
+    clearTimeout(p.jailTimer);
+    p.jailTimer = setTimeout(() => {
+      p.jailed = false;
+      if (this.w.players.has(p.id)) { this.w.send(p, { t: 'released' }); this.w.broadcast({ t: 'sys', text: `🔓 ${p.name}님이 교도소에서 석방됐어요` }); }
+    }, (secs + 5) * 1000);
+  }
+
   // ---------------- 현상수배 ----------------
   addHeat(p, v, reason = '') {
-    if (!p || !p.token || p.dead) return;
+    if (!p || !p.token || p.dead || p.jailed) return;
     p.heat = Math.min(420, (p.heat || 0) + v);
     p.lastCrime = Date.now();
     if (reason) p.crimeReason = reason;
@@ -356,7 +378,7 @@ export class Combat {
       // 체력 재생
       if (!p.dead && p.hp < p.maxHp && now - (p.lastHurt || 0) > 8000) { p.hp = Math.min(p.maxHp, p.hp + (2 + (p.profile.regen || 0)) * dt); p.hpSendT = (p.hpSendT || 0) - dt; if (p.hpSendT <= 0) { p.hpSendT = 1; this.w.send(p, { t: 'hp', hp: Math.round(p.hp) }); } }
       // 필요한 유닛 수 맞추기
-      if (p.dead) continue;
+      if (p.dead || p.jailed) continue;
       p.spawnT = (p.spawnT || 0) - dt;
       if (p.spawnT > 0) continue;
       p.spawnT = 1.5;
@@ -406,6 +428,12 @@ export class Combat {
     const tp = p.pos;
     const dx = tp.x - u.pos.x, dz = tp.z - u.pos.z, d = Math.hypot(dx, dz);
     u.h = Math.atan2(dx, dz);
+    // 경범죄 (별 1~2개): 경찰은 총을 쏘지 않고 쫓아가서 체포한다
+    if (u.kind === 'cop' && (p.stars || 0) <= 2) {
+      if (d > 1.6) this.moveUnit(u, tp, { ...info, speed: info.speed * 1.25 }, dt);
+      if (d < 2.2 && p.car < 0 && !p.dead) this.arrest(p, u);
+      return;
+    }
     if (d > info.range * 0.6) this.moveUnit(u, tp, info, dt);
     u.fireT -= dt;
     // 건물에 가려 있으면 쏘지 않고 다가간다 (총알이 벽을 뚫지 않게)

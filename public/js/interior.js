@@ -92,6 +92,7 @@ const STYLE = {
   club: ['tile', '#1a1030', '#120a24', '#1a1030'],
   dojang: ['wood', '#d7b98e', '#caa979', '#fff3e0'],
   range: ['concrete', '#9e9e9e', '#8d8d8d', '#cfd8c4'],
+  prison: ['concrete', '#9e9e9e', '#8d8d8d', '#cfd8dc'],
   hunter: ['wood', '#8d6e63', '#795548', '#d7ccc8'],
   fishing: ['wood', '#b3e5fc', '#81d4fa', '#e1f5fe'],
   seafood: ['tile', '#fff3e0', '#ffccbc', '#fff8e1'],
@@ -707,6 +708,89 @@ const LAYOUTS = {
     k.act('dealer', 0, D / 2 - 2.8);
     k.label('BAKWI MOTORS · 드림카를 만나보세요', '🏎️', 0, 4.2, -D / 2 + 0.2, 8, '#212121', '#ff1744');
     k.v(-3, 0, 0); k.v(3, 1, Math.PI); k.v(-10, 0, Math.PI / 2);
+  },
+  // ---------------- 교도소: 감방 ----------------
+  prison(k) {
+    const { W, D } = k;
+    k.cells = [];
+    // 뒤쪽에 감방 4칸 — 칸끼리 벽을 공유해 빈틈이 없고, 철창은 벽 끝까지 이어진다
+    const cw = (W - 2) / 4, z0 = -D / 2, z1 = -D / 2 + 6.4, x0 = -W / 2 + 1;
+    for (let i = 0; i <= 4; i++) {
+      const wx = x0 + i * cw;
+      box(k.g, 0.25, 4, 6.4, '#78909c', wx, 2, z0 + 3.2);
+      k.col(wx, z0 + 3.2, 0.2, 3.2);
+    }
+    // 바깥 벽과 감방 사이 틈도 막는다
+    box(k.g, 1, 4, 0.25, '#78909c', -W / 2 + 0.5, 2, z1); box(k.g, 1, 4, 0.25, '#78909c', W / 2 - 0.5, 2, z1);
+    k.col(0, z1, W / 2, 0.2);
+    for (let i = 0; i < 4; i++) {
+      const cx = x0 + cw * (i + 0.5);
+      const z = z0 + 3.2;
+      const nb = Math.round(cw / 0.5);
+      for (let b = 0; b <= nb; b++) box(k.g, 0.08, 4, 0.08, '#37474f', cx - cw / 2 + b * (cw / nb), 2, z1);
+      box(k.g, cw, 0.15, 0.15, '#37474f', cx, 3.9, z1);
+      // 침대 + 변기
+      box(k.g, 1.2, 0.5, 2.4, '#8d6e63', cx - 1.8, 0.35, z - 1.5); box(k.g, 1.1, 0.15, 2.3, '#e0e0e0', cx - 1.8, 0.65, z - 1.5);
+      cyl(k.g, 0.35, 0.6, '#fafafa', cx + 2, 0.4, z - 2.2);
+      // rect: 수감자가 절대 벗어나지 못하는 칸 안쪽 영역
+      k.cells.push({ x: cx, z: z + 0.5, rect: { minX: cx - cw / 2 + 0.6, maxX: cx + cw / 2 - 0.6, minZ: z0 + 0.6, maxZ: z1 - 0.6 } });
+      k.v(cx + 0.5, z, 0);
+    }
+    // 간수 책상
+    k.counter(W / 2 - 4, D / 2 - 5, 3, '#455a64', '#cfd8dc');
+    k.w(W / 2 - 4, D / 2 - 6, 0);
+    k.label('바퀴 교도소 · 반성하는 시간', '🔒', 0, 4.6, -D / 2 + 0.2, 7, '#263238', '#ffffff');
+    k.act('visit', -W / 2 + 3, D / 2 - 3);
+  },
+  // ---------------- 사냥꾼 오두막 ----------------
+  hunter(k) {
+    const { W, D } = k;
+    k.counter(0, -D / 2 + 3, W - 6, '#5d4037', '#a1887f');
+    k.w(0, -D / 2 + 1.8, 0);
+    k.act('shop', -2.5, -D / 2 + 4.3);
+    k.act('sell', 2.5, -D / 2 + 4.3);
+    // 벽에 걸린 사슴머리·가죽
+    for (let i = 0; i < 3; i++) {
+      const x = -W / 2 + 3 + i * ((W - 6) / 2);
+      sph(k.g, 0.35, 0.4, 0.3, '#b07945', x, 3.6, -D / 2 + 0.5);
+      for (const s of [-1, 1]) cyl(k.g, 0.05, 0.9, '#efebe9', x + s * 0.3, 4.2, -D / 2 + 0.5, { rz: s * -0.5 });
+    }
+    box(k.g, 2.6, 2, 0.1, '#6d4c41', -W / 2 + 0.3, 2.4, 0, { ry: Math.PI / 2 });
+    box(k.g, 2.2, 1.6, 0.12, '#ff8f00', -W / 2 + 0.36, 2.4, 0, { ry: Math.PI / 2 });
+    for (let i = 0; i < 4; i++) box(k.g, 0.06, 0.06, 1.6, '#212121', -W / 2 + 0.4, 1.8 + i * 0.4, 3, { ry: 0.2 });
+    // 벽난로
+    box(k.g, 2.4, 2.6, 1, '#8d8d8d', W / 2 - 1, 1.3, 0); k.col(W / 2 - 1, 0, 0.6, 1.2);
+    sph(k.g, 0.5, 0.5, 0.3, toon('#ff9100', { emissive: '#ff6d00', emissiveIntensity: 1 }), W / 2 - 1.4, 0.6, 0, { low: true });
+    k.rug(0, 1.5, 4, 3, '#a1887f');
+    k.v(-2, 2, Math.PI); k.v(2, 1, 0);
+  },
+  fishing(k) {
+    const { W, D } = k;
+    k.counter(0, -D / 2 + 3, W - 6, '#0277bd', '#e1f5fe');
+    k.w(0, -D / 2 + 1.8, 0);
+    k.act('shop', -2.5, -D / 2 + 4.3); k.act('sell', 2.5, -D / 2 + 4.3);
+    for (let i = 0; i < 8; i++) cyl(k.g, 0.04, 3, ['#c8a165', '#37474f', '#ffd54f'][i % 3], -W / 2 + 0.5, 1.6, -3 + i * 0.7, { rz: 0.12, low: true });
+    box(k.g, 2.6, 1.4, 1, '#81d4fa', W / 2 - 1.6, 0.7, 1); k.col(W / 2 - 1.6, 1, 1.3, 0.5);
+    k.label('오늘의 대물: 참치 1.2m!', '🐟', 0, 4, -D / 2 + 0.2, 6, '#0277bd', '#ffffff');
+    k.v(-2, 2, Math.PI); k.v(2, 1, 0);
+  },
+  seafood(k) {
+    const { W, D } = k;
+    LAYOUTS.diner(k, { counter: '#d84315', counterTop: '#fff3e0', table: '#d7b98e', chair: '#8d6e63', round: false, emoji: '🍲', menuText: '매운탕 정식 · 모둠회 · 가져온 물고기 요리해 드려요', board: '#bf360c', kitchen: (k2) => {
+      // 수족관 + 큰 솥
+      const tank = new THREE.Mesh(G.box(), new THREE.MeshToonMaterial({ color: '#4fc3f7', transparent: true, opacity: 0.5 }));
+      tank.scale.set(4, 1.6, 1); tank.position.set(-W / 2 + 2.8, 1.3, -D / 2 + 1); k2.g.add(tank);
+      for (let i = 0; i < 5; i++) { const f = sph(k2.g, 0.25, 0.12, 0.07, ['#ff7043', '#90a4ae', '#ffca28'][i % 3], -W / 2 + 1.4 + i * 0.7, 1 + (i % 2) * 0.5, -D / 2 + 1); k2.anim.push({ type: 'bob', obj: f, base: 1 + (i % 2) * 0.5 }); }
+      cyl(k2.g, 0.8, 0.9, '#263238', W / 2 - 2, 0.75, -D / 2 + 1.2); bubbles(k2, W / 2 - 2, 1.22, -D / 2 + 1.2, '#ff7043');
+    } });
+    k.act('cook_spicy', -3, -D / 2 + 4.3); k.act('cook_raw', 3, -D / 2 + 4.3);
+  },
+  ranch(k) {
+    const { W, D } = k;
+    LAYOUTS.diner(k, { counter: '#c62828', counterTop: '#fff8e1', table: '#d7b98e', chair: '#c62828', round: false, emoji: '🐄', menuText: '목장 우유 · 수제 치즈 · 한우 스테이크 · 소프트아이스크림', board: '#33691e', kitchen: (k2) => {
+      for (let i = 0; i < 3; i++) cyl(k2.g, 0.4, 1.1, '#cfd8dc', -W / 2 + 2 + i * 1, 0.55, -D / 2 + 1.2);
+      box(k2.g, 2.4, 2.2, 1, '#eceff1', W / 2 - 1.6, 1.1, -D / 2 + 1);
+    } });
   },
   // 아파트·빌라 우리 집 (호수)
   unit(k, ctx) {
@@ -1331,6 +1415,7 @@ function W2(k) { return k.W / 2; }
 
 function roomSize(b, key) {
   if (key === 'range') return [26, 76];
+  if (key === 'prison') return [28, 20];
   if (key === 'dealer') return [26, 18];
   if (key === 'unit') return [15, 11];
   if (key === 'villa') return [14, 11];
@@ -1450,6 +1535,7 @@ export function buildInterior(b, opts = {}) {
     seats: k.seats.map((st) => ({ p: new THREE.Vector3(st.x, 0.1, st.z).add(O), face: st.face })),
     targets: k.targets || [],
     screens: k.screens,
+    cells: (k.cells || []).map((c) => Object.assign(new THREE.Vector3(c.x, 0.1, c.z).add(O), c.rect && { rect: { minX: c.rect.minX + O.x, maxX: c.rect.maxX + O.x, minZ: c.rect.minZ + O.z, maxZ: c.rect.maxZ + O.z } })),
     entry: new THREE.Vector3(0, 0.1, D / 2 - 2).add(O),
     exit: new THREE.Vector3(0, 0.1, D / 2 - 1).add(O),
     bounds: { minX: O.x - W / 2 + 0.6, maxX: O.x + W / 2 - 0.6, minZ: O.z - D / 2 + 0.6, maxZ: O.z + D / 2 - 0.6 },

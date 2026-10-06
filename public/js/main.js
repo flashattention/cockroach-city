@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { SEED, HALF } from './config.js';
 import { buildCity, renderMapImage } from './city.js';
 import { setupWorld, housePrice, homeLabel, freeUnits } from './world-setup.js';
-import { Traffic } from './traffic.js';
+import { Traffic, makeCarMesh } from './traffic.js';
 import { Player } from './player.js';
 import { buildInterior } from './interior.js';
 import { Lobby } from './lobby.js';
-import { CitizenView, PlayersView, UnitsView, GroundView, Runners, RouteView, seatRoach } from './views.js';
+import { CitizenView, PlayersView, UnitsView, GroundView, Runners, RouteView, seatRoach, unseatRoach } from './views.js';
 import { Inventory } from './inventory.js';
 import { Combat } from './combat.js';
 import { itemDef, CLUB_CHARM, ENCHANT_FEE, RARITY, SHOPS, TEMP_MINUTES } from './items.js';
@@ -519,6 +519,7 @@ function setupNet() {
     ui.toast(game.stats.homeId != null ? '🏠 집에서 부활했어요. 체력이 가득 찼어요!' : '🏨 호텔에서 부활했어요');
   });
   net.on('wanted', (m) => { game.stars = m.stars; });
+  net.on('arrested', (m) => goToJail(m));
   // 바닥 아이템
   net.on('gdrop', (m) => game.ground.add(m.g));
   net.on('gpick', (m) => game.ground.remove(m.gid));
@@ -772,7 +773,7 @@ function findFocus() {
       }
     }
     const de = Math.hypot(I.exit.x - pos.x, I.exit.z - pos.z);
-    if (de < 2.0) opts.push({ kind: 'exit', d: de, label: '밖으로 나가기 🚪' });
+    if (de < 2.0) opts.push({ kind: 'exit', d: de, label: game.jail ? `🔒 석방까지 ${Math.max(0, Math.ceil((game.jail.until - Date.now()) / 1000))}초 남았어요` : '밖으로 나가기 🚪' });
   }
   opts.sort((a, b) => a.d - b.d);
   const f = opts[0] || null;
@@ -793,7 +794,7 @@ function interact() {
     ui.openChat(c);
   } else if (focus.kind === 'ground') game.net.send({ t: 'pickup', gid: focus.g.id });
   else if (focus.kind === 'door') enterBuilding(focus.b);
-  else if (focus.kind === 'exit') exitBuilding();
+  else if (focus.kind === 'exit') { if (game.jail) ui.toast('🔒 감옥 문이 잠겨 있어요. 석방될 때까지 기다리세요'); else exitBuilding(); }
   else if (focus.kind === 'action') doAction(focus.a.action);
 }
 
@@ -824,8 +825,8 @@ function toggleCar() {
   game.net.send({ t: 'carEnter', id: focus.car.id });
 }
 
-async function enterBuilding(b) {
-  if (b.type === 'club' && game.charm() < CLUB_CHARM) {
+async function enterBuilding(b, opts = {}) {
+  if (!opts.jail && b.type === 'club' && game.charm() < CLUB_CHARM) {
     const msg = `매력 ${CLUB_CHARM} 이상만 입장 가능합니다. 😎 (지금 ${game.charm()})`;
     game.bouncerSay = { b, text: msg, t: 3.5 };
     b.bouncers?.forEach((r) => r.setEmotion('angry', 3));
@@ -834,6 +835,7 @@ async function enterBuilding(b) {
   }
   if (b.type === 'club') { game.bouncerSay = { b, text: '어서 오십시오. 즐거운 시간 되세요 🎶', t: 2.5 }; b.bouncers?.forEach((r) => r.wave()); }
   const mine = game.myHomes.filter((h) => h.bid === b.id);
+  if (!opts.jail && b.type === 'prison') { ui.toast('🔒 교도소는 면회 시간에만... 지금은 들어갈 수 없어요'); return; }
   if (b.type === 'house' && !mine.length && (game.owned[b.id] || []).length) {
     ui.toast(`🔒 ${b.name}이에요. 열쇠가 없으면 들어갈 수 없어요`);
     return;
@@ -853,7 +855,9 @@ async function enterBuilding(b) {
   game.city.root.visible = false;
   game.wild.root.visible = false;
   const p = game.player;
-  p.pos.copy(I.entry);
+  const cell = opts.jail && I.cells.length ? I.cells[Math.floor(Math.random() * I.cells.length)] : null;
+  if (cell && game.jail) game.jail.cell = cell.rect;
+  p.pos.copy(cell || I.entry);
   p.heading = Math.PI;
   p.cam.yaw = 0;
   p.cam.target.copy(p.pos);
@@ -1088,6 +1092,57 @@ function summonCar(it) {
   const pos = p.pos.clone().addScaledVector(side, 3.2);
   game.net.send({ t: 'summonCar', kind: it.car.kind, color: it.car.color, x: pos.x, z: pos.z, h: p.heading });
   ui.toast(`🔑 ${vehicleName(it.car.kind)}을(를) 불렀어요! F로 타세요`);
+}
+
+// ------------------------------------------------------------------
+// 체포 → 경찰차 이송 → 교도소
+// ------------------------------------------------------------------
+async function goToJail(m) {
+  const p = game.player;
+  game.jail = { until: Date.now() + (m.secs + 5) * 1000, prison: m.prison };
+  game.autoWalk = false; game.range = null;
+  if (game.sleeping) stopSleeping(false);
+  if (game.course) endCourse(false, null);
+  if (ui.chatOpen()) ui.closeChat();
+  ui.closeModal(); ui.closePhone();
+  if (p.inCar) leaveCar(true);
+  p.flying = false; p.flipped = false; game.flip = null; ui.flipHud(null);
+  ui.lootBanner('🚔 체포되었습니다!', `사유: ${m.reason} · 경찰차로 교도소에 이송 중...`, '#1e88e5', '');
+  game.busy = true; clearKeys();
+  if (game.mode === 'interior') await exitBuilding(true);
+  // 경찰차에 태워 4초간 달린다
+  const h = p.heading;
+  const car = makeCarMesh('police', '#ffffff');
+  const fake = { mesh: car, pos: p.pos.clone().add(new THREE.Vector3(Math.cos(h) * 2.5, 0, -Math.sin(h) * 2.5)), heading: h, kind: 'police' };
+  fake.pos.y = game.city.groundY(fake.pos.x, fake.pos.z);
+  scene.add(car.g);
+  const siren = car.body.children.filter((o) => o.material?.emissive);
+  game.cutscene = {
+    t: 0,
+    update(dt) {
+      this.t += dt;
+      const sp = Math.min(14, this.t * 6);
+      if (this.t > 1) { fake.pos.x += Math.sin(fake.heading) * sp * dt; fake.pos.z += Math.cos(fake.heading) * sp * dt; fake.pos.y = game.city.groundY(fake.pos.x, fake.pos.z); }
+      car.g.position.copy(fake.pos); car.g.rotation.y = fake.heading;
+      siren.forEach((o, i) => { o.visible = Math.floor(this.t * 6 + i) % 2 === 0; });
+      p.pos.copy(fake.pos);
+      seatRoach(p.roach, fake); p.roach.update(dt, 0, {});
+    },
+  };
+  await new Promise((r) => setTimeout(r, 4200));
+  game.cutscene = null;
+  scene.remove(car.g);
+  unseatRoach(p.roach);
+  await enterBuilding(game.city.buildings[m.prison], { jail: true });
+  game.busy = false;
+  ui.toast('🔒 감방에 들어왔어요. 60초 뒤에 석방돼요');
+}
+async function releaseFromJail() {
+  if (!game.jail) return;
+  game.jail = null;
+  ui.jailHud(null);
+  if (game.mode === 'interior' && game.interior.building.type === 'prison') await exitBuilding();
+  ui.lootBanner('🔓 석방!', '이제 착하게 살아요 🙏', '#43a047', '');
 }
 
 // ------------------------------------------------------------------
@@ -1681,8 +1736,20 @@ function frame() {
   if (game.slowT > 0) { game.slowT -= dt; p.speedBonus = -0.55; } else if (game.slowWas) game.sendProfile();
   game.slowWas = game.slowT > 0;
   const before = p.pos.clone();
-  if (!game.dead) p.update(dt, input, world);
+  if (game.cutscene) game.cutscene.update(dt);
+  else if (!game.dead) p.update(dt, input, world);
   else p.roach.update(dt, 0, {});
+  if (game.jail) {
+    const left = Math.max(0, Math.ceil((game.jail.until - Date.now()) / 1000));
+    ui.jailHud(left);
+    // 어떤 경우에도 감방 밖으로 못 나가게 (벽·철창 콜라이더의 안전장치)
+    const r = game.jail.cell;
+    if (r && game.mode === 'interior') {
+      p.pos.x = Math.min(r.maxX, Math.max(r.minX, p.pos.x)); p.pos.z = Math.min(r.maxZ, Math.max(r.minZ, p.pos.z));
+      p.flying = false;
+    }
+    if (left <= 0 && Date.now() - game.jail.until > 4000) releaseFromJail();
+  }
   // 이동 거리 퀘스트
   const moved = Math.hypot(p.pos.x - before.x, p.pos.z - before.z);
   if (moved < 5) {
