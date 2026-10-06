@@ -643,7 +643,12 @@ window.addEventListener('keydown', (e) => {
   if (game.flip && (e.code === 'ArrowLeft' || e.code === 'ArrowRight' || e.code === 'KeyA' || e.code === 'KeyD') && !e.repeat) { mashFlip(e.code === 'ArrowLeft' || e.code === 'KeyA' ? 'L' : 'R'); e.preventDefault(); return; }
   const k = KEYMAP[e.code];
   if (k) {
-    if (k === 'jump' && !game.input.jump) game.input.jumpPressed = true;
+    if (k === 'jump' && !game.input.jump) {
+      // Space 두 번 연속(0.3초 안) → 날기 / 날고 있으면 날개 접고 떨어지기
+      const now = performance.now();
+      if (game.started && now - (game.lastSpace || 0) < 300 && game.mode === 'city' && !game.player?.inCar) { game.lastSpace = 0; toggleFly(); }
+      else { game.input.jumpPressed = true; game.lastSpace = now; }
+    }
     game.input[k] = true;
     if (e.code === 'Space') e.preventDefault();
     if (['forward', 'back', 'left', 'right'].includes(k) && game.autoWalk) { game.autoWalk = false; ui.toast('🚶 자동 이동을 멈췄어요'); }
@@ -749,10 +754,11 @@ function findFocus() {
     for (const b of game.city.buildings) {
       if (b.type === 'park') continue;
       const d = Math.hypot(b.door.x - pos.x, b.door.z - pos.z);
-      if (d < 3.2) {
+      // 공중(날기·점프 중, 옥상 위)에서는 들어갈 수 없다
+      if (d < 3.2 && !p.flying && pos.y - b.door.y < 1.2) {
         const n = game.sim.citizens.filter((c) => c.location === b && c.mode === 'inside').length;
         const pl = [...game.players.list.values()].filter((o) => o.loc === b.id).length;
-        const lock = b.type === 'club' ? ` (매력 ${CLUB_CHARM}+)` : '';
+        const lock = b.type === 'club' && CLUB_CHARM > 0 ? ` (매력 ${CLUB_CHARM}+)` : '';
         opts.push({ kind: 'door', b, d, label: `들어가기 · ${b.def.emoji} ${b.name}${lock}${n ? ` (${n}명)` : ''}${pl ? ` 🎮${pl}` : ''}` });
       }
     }
@@ -1198,9 +1204,8 @@ function computeBadges() {
 function toggleFly() {
   const p = game.player;
   if (p.inCar) return;
-  if (p.flying) { p.flying = false; ui.toast('🪽 날개를 접었어요'); return; }
-  if (game.stats.needs.energy < 10) { ui.toast('😪 너무 지쳐서 날 수 없어요'); return; }
-  if (p.takeOff()) ui.toast('🪽 날기! Space 위로 · X 아래로 · Shift 빠르게 · G 착지');
+  if (p.flying) { p.flying = false; p.vy = 0; p.onGround = false; p.jumps = p.maxJumps; ui.toast('🪽 날개를 접었어요 — 떨어진다!'); return; }
+  if (p.takeOff()) ui.toast('🪽 날기! Space 꾹 위로 · X 아래로 · Shift 빠르게 · Space 두 번 = 날개 접기');
 }
 function toggleView() {
   const p = game.player;
@@ -1635,7 +1640,9 @@ function frame() {
   game.mouseT = Math.max(0, (game.mouseT || 0) - dt);
   const p = game.player;
   const panel = ui.anyPanelOpen() || typing();
-  const blocked = panel || game.busy || game.dead;
+  // 지도만 열어 둔 채 자동 이동 중이면 계속 걸어간다
+  const mapOnly = game.autoWalk && ui.modalKind === 'map' && !document.getElementById('modal').classList.contains('hidden') && document.getElementById('phone').classList.contains('hidden') && !typing();
+  const blocked = (panel && !mapOnly) || game.busy || game.dead;
   const input = blocked ? NO_INPUT : game.input;
   input.enabled = !blocked;
   input.moveDir = blocked ? null : autoWalkDir();

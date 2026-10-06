@@ -62,6 +62,7 @@ export class Player {
     }
     if (this.roach.seated) { this.roach.setSeated(false); this.roach.root.scale.setScalar(this.roach.baseScale); }
     this.roach.root.visible = true;
+    if (this.climb) { this.updateClimb(dt, input, world); return; }
     const yaw = this.cam.yaw;
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
     const rx = Math.cos(yaw), rz = -Math.sin(yaw);
@@ -77,7 +78,7 @@ export class Player {
     let speed = 0;
     if (len > 0) {
       mx /= len; mz /= len;
-      speed = this.flying ? (input.run ? 19 : 11) : (input.run || input.moveDir ? 9.5 : 5.2) * (1 + this.speedBonus);
+      speed = this.flying ? (input.run ? 19 : 11) : (input.run || input.moveDir ? 9.5 : 5.2) * (1 + this.speedBonus) * (this.swimming ? 0.55 : 1);
       if (world.tired) speed *= 0.6;
       this.heading = Math.atan2(mx, mz);
     }
@@ -86,7 +87,7 @@ export class Player {
     // 대쉬
     this.dashCool -= dt;
     if (input.enabled && input.dashPressed && this.canDash && this.dashCool <= 0 && !this.flipped) {
-      this.dashT = 0.2; this.dashCool = 0.9;
+      this.dashT = 0.2; this.dashCool = 0.35;
       this.dashDir = { x: Math.sin(this.heading), z: Math.cos(this.heading) };
       if (this.vy < 0) this.vy = 0;
       this.roach.jumpSquash = 1;
@@ -101,7 +102,10 @@ export class Player {
     }
 
     // 점프 & 중력 (여러 단 점프)
-    const gy = this.groundAt(world, this.pos.x, this.pos.z, this.pos.y);
+    let gy = this.groundAt(world, this.pos.x, this.pos.z, this.pos.y);
+    // 깊은 물에서는 헤엄친다
+    this.swimming = world.water !== undefined && gy < world.water - 0.7 && !this.flying;
+    if (this.swimming) gy = world.water - 0.55;
     this.flyDist = 0;
     if (this.flying) {
       // 날기: Space 위로, X 아래로. 땅에 닿으면 착지
@@ -127,7 +131,16 @@ export class Player {
     this.airJump = Math.max(0, (this.airJump || 0) - dt);
 
     // 충돌 (발 아래보다 높은 발판은 벽)
+    this.wallHit = null;
     this.collide(world.colliders);
+    // 벽을 향해 계속 걸으면 바퀴벌레답게 벽을 타고 오른다
+    if (this.wallHit && len > 0 && !this.flying && !this.flipped && input.enabled && world.climbable !== false) {
+      const w = this.wallHit;
+      if (mx * w.nx + mz * w.nz < -0.6 && (w.c.top ?? w.c.h ?? 0) > this.pos.y + 1.2) {
+        this.wallPush = (this.wallPush || 0) + dt;
+        if (this.wallPush > 0.25) { this.climb = { c: w.c, nx: w.nx, nz: w.nz, top: w.c.top ?? w.c.h }; this.wallPush = 0; this.vy = 0; }
+      } else this.wallPush = 0;
+    } else this.wallPush = 0;
     if (world.platforms) this.collide(world.platforms.filter((p) => this.pos.y < p.top - 0.45).map((p) => ({ ...p, h: p.top })), true);
     if (world.bounds) {
       const b = world.bounds;
@@ -147,6 +160,41 @@ export class Player {
     root.rotation.y = angleLerp(root.rotation.y, this.heading, Math.min(1, dt * 14));
     this.roach.flying = this.flying; this.roach.flipped = this.flipped;
     this.roach.update(dt, this.dashT > 0 ? 14 : this.speed, { airborne: !this.onGround && (this.airJump > 0 || this.dashT > 0), noCrawl: this.flying });
+    root.visible = !this.fp && !(this.adsFP && this.aim > 0.75);
+  }
+
+  // 벽 타기: W 위로 · S 아래로 · A/D 옆으로 · Space 뛰어내리기
+  updateClimb(dt, input, world) {
+    const C = this.climb;
+    const f = input.enabled ? (input.forward ? 1 : 0) - (input.back ? 1 : 0) : 0;
+    const sd = input.enabled ? (input.right ? 1 : 0) - (input.left ? 1 : 0) : 0;
+    // 화면 기준 오른쪽 = 벽을 바라볼 때 오른쪽
+    const tx = -C.nz, tz = C.nx;
+    this.pos.y += f * 4.2 * dt;
+    this.pos.x += tx * sd * 3 * dt; this.pos.z += tz * sd * 3 * dt;
+    // 벽에 붙어 있게
+    const c = C.c, r = this.radius;
+    const cx = Math.max(c.minX, Math.min(this.pos.x, c.maxX)), cz = Math.max(c.minZ, Math.min(this.pos.z, c.maxZ));
+    this.pos.x = cx + C.nx * r; this.pos.z = cz + C.nz * r;
+    this.heading = Math.atan2(-C.nx, -C.nz);
+    this.speed = Math.abs(f) + Math.abs(sd) > 0 ? 3 : 0;
+    const gy = this.groundAt(world, this.pos.x, this.pos.z, 0);
+    if (input.enabled && input.jumpPressed) {
+      this.climb = null; this.vy = 6; this.onGround = false; this.jumps = 1;
+      this.pos.x += C.nx * 1.2; this.pos.z += C.nz * 1.2;
+    } else if (this.pos.y >= C.top - 0.05) {
+      // 옥상으로 올라선다
+      this.climb = null; this.pos.y = C.top; this.vy = 0; this.onGround = true;
+      this.pos.x -= C.nx * 1.0; this.pos.z -= C.nz * 1.0;
+    } else if (this.pos.y <= gy + 0.02 && f < 0) { this.climb = null; this.pos.y = gy; }
+    // 벽 모서리를 벗어나면 떨어진다
+    if (this.climb && ((Math.abs(C.nx) > 0.5 && (this.pos.z < c.minZ - 0.1 || this.pos.z > c.maxZ + 0.1)) || (Math.abs(C.nz) > 0.5 && (this.pos.x < c.minX - 0.1 || this.pos.x > c.maxX + 0.1)))) this.climb = null;
+    const root = this.roach.root;
+    root.position.copy(this.pos);
+    root.rotation.y = this.heading;
+    this.roach.climbing = !!this.climb;
+    this.roach.flying = false;
+    this.roach.update(dt, this.speed, { noCrawl: true });
     root.visible = !this.fp;
   }
 
@@ -157,7 +205,9 @@ export class Player {
     const r = this.radius;
     for (const c of colliders) {
       if (this.pos.x < c.minX - r || this.pos.x > c.maxX + r || this.pos.z < c.minZ - r || this.pos.z > c.maxZ + r) continue;
+      if (c.broken) continue;
       if (!plat && c.h !== undefined && this.pos.y > c.h) continue;
+      if (!plat && c.top !== undefined && this.pos.y >= c.top - 0.4) continue; // 옥상 위
       const cx = clamp(this.pos.x, c.minX, c.maxX), cz = clamp(this.pos.z, c.minZ, c.maxZ);
       let dx = this.pos.x - cx, dz = this.pos.z - cz;
       let d = Math.hypot(dx, dz);
@@ -166,8 +216,10 @@ export class Player {
         const opts = [[c.minX - r - this.pos.x, 0], [c.maxX + r - this.pos.x, 0], [0, c.minZ - r - this.pos.z], [0, c.maxZ + r - this.pos.z]];
         opts.sort((a, b) => Math.abs(a[0] + a[1]) - Math.abs(b[0] + b[1]));
         this.pos.x += opts[0][0]; this.pos.z += opts[0][1];
+        if (!plat && !c.small) { const L = Math.hypot(opts[0][0], opts[0][1]) || 1; this.wallHit = { c, nx: opts[0][0] / L, nz: opts[0][1] / L }; }
       } else if (d < r) {
         this.pos.x = cx + (dx / d) * r; this.pos.z = cz + (dz / d) * r;
+        if (!plat && !c.small) this.wallHit = { c, nx: dx / d, nz: dz / d };
       }
     }
   }

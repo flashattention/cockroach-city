@@ -7,7 +7,7 @@ export const QUEST_POOL = [
   { id: 'photo2', text: '📷 사진 2장 찍기 (P)', ev: 'photo', n: 2, xp: 90, money: 20 },
   { id: 'insta1', text: '📸 인스타그램에 사진 올리기', ev: 'insta', n: 1, xp: 130, money: 40 },
   { id: 'range300', text: '🎯 사격장에서 300점 넘기기', ev: 'range', n: 300, max: true, xp: 220, money: 60 },
-  { id: 'fly300', text: '🪽 하늘을 300m 날기 (G)', ev: 'fly', n: 300, xp: 150, money: 40 },
+  { id: 'fly300', text: '🪽 하늘을 300m 날기 (Space 두 번)', ev: 'fly', n: 300, xp: 150, money: 40 },
   { id: 'buy1', text: '🛍️ 상점에서 물건 사기', ev: 'buy', n: 1, xp: 60, money: 10 },
   { id: 'takeout2', text: '🥡 음식 2개 포장하기', ev: 'takeout', n: 2, xp: 80, money: 20 },
   { id: 'walk800', text: '🏃 800m 걷거나 달리기', ev: 'walk', n: 800, xp: 90, money: 20 },

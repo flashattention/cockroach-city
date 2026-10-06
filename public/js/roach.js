@@ -1145,6 +1145,15 @@ export class Roach {
       this.legs[0].rotation.x = 0.5 + Math.sin(this.t * 5) * 0.2; this.legs[1].rotation.x = 0.5 - Math.sin(this.t * 5) * 0.2;
       if (this.heldPose === 'none') for (let i = 0; i < 4; i++) { this.arms[i].rotation.x = 0.4 + Math.sin(this.t * 7 + i) * 0.2; }
     }
+    // 벽 타기: 여섯 다리를 활짝 벌리고 번갈아 움직인다
+    if (this.climbing) {
+      const w = Math.sin(this.phase * 1.3);
+      for (let i = 0; i < 4; i++) { this.arms[i].rotation.x = -1.9 + (i % 2 ? w : -w) * 0.5; this.arms[i].rotation.z = this.arms[i].userData.baseZ * 1.8; }
+      this.legs[0].rotation.x = -0.4 + w * 0.5; this.legs[1].rotation.x = -0.4 - w * 0.5;
+      this.legs[0].rotation.z = -0.5; this.legs[1].rotation.z = 0.5;
+      this.inner.position.y = 0.1;
+      this.head.rotation.x = -0.3;
+    } else { this.legs[0].rotation.z = 0; this.legs[1].rotation.z = 0; }
     // 차에 치여 뒤집힘: 등을 대고 누워 다리를 버둥버둥
     if (this.flipped) {
       this.inner.rotation.x = -Math.PI / 2 * 0.95;
