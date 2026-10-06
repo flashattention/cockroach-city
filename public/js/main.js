@@ -19,7 +19,7 @@ import { DAYS, clamp, lerp, angleLerp, windowMaterials, retitleSign } from './ut
 import { expNeed, levelStats, addExp } from './level.js';
 import { dailyQuests, questDef } from './quests.js';
 import { SPORT_KINDS, vehicleName, CAR_KINDS } from './traffic.js';
-import { DROP_POOL } from './items.js';
+import { DROP_POOL, FISH } from './items.js';
 import { buildWilds, renderWorldImage } from './wilds.js';
 import { AnimalsView } from './animals.js';
 import { WORLD_HALF, WATER_Y, regionAt } from './terrain.js';
@@ -706,6 +706,8 @@ function useSelected(down) {
     if (game.eating) return;
     game.inv.consume(it.uid);
     eatFood(it.id, 2.6, false);
+  } else if (d.cat === 'rod') {
+    fishAction(d);
   } else if (d.cat === 'carkey') {
     summonCar(it);
   } else if (d.cat === 'key') {
@@ -908,6 +910,7 @@ async function doAction(a) {
   if (a.houses) { ui.openHouses(); return; }
   if (a.restyle) { ui.openStyle(a.cost); return; }
   if (a.sell) { ui.openSell(); return; }
+  if (a.cookFish) { ui.openCookFish(a.cookFish); return; }
   if (a.dealer) { ui.openDealer(); return; }
   if (a.rangeStart) { startRange(); return; }
   if (a.rangeRent) {
@@ -1032,6 +1035,7 @@ game.buy = async (id) => {
   if (d.slot && it && !game.stats.equip[d.slot]) game.inv.equip(it.uid);
   let gift = '';
   if (d.ammo) { const a = itemDef(d.ammo); game.inv.add(d.ammo, a.pack); gift = ` + ${a.name.replace(/ ×\d+$/, '')} ${a.pack}발 증정!`; }
+  if (d.cat === 'rod') { game.inv.add('bait', 10); gift = ' + 🪱 미끼 10개 증정! 물을 바라보고 클릭하면 던져요'; }
   ui.toast(`${d.emoji} ${d.name}을(를) 샀어요!${gift}${d.slot ? ' (I키 가방에서 장착)' : ''}`);
   return true;
 };
@@ -1277,6 +1281,95 @@ game.hitRangeTarget = (t, point) => {
   if (!game.range) { ui.scorePop(`${pts === 100 ? '🎯 정중앙!' : '명중!'} (연습)`, '#fff'); return; }
   game.range.score += pts + bonus; game.range.hits++;
   ui.scorePop(pts === 100 ? `🎯 BULLSEYE +${pts + bonus}` : `+${pts + bonus}`, pts === 100 ? '#ffd54f' : '#fff');
+};
+
+// ------------------------------------------------------------------
+// 낚시: 물가에서 낚싯대 사용 → 기다리다 "입질!" 때 클릭
+// ------------------------------------------------------------------
+function fishAction(rod) {
+  const F = game.fishing, p = game.player;
+  if (F) {
+    if (F.state === 'bite') {
+      const ok = Math.random() < rod.rodLuck;
+      endFishing();
+      if (!ok) { ui.toast('💨 앗! 줄이 끊어졌어요... 다시 던져봐요'); return; }
+      catchFish(rod, F.sea);
+    } else { endFishing(); ui.toast('🎣 낚싯줄을 감았어요'); }
+    return;
+  }
+  if (game.mode !== 'city' || p.inCar || p.flying) { ui.toast('🎣 물가에서 써요 (바퀴 낚시터, 호수, 강, 바다)'); return; }
+  if (game.inv.count('bait') <= 0) { ui.toast('🪱 미끼가 없어요! 낚시용품점에서 지렁이 미끼를 사세요'); return; }
+  // 바라보는 방향의 물 찾기
+  let spot = null;
+  for (let d = 2.5; d <= 12; d += 0.5) {
+    const x = p.pos.x + Math.sin(p.heading) * d, z = p.pos.z + Math.cos(p.heading) * d;
+    if (game.city.groundY(x, z, -50) < WATER_Y - 0.35) { spot = new THREE.Vector3(x, WATER_Y, z); break; }
+  }
+  if (!spot) { ui.toast('🌊 물을 바라보고 던져야 해요! 물가에 가까이 가세요'); return; }
+  game.inv.consumeId('bait', 1);
+  const bob = new THREE.Group();
+  const red = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshToonMaterial({ color: '#ff1744' }));
+  const white = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), new THREE.MeshToonMaterial({ color: '#ffffff' }));
+  bob.add(red, white); bob.position.copy(spot); scene.add(bob);
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([p.pos, spot]), new THREE.LineBasicMaterial({ color: '#eeeeee' }));
+  scene.add(line);
+  game.fishing = { state: 'wait', t: 3 + Math.random() * 7, bob, line, spot, from: p.pos.clone(), sea: spot.x > 290 };
+  p.roach.attack('throw');
+  ui.toast('🎣 휙~ 찌가 물 위에 떴어요. 입질을 기다려요...');
+}
+function updateFishing(dt) {
+  const F = game.fishing;
+  if (!F) return;
+  const p = game.player;
+  if (p.pos.distanceTo(F.from) > 4 || game.mode !== 'city' || p.inCar) { endFishing(); ui.toast('🎣 자리를 떠서 낚시를 그만뒀어요'); return; }
+  F.t -= dt;
+  const now = performance.now() / 1000;
+  if (F.state === 'wait') {
+    F.bob.position.y = WATER_Y + Math.sin(now * 3) * 0.04;
+    if (F.t <= 0) { F.state = 'bite'; F.t = 1.4; ui.scorePop('❗ 입질! 지금 클릭!', '#ffd54f'); game.shake(0.15); p.roach.reel = true; }
+  } else if (F.state === 'bite') {
+    F.bob.position.y = WATER_Y - 0.15 + Math.sin(now * 25) * 0.12;
+    if (F.t <= 0) { endFishing(); ui.toast('🐟 물고기가 미끼만 먹고 도망갔어요!'); }
+  }
+  const tip = p.roach.rodTip ? p.roach.rodTip.getWorldPosition(new THREE.Vector3()) : p.pos.clone().setY(p.pos.y + 2);
+  F.line.geometry.setFromPoints([tip, F.bob.position]);
+}
+function endFishing() {
+  const F = game.fishing;
+  if (!F) return;
+  scene.remove(F.bob); scene.remove(F.line); F.line.geometry.dispose();
+  game.player.roach.reel = false;
+  game.fishing = null;
+}
+function catchFish(rod, sea) {
+  if (Math.random() < 0.04) { game.inv.add('fish_boot', 1); ui.toast('🥾 ...낡은 장화를 낚았어요'); return; }
+  const pool = FISH.filter((f) => f[8] === (sea ? 'sea' : 'fresh') && f[7] <= rod.tier);
+  const total = pool.reduce((a, f) => a + f[3], 0);
+  let r = Math.random() * total, pick = pool[0];
+  for (const f of pool) { r -= f[3]; if (r <= 0) { pick = f; break; } }
+  const [id, name, emoji, w, sell, raw, spicy] = pick;
+  const cm = Math.round((id === 'shark' ? 180 : id === 'tuna' ? 120 : 20) * (0.7 + Math.random() * 0.8));
+  game.inv.add('fish_' + id, 1);
+  const rare = w <= 2 ? '#ff1744' : w <= 5 ? '#ffab00' : '#29b6f6';
+  ui.lootBanner(`${emoji} ${name} ${cm}cm 낚았다!`, `판매가 ₩${sell.toLocaleString()} · ${id === 'shark' ? '상어는 먹을 수 없어요 (팔기만)' : [raw && '회 가능', spicy && '매운탕 가능'].filter(Boolean).join(' · ') || '팔거나 보관'}`, rare, '');
+  game.combat.fx.sparkle(game.player.pos.clone().setY(game.player.pos.y + 1), '#4fc3f7', 16, 2);
+  gainExp(Math.round(10 + sell / 25), '낚시');
+  game.questEvent('fish');
+  game.stats.fishCaught = (game.stats.fishCaught || 0) + 1;
+}
+// 매운탕·횟집에서 잡아온 물고기 요리
+game.cookFish = async (uid, kind, eatNow) => {
+  const it = game.inv.find(uid);
+  if (!it) return;
+  const d = itemDef(it.id);
+  const fee = kind === 'spicy' ? 10 : 8;
+  if (game.stats.money < fee) { ui.toast('💸 수고비가 부족해요'); return; }
+  game.stats.money -= fee;
+  game.inv.remove(uid, 1);
+  const dish = kind === 'spicy' ? 'maeuntang' : 'sashimi';
+  ui.toast(`${kind === 'spicy' ? '🍲' : '🍣'} 사장님이 ${d.name}${kind === 'spicy' ? ' 매운탕을 보글보글 끓였어요!' : '을 슥슥 회 떴어요!'}`);
+  if (eatNow) { ui.closeModal(); await game.eatIn(dish); }
+  else { game.inv.add(dish, 1); ui.toast('🥡 포장해서 가방에 넣었어요'); }
 };
 
 // ------------------------------------------------------------------
@@ -1586,6 +1679,7 @@ function frame() {
   game.combat.update(dt);
   updateCourse(dt);
   updateRange(dt);
+  updateFishing(dt);
   game.secT = (game.secT || 0) - dt;
   if (game.secT <= 0) {
     game.secT = 1;

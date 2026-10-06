@@ -13,7 +13,7 @@ import { RNG } from './utils.js';
 // 주말에 쉬는 직장
 const WEEKDAY_ONLY = new Set(['school', 'kindergarten', 'university', 'office', 'bank', 'court', 'cityhall', 'postoffice', 'lab', 'factory', 'construction', 'realestate']);
 const LEISURE_TYPES = ['cafe', 'restaurant', 'pizza', 'chicken', 'chinese', 'gukbap', 'burger', 'bunsik', 'bakery', 'park', 'library', 'gym', 'cinema', 'supermarket', 'convenience', 'bookstore', 'museum', 'gallery', 'salon', 'clothing', 'concerthall', 'flowershop', 'bank', 'postoffice', 'pharmacy', 'hospital', 'hatshop', 'eyewear', 'jeweler', 'dojang', 'armory_3k', 'armory_mil', 'armory_sf'];
-const MEAL_TYPES = ['restaurant', 'cafe', 'bakery', 'convenience', 'pizza', 'chicken', 'chinese', 'gukbap', 'burger', 'bunsik'];
+const MEAL_TYPES = ['seafood', 'restaurant', 'cafe', 'bakery', 'convenience', 'pizza', 'chicken', 'chinese', 'gukbap', 'burger', 'bunsik'];
 
 const inHours = (h, [a, b]) => (a <= b ? h >= a && h < b : h >= a || h < b);
 

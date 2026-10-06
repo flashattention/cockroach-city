@@ -170,6 +170,16 @@ export const ITEMS = {
   wand_dark: { name: '어둠 지팡이', emoji: '🌑', cat: 'wand', shop: 'magicshop', price: 4200, dmg: 65, radius: 2.5, rate: 1.4, range: 70, kind: 'magic', element: 'dark', mana: 28, held: 'wand:#7e57c2', sockets: 3, skill: '암흑구 — 느리지만 강력한 유도 구체' },
   mana_potion: { name: '마나 물약', emoji: '🧪', cat: 'food', shop: 'magicshop', price: 25, stack: true, food: {}, heal: 0, mana: 60, eat: ['drink', 'cup:#5c6bc0'] },
 
+  // ---------------- 낚시 ----------------
+  rod_bamboo: { name: '대나무 낚싯대', emoji: '🎣', cat: 'rod', shop: 'fishing', price: 150, tier: 0, held: 'rod:#c8a165', rodLuck: 0.75 },
+  rod_carbon: { name: '카본 낚싯대', emoji: '🎣', cat: 'rod', shop: 'fishing', price: 1200, tier: 1, held: 'rod:#37474f', rodLuck: 0.86 },
+  rod_gold: { name: '황금 낚싯대', emoji: '✨', cat: 'rod', shop: 'fishing', price: 6000, tier: 2, held: 'rod:#ffd54f', rodLuck: 0.95 },
+  bait: { name: '지렁이 미끼 ×10', emoji: '🪱', cat: 'ammo', shop: 'fishing', price: 20, stack: true, pack: 10 },
+  maeuntang: { name: '매운탕', emoji: '🍲', cat: 'food', price: 0, stack: true, food: { hunger: 75, fun: 10 }, heal: 30, eat: ['spoon', 'bowl:#d84315'] },
+  sashimi: { name: '모둠회', emoji: '🍣', cat: 'food', price: 0, stack: true, food: { hunger: 45, fun: 18 }, heal: 20, eat: ['chopsticks', 'plate:#ffab91'] },
+  seafood_set: { name: '매운탕 정식', emoji: '🍲', cat: 'food', shop: 'seafood', price: 18, stack: true, food: { hunger: 75, fun: 10 }, heal: 30, eat: ['spoon', 'bowl:#d84315'] },
+  sashimi_set: { name: '광어·우럭 모둠회', emoji: '🍣', cat: 'food', shop: 'seafood', price: 30, stack: true, food: { hunger: 45, fun: 18 }, heal: 20, eat: ['chopsticks', 'plate:#ffab91'] },
+
   // ---------------- 사냥 전리품 (사냥꾼 오두막에서 팔 수 있어요) ----------------
   bear_hide: { name: '곰가죽', emoji: '🐻', cat: 'loot', price: 0, sell: 420, stack: true },
   bear_meat: { name: '곰고기', emoji: '🥩', cat: 'food', price: 0, sell: 70, stack: true, food: { hunger: 60, fun: 6 }, heal: 20, eat: ['drumstick', 'drumstick:#8d3b2f'] },
@@ -209,6 +219,33 @@ export const ITEMS = {
 };
 
 Object.assign(ITEMS, BASIC_ITEMS);
+// 물고기 22종: [id, 이름, 이모지, 잡힐 확률 가중치, 판매가, 회 가능, 매운탕 가능, 필요한 낚싯대 등급, 바다/민물]
+export const FISH = [
+  ['shark', '상어', '🦈', 1, 2500, false, false, 2, 'sea'],
+  ['tuna', '참치', '🐟', 1.6, 1800, true, false, 1, 'sea'],
+  ['octopus', '문어', '🐙', 5, 350, true, false, 0, 'sea'],
+  ['rock_bream', '돌돔', '🐟', 4, 600, true, false, 1, 'sea'],
+  ['red_snapper', '참돔', '🐠', 6, 450, true, true, 0, 'sea'],
+  ['flatfish', '광어', '🐟', 10, 300, true, true, 0, 'sea'],
+  ['rockfish', '우럭', '🐟', 12, 250, true, true, 0, 'sea'],
+  ['mackerel', '고등어', '🐟', 16, 80, true, false, 0, 'sea'],
+  ['hairtail', '갈치', '🐟', 8, 150, false, false, 0, 'sea'],
+  ['squid', '오징어', '🦑', 10, 120, true, false, 0, 'sea'],
+  ['yellowtail', '방어', '🐟', 4, 500, true, false, 1, 'sea'],
+  ['pufferfish', '복어', '🐡', 4, 400, false, true, 0, 'sea'],
+  ['gizzard_shad', '전어', '🐟', 12, 70, true, false, 0, 'sea'],
+  ['cod', '대구', '🐟', 6, 200, false, true, 0, 'sea'],
+  ['monkfish', '아귀', '🐟', 5, 220, false, true, 0, 'sea'],
+  ['trout', '송어', '🐟', 12, 150, true, false, 0, 'fresh'],
+  ['carp', '잉어', '🐟', 14, 100, false, true, 0, 'fresh'],
+  ['catfish', '메기', '🐟', 10, 130, false, true, 0, 'fresh'],
+  ['crucian', '붕어', '🐟', 16, 60, false, true, 0, 'fresh'],
+  ['mandarin', '쏘가리', '🐟', 4, 400, true, true, 1, 'fresh'],
+  ['eel', '민물장어', '🐍', 3, 450, false, false, 1, 'fresh'],
+  ['smelt', '빙어', '🐟', 14, 40, true, false, 0, 'fresh'],
+];
+for (const [id, name, emoji, , sell, raw, spicy] of FISH) ITEMS['fish_' + id] = { name, emoji, cat: 'fish', price: 0, sell, stack: true, raw, spicy, fish: true };
+ITEMS.fish_boot = { name: '낡은 장화', emoji: '🥾', cat: 'loot', price: 0, sell: 5, stack: true };
 // 바퀴 모터스 쇼룸 자동차 (사면 차 키를 받아 언제든 호출)
 export const DEALER_CARS = [
   ['sport_b', '🏎️', 90000], ['sport_l', '🐂', 45000], ['sport_f', '🐎', 40000], ['sport_m', '🏁', 38000], ['sport_p', '🏎️', 28000],
@@ -237,6 +274,8 @@ export const GEMS = {
 export const ENCHANT_FEE = 100;
 
 export const SHOPS = {
+  fishing: { title: '낚시용품점', subtitle: '낚싯대 · 미끼 · 물고기 매입' },
+  seafood: { title: '매운탕·횟집', subtitle: '잡아온 물고기로 매운탕·회 · 정식 판매' },
   hunter: { title: '사냥꾼 오두막', subtitle: '사냥 장비 · 전리품 매입' },
   ranch: { title: '바퀴 목장 직판장', subtitle: '우유 · 치즈 · 스테이크' },
   magicshop: { title: '마법봉 공방', subtitle: '속성 지팡이 · 마나 물약' },

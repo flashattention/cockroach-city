@@ -93,6 +93,8 @@ const STYLE = {
   dojang: ['wood', '#d7b98e', '#caa979', '#fff3e0'],
   range: ['concrete', '#9e9e9e', '#8d8d8d', '#cfd8c4'],
   hunter: ['wood', '#8d6e63', '#795548', '#d7ccc8'],
+  fishing: ['wood', '#b3e5fc', '#81d4fa', '#e1f5fe'],
+  seafood: ['tile', '#fff3e0', '#ffccbc', '#fff8e1'],
   ranch: ['wood', '#d7b98e', '#caa979', '#fff8e1'],
   magicshop: ['wood', '#4527a0', '#311b92', '#ede7f6'],
   dealer: ['tile', '#fafafa', '#e0e0e0', '#eceff1'],

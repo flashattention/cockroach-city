@@ -859,6 +859,30 @@ const BUILDERS = {
     void ctx;
   },
 
+  fishing(g, b, ctx) {
+    const h = shell(g, b.w, b.d, b.floors, '#e1f5fe', { roofColor: '#0277bd', frontStart: 1 });
+    shopFront(g, b);
+    awning(g, b, '#0277bd', '#ffffff');
+    roofSign(g, b, h, '#0277bd', '#ffffff');
+    // 커다란 물고기 간판 + 낚싯대 진열
+    const f = new THREE.Group(); f.position.set(b.w / 2 - 2.5, h + 1.4, -0.5); g.add(f);
+    sph(f, 1.6, 0.9, 0.5, '#4fc3f7', 0, 0, 0); cone(f, 0.8, 1.2, '#29b6f6', -1.9, 0, 0).rotation.z = Math.PI / 2;
+    sph(f, 0.18, 0.18, 0.1, '#ffffff', 1.0, 0.25, 0.4, { low: true });
+    for (let i = 0; i < 4; i++) cyl(g, 0.04, 3.2, '#5d4037', -b.w / 2 + 1 + i * 0.4, 1.6, b.d / 2 + 0.6, { rz: 0.15, low: true });
+    void ctx;
+  },
+
+  seafood(g, b, ctx) {
+    const h = shell(g, b.w, b.d, b.floors, '#fff3e0', { roofColor: '#d84315', frontStart: 1 });
+    shopFront(g, b, { door: '#d84315' });
+    awning(g, b, '#d84315', '#fff3e0');
+    roofSign(g, b, h, '#d84315', '#ffffff');
+    // 앞 수족관
+    const tank = new THREE.Mesh(G.box(), new THREE.MeshToonMaterial({ color: '#81d4fa', transparent: true, opacity: 0.55 }));
+    tank.scale.set(3, 1.6, 1.2); tank.position.set(-b.w / 2 + 2.2, 0.9, b.d / 2 + 1.2); g.add(tank);
+    for (let i = 0; i < 4; i++) sph(g, 0.25, 0.12, 0.08, ['#ff7043', '#90a4ae', '#ffca28', '#8d6e63'][i], -b.w / 2 + 1.2 + i * 0.6, 0.6 + (i % 2) * 0.5, b.d / 2 + 1.2, { low: true });
+    void ctx;
+  },
 
   range(g, b, ctx) {
     const h = shell(g, b.w, b.d, b.floors, '#cfd8c4', { roofColor: '#556b2f', frontStart: 1 });

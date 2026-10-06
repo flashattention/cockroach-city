@@ -831,7 +831,7 @@ export class UI {
       const d = itemDef(sel.id);
       const hb = S.hotbar.indexOf(sel.uid);
       const eq = inv.isEquipped(sel.uid);
-      const usable = isWeapon(d) || ['food', 'doll', 'carkey', 'key'].includes(d.cat);
+      const usable = isWeapon(d) || ['food', 'doll', 'carkey', 'key', 'rod'].includes(d.cat);
       detail = `<div class="inv-detail"><div class="big">${d.emoji}</div><b>${escapeHtml(nameOf(sel, d))}${(sel.n || 1) > 1 ? ` ×${sel.n}` : ''}</b><small>${statLine(d, sel) || (d.price ? `가격 ₩${d.price}` : '')}</small>
         <div class="acts">
           ${d.slot ? `<button class="btn" data-eq="${sel.uid}">${eq ? '장착 해제' : '장착하기'}</button>` : ''}
@@ -1191,6 +1191,19 @@ export class UI {
     $('sell-close').onclick = () => this.closeModal();
     $('modal-inner').querySelectorAll('[data-s1]').forEach((b) => { b.onclick = () => { g.sell(b.dataset.s1, 1); this.openSell(); }; });
     $('modal-inner').querySelectorAll('[data-sa]').forEach((b) => { b.onclick = () => { g.sell(b.dataset.sa, 9999); this.openSell(); }; });
+  }
+
+  // ---------------- 잡아온 물고기 요리 ----------------
+  openCookFish(kind) {
+    const g = this.game;
+    const fish = g.stats.items.filter((it) => itemDef(it.id).fish);
+    const ok = (d) => (kind === 'spicy' ? d.spicy : d.raw);
+    this.openModal(`<h3 class="mh">${kind === 'spicy' ? '🌶️ 매운탕 끓이기' : '🔪 회 뜨기'} <small>${kind === 'spicy' ? '매운탕: 참돔·광어·우럭·복어·대구·아귀·잉어·메기·붕어·쏘가리' : '회: 참치·문어·돌돔·참돔·광어·우럭·고등어·오징어·방어·전어·송어·쏘가리·빙어'}</small></h3>
+      <div class="itemlist">${fish.map((it) => { const d = itemDef(it.id); const can = ok(d); return `<div class="item"><div class="ic">${d.emoji}</div><div class="info"><b>${escapeHtml(d.name)} ×${it.n || 1}</b><small>${can ? (kind === 'spicy' ? '매운탕 가능 ✅' : '회 가능 ✅') : it.id === 'fish_shark' ? '🦈 상어는 먹을 수 없어요' : kind === 'spicy' ? '매운탕으로는 안 돼요 ❌' : '회로는 안 돼요 ❌'}</small></div><div class="acts">${can ? `<button class="btn mini" data-eat="${it.uid}">🍽️ 바로 먹기</button><button class="btn mini ghost" data-take="${it.uid}">🥡 포장</button>` : ''}</div></div>`; }).join('') || '<div style="padding:14px">물고기가 없어요. 바퀴 낚시터나 호수에서 낚아 오세요! 🎣</div>'}</div>
+      <div style="margin-top:10px"><button class="btn ghost" id="cf-close">닫기</button></div>`, 'cook');
+    $('cf-close').onclick = () => this.closeModal();
+    $('modal-inner').querySelectorAll('[data-eat]').forEach((b) => { b.onclick = () => g.cookFish(b.dataset.eat, kind, true); });
+    $('modal-inner').querySelectorAll('[data-take]').forEach((b) => { b.onclick = () => { g.cookFish(b.dataset.take, kind, false); this.openCookFish(kind); }; });
   }
 
   shutter() { const f = $('shutter'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }

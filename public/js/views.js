@@ -7,7 +7,7 @@ import { makeCarMesh } from './traffic.js';
 import { itemDef, RARITY, ITEMS, shopItems } from './items.js';
 
 const STREET_MODES = new Set(['walk', 'idle', 'park', 'chat', 'fight', 'flee', 'dead']);
-const EAT_SHOPS = new Set(['restaurant', 'pizza', 'chicken', 'chinese', 'gukbap', 'burger', 'bunsik', 'cafe', 'bakery']);
+const EAT_SHOPS = new Set(['seafood', 'restaurant', 'pizza', 'chicken', 'chinese', 'gukbap', 'burger', 'bunsik', 'cafe', 'bakery']);
 const INSIDE_MODES = new Set(['inside', 'player', 'fight', 'flee', 'dead']);
 
 export class CitizenView {

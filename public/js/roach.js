@@ -895,6 +895,13 @@ export class Roach {
         mesh(G.sphereLow(), toon('#b0bec5'), g, 0, -0.08, 0, 0.14, 0.14, 0.14);
         mesh(G.sphereLow(), toon('#ff5252', { emissive: '#ff1744' }), g, 0, -0.08, 0.12, 0.04, 0.04, 0.04);
         this.heldPose = 'none'; break;
+      case 'rod': {
+        mesh(G.cylLow(), toon(c), g, 0, -0.9, 0, 0.03, 2.2, 0.03);
+        mesh(G.cylLow(), toon('#212121'), g, 0, 0.05, 0, 0.045, 0.4, 0.045);
+        mesh(G.sphereLow(), toon('#90a4ae'), g, 0.08, -0.05, 0, 0.07, 0.07, 0.07);
+        this.rodTip = new THREE.Object3D(); this.rodTip.position.set(0, -2.0, 0); g.add(this.rodTip);
+        this.heldPose = 'rod'; break;
+      }
       case 'wand': {
         mesh(G.cylLow(), toon('#5d4037'), g, 0, -0.35, 0, 0.035, 0.9, 0.035);
         const orb = mesh(G.sphereLow(), new THREE.MeshToonMaterial({ color: c, emissive: c, emissiveIntensity: 0.9 }), g, 0, -0.85, 0, 0.11, 0.11, 0.11);
@@ -1101,6 +1108,7 @@ export class Roach {
       this.mouth.visible = !this.mouthO.visible;
       if (this.eatT <= 0) { this.stopEat(); this.mouthO.visible = false; this.mouth.visible = true; }
     } else if (this.heldPose === 'food') { ar.rotation.x = -0.9; ar.rotation.z = -0.1; }
+    if (this.heldPose === 'rod' && ck < 0.5) { ar.rotation.x = -2.0 + (this.reel ? Math.sin(this.t * 20) * 0.15 : 0); ar.rotation.z = -0.2; al.rotation.x = -1.5; }
     // 활 당기기 (drawK 0~1)
     if (this.drawK > 0 && this.heldPose === 'gun') {
       ar.rotation.x = -1.5; ar.rotation.z = 0.1;
