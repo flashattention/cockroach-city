@@ -1,7 +1,7 @@
 // 전투 · 현상수배 · 경찰/군대 · 바닥 아이템
 import * as THREE from 'three';
 import { HALF } from '../public/js/config.js';
-import { weaponStats, damageTaken, itemDef, RARITY, DROP_POOL, TEMP_MINUTES } from '../public/js/items.js';
+import { weaponStats, damageTaken, itemDef, RARITY, DROP_GROUPS, rarityOf, TEMP_MINUTES } from '../public/js/items.js';
 import { randomStreetPoint } from '../public/js/citizens.js';
 import { RNG } from '../public/js/utils.js';
 import { levelStats } from '../public/js/level.js';
@@ -494,9 +494,9 @@ export class Combat {
 
   // 거리 곳곳에 무기를 무작위로 떨어뜨린다
   spawnWorldDrop() {
-    const tiers = Object.keys(RARITY);
-    const tier = this.rng.weighted(tiers, (t) => RARITY[t].weight);
-    const id = this.rng.pick(DROP_POOL[tier]);
+    const grp = this.rng.weighted(DROP_GROUPS, (x) => x[1]);
+    const id = this.rng.weighted(grp[2], (i) => RARITY[rarityOf(i)].weight);
+    const tier = rarityOf(id);
     const d = itemDef(id);
     const item = { id, n: d.stack ? 3 : 1, gems: [], rarity: tier };
     // 총은 그 총의 탄약, 활은 화살을 함께

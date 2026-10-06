@@ -19,6 +19,8 @@ export const ITEMS = {
   yitian: { name: '의천검 (조조의 보검)', emoji: '✨', cat: 'melee', shop: 'armory_3k', price: 6000, dmg: 70, rate: 0.5, range: 2.4, kind: 'melee', held: 'sword:#e1bee7', sockets: 3 },
   bow: { name: '장궁', emoji: '🏹', cat: 'gun', shop: 'armory_3k', price: 700, dmg: 26, rate: 0.9, range: 60, kind: 'arrow', ammo: 'arrow', held: 'bow', sockets: 1 },
   composite_bow: { name: '각궁 (황충의 활)', emoji: '🏹', cat: 'gun', shop: 'armory_3k', price: 1600, dmg: 38, rate: 0.75, range: 75, kind: 'arrow', ammo: 'arrow', held: 'bow', sockets: 2 },
+  recurve_bow: { name: '양궁 (올림픽 리커브)', emoji: '🏹', cat: 'gun', shop: 'armory_3k', price: 2200, dmg: 44, rate: 0.8, range: 90, kind: 'arrow', held: 'bow', sockets: 2 },
+  crossbow: { name: '석궁', emoji: '🎯', cat: 'gun', shop: 'armory_3k', price: 1300, dmg: 55, rate: 1.4, range: 80, kind: 'arrow', instant: true, held: 'crossbow', sockets: 1 },
   zhuge_crossbow: { name: '제갈연노 (연발 쇠뇌)', emoji: '🎯', cat: 'gun', shop: 'armory_3k', price: 2600, dmg: 16, rate: 0.22, range: 55, kind: 'arrow', ammo: 'arrow', auto: true, held: 'crossbow', sockets: 2 },
   arrow: { name: '화살 ×20', emoji: '➶', cat: 'ammo', shop: 'armory_3k', price: 40, stack: true, pack: 20 },
   leather_helm: { name: '가죽 투구', emoji: '🪖', cat: 'head', slot: 'head', shop: 'armory_3k', price: 150, def: 5, vis: 'helm_leather', sockets: 1 },
@@ -40,6 +42,7 @@ export const ITEMS = {
   uzi: { name: '우지 기관단총', emoji: '🔫', cat: 'gun', shop: 'armory_mil', price: 1400, dmg: 9, rate: 0.07, range: 35, ammo: 'ammo_9mm', kind: 'hitscan', auto: true, held: 'pistol', sockets: 1 },
   mp5: { name: 'MP5 기관단총', emoji: '🔫', cat: 'gun', shop: 'armory_mil', price: 1700, dmg: 11, rate: 0.08, range: 45, ammo: 'ammo_9mm', kind: 'hitscan', auto: true, held: 'rifle', sockets: 2 },
   ak47: { name: 'AK-47', emoji: '🔫', cat: 'gun', shop: 'armory_mil', price: 2400, dmg: 19, rate: 0.12, range: 65, ammo: 'ammo_762', kind: 'hitscan', auto: true, held: 'rifle', sockets: 2 },
+  m4: { name: 'M4A1 카빈', emoji: '🔫', cat: 'gun', shop: 'armory_mil', price: 2600, dmg: 17, rate: 0.1, range: 70, kind: 'hitscan', auto: true, held: 'rifle', sockets: 2 },
   scar: { name: 'SCAR-H 전투소총', emoji: '🔫', cat: 'gun', shop: 'armory_mil', price: 3600, dmg: 24, rate: 0.14, range: 80, ammo: 'ammo_762', kind: 'hitscan', auto: true, held: 'rifle', sockets: 3 },
   m249: { name: 'M249 경기관총', emoji: '🌀', cat: 'gun', shop: 'armory_mil', price: 4800, dmg: 13, rate: 0.075, range: 60, ammo: 'ammo_belt', kind: 'hitscan', auto: true, held: 'minigun', sockets: 2 },
   double_barrel: { name: '더블배럴 샷건', emoji: '💥', cat: 'gun', shop: 'armory_mil', price: 1600, dmg: 12, pellets: 9, spread: 0.11, rate: 1.1, range: 18, ammo: 'ammo_shell', kind: 'hitscan', held: 'shotgun', sockets: 1 },
@@ -269,24 +272,24 @@ for (const id of NO_AMMO) delete ITEMS[id].shop;
 // 실제 총의 유효사거리와 비슷하게 (m)
 const REAL_RANGE = {
   pistol: 50, revolver: 50, deagle: 70, blaster: 120, uzi: 100, mp5: 150, plasma_smg: 150,
-  rifle: 400, ak47: 350, scar: 600, blaster_rifle: 400, m249: 800, minigun: 1000,
+  rifle: 400, ak47: 350, m4: 500, scar: 600, blaster_rifle: 400, m249: 800, minigun: 1000,
   shotgun: 40, double_barrel: 35, sniper: 1000, hunting_rifle: 400, barrett: 1800,
-  rpg: 500, ion_cannon: 600, bow: 150, composite_bow: 200, hunter_bow: 180, zhuge_crossbow: 80,
+  rpg: 500, ion_cannon: 600, bow: 150, composite_bow: 200, hunter_bow: 180, zhuge_crossbow: 80, recurve_bow: 220, crossbow: 120,
 };
 for (const [id, r] of Object.entries(REAL_RANGE)) if (ITEMS[id]) ITEMS[id].range = r;
 // 조준(우클릭) 배율
-const ZOOM = { revolver: 1.6, deagle: 1.7, uzi: 1.3, mp5: 1.8, ak47: 2.2, scar: 3.0, m249: 1.7, double_barrel: 1.2, barrett: 8, plasma_smg: 1.8, hunting_rifle: 4.5, hunter_bow: 2.4, pistol: 1.5, blaster: 1.6, shotgun: 1.3, rifle: 2.4, blaster_rifle: 2.4, minigun: 1.5, sniper: 6, rpg: 1.8, ion_cannon: 2, bow: 2.2, composite_bow: 2.6, zhuge_crossbow: 2 };
+const ZOOM = { m4: 2.6, recurve_bow: 2.6, crossbow: 2.4, revolver: 1.6, deagle: 1.7, uzi: 1.3, mp5: 1.8, ak47: 2.2, scar: 3.0, m249: 1.7, double_barrel: 1.2, barrett: 8, plasma_smg: 1.8, hunting_rifle: 4.5, hunter_bow: 2.4, pistol: 1.5, blaster: 1.6, shotgun: 1.3, rifle: 2.4, blaster_rifle: 2.4, minigun: 1.5, sniper: 6, rpg: 1.8, ion_cannon: 2, bow: 2.2, composite_bow: 2.6, zhuge_crossbow: 2 };
 for (const [id, z] of Object.entries(ZOOM)) if (ITEMS[id]) ITEMS[id].zoom = z;
 // 반동: [위로 튀는 각도, 좌우 흔들림, 화면 흔들림] — 총마다 실제처럼
 const RECOIL = {
   pistol: [0.035, 0.012, 0.08], revolver: [0.07, 0.02, 0.15], deagle: [0.11, 0.03, 0.25], blaster: [0.025, 0.01, 0.05],
   uzi: [0.018, 0.02, 0.04], mp5: [0.013, 0.012, 0.03], plasma_smg: [0.01, 0.01, 0.03],
-  rifle: [0.016, 0.01, 0.05], ak47: [0.024, 0.016, 0.07], scar: [0.03, 0.014, 0.09], blaster_rifle: [0.012, 0.008, 0.04],
+  rifle: [0.016, 0.01, 0.05], ak47: [0.024, 0.016, 0.07], m4: [0.018, 0.012, 0.05], scar: [0.03, 0.014, 0.09], blaster_rifle: [0.012, 0.008, 0.04],
   minigun: [0.008, 0.012, 0.06], m249: [0.012, 0.016, 0.07],
   shotgun: [0.12, 0.03, 0.35], double_barrel: [0.16, 0.04, 0.45],
   sniper: [0.14, 0.02, 0.4], hunting_rifle: [0.12, 0.02, 0.35], barrett: [0.26, 0.04, 0.8],
   rpg: [0.1, 0.03, 0.6], ion_cannon: [0.08, 0.02, 0.5],
-  bow: [0.01, 0.004, 0], composite_bow: [0.012, 0.004, 0], hunter_bow: [0.01, 0.004, 0], zhuge_crossbow: [0.01, 0.006, 0.02],
+  bow: [0.01, 0.004, 0], composite_bow: [0.012, 0.004, 0], hunter_bow: [0.01, 0.004, 0], zhuge_crossbow: [0.01, 0.006, 0.02], recurve_bow: [0.012, 0.004, 0], crossbow: [0.02, 0.006, 0.03],
 };
 for (const [id, r] of Object.entries(RECOIL)) if (ITEMS[id]) ITEMS[id].recoil = r;
 for (const d of Object.values(ITEMS)) if (d.cat === 'wand') d.zoom = 1.4;
@@ -393,11 +396,25 @@ export const RARITY = {
   legendary: { name: '전설', color: '#ffab00', weight: 5 },
 };
 const RARITY_OF = {
-  common: ['wood_sword', 'iron_sword', 'combat_knife', 'pistol', 'bow'],
-  rare: ['qinggang', 'twin_swords', 'shotgun', 'blaster', 'composite_bow', 'grenade'],
-  epic: ['serpent_spear', 'rifle', 'sniper', 'blaster_rifle', 'rpg', 'zhuge_crossbow', 'thermal'],
-  legendary: ['halberd', 'dragon_glaive', 'yitian', 'minigun', 'saber_blue', 'saber_red', 'saber_green', 'ion_cannon'],
+  common: ['wood_sword', 'iron_sword', 'combat_knife', 'pistol', 'revolver', 'uzi', 'shotgun', 'bow', 'crossbow'],
+  rare: ['qinggang', 'twin_swords', 'deagle', 'mp5', 'double_barrel', 'rifle', 'ak47', 'm4', 'hunting_rifle', 'blaster', 'composite_bow', 'recurve_bow', 'grenade'],
+  epic: ['serpent_spear', 'scar', 'sniper', 'plasma_smg', 'blaster_rifle', 'm249', 'rpg', 'zhuge_crossbow', 'thermal'],
+  legendary: ['halberd', 'dragon_glaive', 'yitian', 'minigun', 'barrett', 'saber_blue', 'saber_red', 'saber_green', 'ion_cannon'],
 };
+// 맵 드랍: 먼저 무기 종류를 고르게 뽑고(근접무기만 몰리지 않게), 그 안에서 희귀도 가중치로 뽑는다
+export const DROP_GROUPS = [
+  ['melee', 1, ['wood_sword', 'iron_sword', 'combat_knife', 'qinggang', 'twin_swords', 'serpent_spear', 'halberd', 'dragon_glaive', 'yitian']],
+  ['saber', 0.5, ['saber_blue', 'saber_red', 'saber_green']],
+  ['pistol', 1, ['pistol', 'revolver', 'deagle', 'blaster']],
+  ['smg', 0.8, ['uzi', 'mp5', 'plasma_smg']],
+  ['shotgun', 0.9, ['shotgun', 'double_barrel']],
+  ['rifle', 1.2, ['ak47', 'm4', 'rifle', 'scar', 'blaster_rifle']],
+  ['sniper', 0.9, ['sniper', 'hunting_rifle', 'barrett']],
+  ['bow', 0.9, ['bow', 'recurve_bow', 'composite_bow']],
+  ['crossbow', 0.7, ['crossbow', 'zhuge_crossbow']],
+  ['heavy', 0.5, ['m249', 'minigun', 'rpg', 'ion_cannon']],
+  ['throw', 0.4, ['grenade', 'thermal']],
+];
 export const rarityOf = (id) => Object.keys(RARITY_OF).find((r) => RARITY_OF[r].includes(id)) || 'common';
 export const DROP_POOL = RARITY_OF;
 export const TEMP_MINUTES = 30;

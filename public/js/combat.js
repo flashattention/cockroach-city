@@ -5,7 +5,7 @@ import { G } from './utils.js';
 import { levelStats } from './level.js';
 
 const ELEMENT_COLOR = { fire: '#ff5722', ice: '#4fc3f7', thunder: '#ffee58', wind: '#a5d6a7', poison: '#9ccc65', holy: '#fff59d', dark: '#7e57c2' };
-const BASE_SPREAD = { revolver: 0.012, deagle: 0.016, uzi: 0.05, mp5: 0.028, ak47: 0.035, scar: 0.02, m249: 0.045, barrett: 0.003, plasma_smg: 0.025, hunting_rifle: 0.006, pistol: 0.018, blaster: 0.015, rifle: 0.03, blaster_rifle: 0.026, minigun: 0.045, sniper: 0.012 };
+const BASE_SPREAD = { m4: 0.022, revolver: 0.012, deagle: 0.016, uzi: 0.05, mp5: 0.028, ak47: 0.035, scar: 0.02, m249: 0.045, barrett: 0.003, plasma_smg: 0.025, hunting_rifle: 0.006, pistol: 0.018, blaster: 0.015, rifle: 0.03, blaster_rifle: 0.026, minigun: 0.045, sniper: 0.012 };
 
 const tmpV = new THREE.Vector3();
 
@@ -146,7 +146,7 @@ export class FX {
 const HOLE_STYLE = {
   pistol: 'small', revolver: 'small', uzi: 'small', mp5: 'small',
   deagle: 'big', sniper: 'big', hunting_rifle: 'big',
-  rifle: 'rifle', ak47: 'rifle', scar: 'rifle', m249: 'rifle', minigun: 'rifle',
+  rifle: 'rifle', ak47: 'rifle', m4: 'rifle', scar: 'rifle', m249: 'rifle', minigun: 'rifle',
   shotgun: 'pellet', double_barrel: 'pellet',
   barrett: 'anti',
   blaster: 'energy', blaster_rifle: 'energy', plasma_smg: 'energy',
@@ -365,7 +365,7 @@ export class Combat {
     const w = this.selectedWeapon();
     const d = w ? itemDef(w.id) : null;
     // 활: 누르고 있으면 시위를 당기고, 놓으면 쏜다
-    if (d && d.kind === 'arrow' && !d.auto && !this.g.player.inCar) {
+    if (d && d.kind === 'arrow' && !d.auto && !d.instant && !this.g.player.inCar) {
       if (down && !this.drawing && this.cool <= 0) this.drawing = { t: 0 };
       else if (!down && this.drawing) { const k = Math.min(1, this.drawing.t / 1.1); this.drawing = null; this.g.player.roach.drawK = 0; this.drawPower = k; this.tryFire(); this.drawPower = null; }
       return;
