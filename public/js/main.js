@@ -565,6 +565,17 @@ function setupNet() {
     refreshPhone('sms');
   });
   net.on('numReq', async (m) => { if (await ui.confirm(`📞 ${m.name}님이 번호를 교환하고 싶어해요. 수락할까요?`)) net.send({ t: 'numAccept', id: m.id }); });
+  // 튄더
+  const refreshTd = () => refreshPhone('tinder');
+  net.on('tdCards', (m) => { game.tdCards = m.list; game.tdMe = m.me; refreshTd(); });
+  net.on('tdMe', (m) => { game.tdMe = m.me; });
+  net.on('tdMatches', (m) => { const changed = JSON.stringify(m.list) !== JSON.stringify(game.tdMatches); game.tdMatches = m.list; game.tdUnread = m.list.reduce((a, x) => a + x.unread, 0); if (changed) refreshTd(); });
+  net.on('tdMsgs', (m) => { if (ui.tdChat === m.mid) { game.tdMsgs = m.msgs; game.tdOther = m.other; refreshTd(); } });
+  net.on('tdMsg', (m) => {
+    if (ui.tdChat === m.mid && !document.getElementById('phone').classList.contains('hidden')) { (game.tdMsgs ||= []).push(m.msg); refreshTd(); }
+    else if (m.msg.from !== game.char) { game.tdUnread = (game.tdUnread || 0) + 1; ui.toast(`🔥 튄더 · ${m.name}: ${m.msg.contact ? '📇 연락처를 보냈어요' : m.msg.text.slice(0, 30)}`); }
+  });
+  net.on('tdMatch', (m) => { ui.lootBanner('💘 매칭 성공!', `${m.other.name}님과 서로 좋아요! 휴대폰 🔥 튄더에서 대화해 보세요`, '#ff2d6f', ''); });
   net.on('flirtRes', (m) => ui.toast(m.player ? `💖 ${m.name}님에게 하트를 날렸어요!` : m.ok ? `💗 ${m.name}의 마음이 흔들려요! (친밀도 ↑)` : `💔 ${m.name}에게 안 통했어요...`));
   net.on('flirted', (m) => { ui.toast(`💖 ${m.name}님이 나에게 하트를 날렸어요!`); game.player.roach.setEmotion('love', 3); });
   net.on('slow', (m) => { game.slowT = m.s; ui.toast('❄️ 몸이 얼어서 느려졌어요!'); });
@@ -635,7 +646,8 @@ window.addEventListener('keydown', (e) => {
   if (!game.started) return;
   if (e.code === 'Escape') { if (game.course) endCourse(false, '수련을 포기했어요'); ui.escape(); return; }
   if (typing()) return;
-  if (e.code === 'Tab') { e.preventDefault(); ui.togglePhone(); return; }
+  // 휴대폰: K 또는 Tab (열려 있으면 닫기)
+  if (e.code === 'Tab' || (e.code === 'KeyK' && !e.repeat)) { e.preventDefault(); ui.togglePhone(); return; }
   if (e.code === 'KeyI') { ui.toggleInventory(); return; }
   if (ui.anyPanelOpen() || game.busy || game.dead) return;
   if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); clearKeys(); ui.focusPlayerChat(); return; }

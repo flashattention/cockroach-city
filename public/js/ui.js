@@ -4,6 +4,7 @@ import { WORLD_HALF } from './terrain.js';
 import { JOBS, BUILDING_TYPES, EMOTE } from './data.js';
 import { ITEMS, GEMS, SHOPS, ENCHANT_FEE, CLUB_CHARM, RARITY, itemDef, shopItems, weaponStats, isWeapon, ammoName } from './items.js';
 import { SLOTS } from './inventory.js';
+const APP_TITLES = { quests: '퀘스트', camera: '카메라', gallery: '사진', insta: 'Roachstagram', tinder: '튄더', contacts: '연락처', sms: '메시지', police: '112 신고', map: '지도', me: '내 정보', feedback: '건의하기', help: '도움말', settings: '설정', admin: '건의함' };
 const SKILL_NAMES = { jump2: '2단 점프', jump3: '3단 점프', dash: '대쉬 거리 강화', jumpboost: '점프력 강화', dashlong: '대쉬 거리 강화' };
 import { LOOK_PARTS, LOOK_COLORS, DEFAULT_LOOK } from './look.js';
 import { PHONE_APPS } from './phone.js';
@@ -95,7 +96,6 @@ export class UI {
     $('tb-exit').onclick = async () => { if (await this.confirm('저장하고 캐릭터 선택 화면으로 나갈까요?<br><small>돈·아이템·집은 서버에 저장돼요</small>')) this.game.resetSave(); };
     $('bag-btn').onclick = () => this.toggleInventory();
     $('quest-card').onclick = () => this.openPhone('quests');
-    $('tab-admin').classList.toggle('hidden', !this.game.admin);
     this.renderQuests();
     let seen = false;
     try { seen = localStorage.getItem('roachcity.keysSeen') === '1'; } catch { /* 무시 */ }
@@ -617,29 +617,55 @@ export class UI {
   // ---------------- 휴대폰 ----------------
   setupPhone() {
     $('phone-close').onclick = () => this.closePhone();
-    document.querySelectorAll('#phone-tabs button[data-tab]').forEach((b) => {
-      b.onclick = () => this.openPhone(b.dataset.tab);
-    });
+    $('app-back').onclick = () => this.phoneHome();
+    $('homebar').onclick = () => this.phoneHome();
     $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') this.closeModal(); });
-    $('phone').addEventListener('click', (e) => { if (e.target.id === 'phone') this.closePhone(); });
   }
 
   togglePhone(tab) {
-    if (!$('phone').classList.contains('hidden') && (!tab || tab === this.phoneTab)) this.closePhone();
-    else this.openPhone(tab || this.phoneTab);
+    if (!$('phone').classList.contains('hidden') && !tab) this.closePhone();
+    else this.openPhone(tab);
   }
   closePhone() { $('phone').classList.add('hidden'); }
+  // 홈 화면: 앱 아이콘
+  phoneHome() {
+    const g = this.game;
+    this.phoneTab = null;
+    $('phone-app').classList.add('hidden');
+    $('phone-home').classList.remove('hidden');
+    const unread = (g.sms || []).filter((m) => !m.mine && !m.read).length;
+    const apps = [
+      ['quests', '📋', '퀘스트', '#7e57c2'], ['camera', '📷', '카메라', '#455a64'], ['gallery', '🖼️', '사진', '#ffb300'], ['insta', '📸', '인스타', 'linear-gradient(135deg,#f58529,#dd2a7b,#8134af)'],
+      ['tinder', '🔥', '튄더', 'linear-gradient(135deg,#ff6a3d,#ff2d6f)'], ['contacts', '📞', '연락처', '#43a047'], ['sms', '💬', '메시지', '#2ecc71', unread], ['police', '🚨', '112', '#e53935'],
+      ['map', '🗺️', '지도', '#29b6f6'], ['online', '👥', '접속자', '#5c6bc0'], ['badges', '🏅', '훈장', '#ff8f00'], ['me', '🙂', '내 정보', '#8d6e63'],
+      ['feedback', '💡', '건의하기', '#fdd835'], ['help', '❓', '도움말', '#78909c'], ['settings', '⚙️', '설정', '#9e9e9e'],
+    ];
+    if (g.admin) apps.push(['admin', '📮', '건의함', '#d81b60']);
+    const icon = ([id, e, n, bg, badge]) => `<button class="app" data-app="${id}"><span class="ai" style="background:${bg}">${e}${badge ? `<i>${badge}</i>` : ''}</span><span class="an">${n}</span></button>`;
+    $('ph-apps').innerHTML = apps.map(icon).join('');
+    $('ph-dock').innerHTML = [['tinder', '🔥', '', 'linear-gradient(135deg,#ff6a3d,#ff2d6f)'], ['sms', '💬', '', '#2ecc71', unread], ['camera', '📷', '', '#455a64'], ['map', '🗺️', '', '#29b6f6']].map(icon).join('');
+    const hh = Math.floor(g.hour()), mm = Math.floor((g.hour() % 1) * 60);
+    $('ph-clock').innerHTML = `<b>${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}</b><small>${g.day() + 1}일차 · ${DAYS[g.day() % 7]}요일 · ${escapeHtml(g.weather)}</small>`;
+    $('phone').querySelectorAll('[data-app]').forEach((b) => { b.onclick = () => this.openPhone(b.dataset.app); });
+  }
 
   openPhone(tab) {
     if (this.chatOpen()) this.closeChat();
     this.game.releaseMouse();
-    this.phoneTab = tab;
     $('phone').classList.remove('hidden');
-    document.querySelectorAll('#phone-tabs button[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+    const t = new Date(); $('ph-time').textContent = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')}`;
+    if (!tab || tab === 'citizens') { this.phoneHome(); return; }
+    if (tab === 'online') { this.closePhone(); this.openOnline(); return; }
+    if (tab === 'badges') { this.closePhone(); this.openBadges(); return; }
+    this.phoneTab = tab;
+    $('phone-home').classList.add('hidden');
+    $('phone-app').classList.remove('hidden');
+    $('app-title').textContent = APP_TITLES[tab] || '';
     const body = $('phone-body');
+    body.scrollTop = 0;
     const g = this.game;
     if (PHONE_APPS[tab]) { PHONE_APPS[tab](this, body, g); return; }
-    if (tab === 'citizens') {
+    if (tab === 'citizens_removed') {
       body.innerHTML = `<input class="search" id="cit-search" placeholder="이름, 직업, 성격으로 검색... (총 ${g.sim.citizens.length}명)" /><div class="grid" id="cit-grid"></div>`;
       const render = (q) => {
         const list = g.sim.citizens.filter((c) => !q || `${c.name}${c.job.name}${c.personality.name}${c.socialRole}${c.home.name}`.includes(q));
@@ -658,7 +684,6 @@ export class UI {
     } else if (tab === 'me') {
       const S = g.stats, P = g.profile;
       const job = g.playerJob();
-      const friends = [...g.sim.citizens].sort((a, b) => b.affinity - a.affinity).slice(0, 5);
       body.innerHTML = `<div class="profile-big">
         <h3>🙂 ${escapeHtml(P.name)}</h3>
         ${P.age}세 · ${escapeHtml(P.gender)} · ${escapeHtml(P.personality)}<br>
@@ -666,7 +691,7 @@ export class UI {
         💼 직업 <b>${job ? `${escapeHtml(job.name)} @ ${escapeHtml(g.workBuilding().name)} (시급 ₩${job.wage})` : '무직 — 시청에서 일자리를 구해보세요'}</b><br>
         🏠 집 <b>${S.homeId != null ? escapeHtml(g.city.buildings[S.homeId].name) : '없음 (호텔 생활 중 · 부동산에서 구매)'}</b><br>
         🎒 가방 ${S.items.length}종 (I키로 열기) · ✨ 매력 ${g.charm()} · 🥋 무공 ${S.skills.length ? S.skills.map((k) => (SKILL_NAMES[k] || k)).join(', ') : '없음'}<br>
-        💗 친한 이웃 ${friends.map((c) => `${escapeHtml(c.name)}(${Math.round(c.affinity)})`).join(', ')}
+        📞 내 번호 <b>${escapeHtml(g.phone || '')}</b> · ⭐ Lv.${S.level || 1}
       </div>
       <div style="margin-top:12px">
         <button class="btn" id="go-home">🏠 집 위치 표시</button>

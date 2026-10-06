@@ -2,6 +2,31 @@
 import { escapeHtml } from './utils.js';
 import { questDef } from './quests.js';
 import { expNeed, levelStats } from './level.js';
+import * as THREE from 'three';
+import { Roach } from './roach.js';
+
+// 캐릭터 사진 (튄더 카드용)
+let thumbR = null, thumbScene = null, thumbCam = null;
+const thumbCache = new Map();
+export function roachThumb(pr) {
+  const key = JSON.stringify([pr.color, pr.look, pr.accessories]);
+  if (thumbCache.has(key)) return thumbCache.get(key);
+  if (!thumbR) {
+    thumbR = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    thumbR.setSize(240, 320); thumbR.outputColorSpace = THREE.SRGBColorSpace;
+    thumbScene = new THREE.Scene();
+    thumbScene.add(new THREE.HemisphereLight('#fff6e8', '#c9a28a', 1.4));
+    const dl = new THREE.DirectionalLight('#ffffff', 1.5); dl.position.set(2, 4, 5); thumbScene.add(dl);
+    thumbCam = new THREE.PerspectiveCamera(30, 240 / 320, 0.1, 50); thumbCam.position.set(0, 1.5, 6.2); thumbCam.lookAt(0, 1.15, 0);
+  }
+  const r = new Roach({ color: pr.color, age: 25, gender: pr.gender, look: pr.look, accessories: pr.accessories || [] });
+  r.root.rotation.y = 0.3; r.setEmotion('happy', 99); r.update(0.016, 0);
+  thumbScene.add(r.root); thumbR.render(thumbScene, thumbCam); thumbScene.remove(r.root);
+  const url = thumbR.domElement.toDataURL('image/png');
+  thumbCache.set(key, url);
+  return url;
+}
+const pic = (o) => (o.photo ? `/photos/${o.photo}.jpg` : roachThumb(o));
 
 const $ = (id) => document.getElementById(id);
 const ago = (t) => {
@@ -133,6 +158,68 @@ export const PHONE_APPS = {
     $('sms-in').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.isComposing) send(); });
     $('sms-send').onclick = send;
     $('sms-in').focus();
+  },
+
+  // ---------------- 튄더 ----------------
+  tinder(ui, body, g) {
+    const tab = ui.tdTab || 'swipe';
+    const tabs = `<div class="td-tabs"><button class="${tab === 'swipe' ? 'on' : ''}" data-td="swipe">💘 둘러보기</button><button class="${tab === 'matches' ? 'on' : ''}" data-td="matches">💬 매칭${g.tdUnread ? ` (${g.tdUnread})` : ''}</button><button class="${tab === 'profile' ? 'on' : ''}" data-td="profile">👤 내 프로필</button></div>`;
+    const bindTabs = () => body.querySelectorAll('[data-td]').forEach((b) => { b.onclick = () => { ui.tdTab = b.dataset.td; ui.tdChat = null; PHONE_APPS.tinder(ui, body, g); }; });
+    if (tab === 'swipe') {
+      if (!g.tdCards) { g.net.send({ t: 'tdCards' }); body.innerHTML = tabs + '<p>불러오는 중...</p>'; bindTabs(); return; }
+      const c = g.tdCards[0];
+      if (!c) { body.innerHTML = tabs + `<div class="profile-big" style="text-align:center">🔥<br>지금은 더 볼 사람이 없어요.<br><small>새 플레이어가 오면 다시 떠요</small><br><button class="btn" id="td-reload">새로고침</button></div>`; bindTabs(); $('td-reload').onclick = () => { g.tdCards = null; PHONE_APPS.tinder(ui, body, g); }; return; }
+      body.innerHTML = tabs + `<div class="td-card" id="td-card"><img class="td-img" src="${pic(c)}"><span class="stamp like">LIKE</span><span class="stamp nope">NOPE</span>
+        <div class="td-info"><b>${escapeHtml(c.name)}</b> ${c.age} ${c.online ? '<span style="color:#4cd964">● 접속 중</span>' : ''}<small>⭐ Lv.${c.level} · ${c.gender === '남' ? '♂' : '♀'} · ${escapeHtml(c.job || '무직')} · ${escapeHtml(c.personality || '')}</small>${c.bio ? `<small>“${escapeHtml(c.bio)}”</small>` : ''}<small>${(c.badges || []).slice(0, 4).map(escapeHtml).join(' ')}</small></div></div>
+        <div class="td-btns"><button id="td-no" title="넘기기">✖️</button><button id="td-yes" title="좋아요">💚</button></div>`;
+      bindTabs();
+      const card = $('td-card');
+      const swipe = (like) => { card.style.transform = `translateX(${like ? 420 : -420}px) rotate(${like ? 25 : -25}deg)`; g.net.send({ t: 'tdSwipe', token: c.token, like }); setTimeout(() => { g.tdCards.shift(); PHONE_APPS.tinder(ui, body, g); }, 230); };
+      $('td-no').onclick = () => swipe(false); $('td-yes').onclick = () => swipe(true);
+      let sx = null;
+      card.onpointerdown = (e) => { sx = e.clientX; card.style.transition = 'none'; card.setPointerCapture(e.pointerId); };
+      card.onpointermove = (e) => { if (sx === null) return; const dx = e.clientX - sx; card.style.transform = `translateX(${dx}px) rotate(${dx / 12}deg)`; card.querySelector('.like').style.opacity = Math.max(0, dx / 90); card.querySelector('.nope').style.opacity = Math.max(0, -dx / 90); };
+      card.onpointerup = (e) => { const dx = e.clientX - sx; sx = null; card.style.transition = ''; if (Math.abs(dx) > 90) swipe(dx > 0); else { card.style.transform = ''; card.querySelectorAll('.stamp').forEach((x) => { x.style.opacity = 0; }); } };
+      return;
+    }
+    if (tab === 'matches' && !ui.tdChat) {
+      g.net.send({ t: 'tdMatches' });
+      const list = g.tdMatches || [];
+      body.innerHTML = tabs + (list.map((m) => `<div class="td-match" data-mid="${m.mid}"><img src="${pic(m.other)}"><div><b>${escapeHtml(m.other.name)}</b> ${m.other.online ? '<span style="color:#4cd964">●</span>' : ''}<br><small>${escapeHtml(m.last || '매칭됐어요! 먼저 인사해 보세요 👋')}</small></div>${m.unread ? `<span class="unread">${m.unread}</span>` : ''}</div>`).join('') || '<div class="profile-big" style="text-align:center">아직 매칭이 없어요.<br>서로 💚를 누르면 매칭돼요!</div>');
+      bindTabs();
+      body.querySelectorAll('[data-mid]').forEach((el) => { el.onclick = () => { ui.tdChat = el.dataset.mid; g.tdMsgs = null; g.net.send({ t: 'tdMsgs', mid: el.dataset.mid }); PHONE_APPS.tinder(ui, body, g); }; });
+      return;
+    }
+    if (tab === 'matches') {
+      const other = g.tdOther;
+      const msgs = g.tdMsgs || [];
+      body.innerHTML = `<div class="insta-head"><button class="btn mini ghost" id="tdc-back">←</button> ${other ? `<b>${escapeHtml(other.name)}</b> <small>Lv.${other.level}</small>` : ''}</div>
+        <div class="smslog" id="tdlog">${msgs.map((m) => { const mine = m.from === g.char; if (m.contact) return `<div class="sm ${mine ? 'me' : ''}"><div class="td-contact">📇 <b>${escapeHtml(m.contact.name)}</b><br>${escapeHtml(m.contact.num)}${mine ? '' : `<br><button class="btn mini" data-save="${escapeHtml(m.contact.num)}" data-nm="${escapeHtml(m.contact.name)}">📲 연락처 저장</button>`}</div><small>${ago(m.t)}</small></div>`; return `<div class="sm ${mine ? 'me' : ''}">${escapeHtml(m.text)}<small>${ago(m.t)}</small></div>`; }).join('') || '<small>💘 매칭됐어요! 대화를 시작해 보세요</small>'}</div>
+        <div class="addrow"><input id="td-in" maxlength="300" placeholder="메시지..."><button class="btn" id="td-send">전송</button></div>
+        <button class="btn ghost" id="td-card-send" style="margin-top:6px;width:100%">📇 내 연락처 보내기</button>`;
+      $('tdlog').scrollTop = 1e9;
+      $('tdc-back').onclick = () => { ui.tdChat = null; PHONE_APPS.tinder(ui, body, g); };
+      const send = () => { const t = $('td-in').value.trim(); if (!t) return; g.net.send({ t: 'tdSend', mid: ui.tdChat, text: t }); $('td-in').value = ''; };
+      $('td-in').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.isComposing) send(); });
+      $('td-send').onclick = send;
+      $('td-card-send').onclick = () => g.net.send({ t: 'tdSend', mid: ui.tdChat, contact: true });
+      body.querySelectorAll('[data-save]').forEach((b) => { b.onclick = () => { g.net.send({ t: 'contactAdd', num: b.dataset.save, name: b.dataset.nm }); b.textContent = '✅ 저장됨'; b.disabled = true; }; });
+      return;
+    }
+    // 내 프로필
+    const me = g.tdMe || {};
+    body.innerHTML = tabs + `<div class="td-card"><img class="td-img" src="${pic({ ...g.profile, photo: me.photo })}"><div class="td-info"><b>${escapeHtml(g.profile.name)}</b> ${g.profile.age}<small>⭐ Lv.${g.stats.level || 1} · ${escapeHtml(g.profile.jobName || '무직')}</small></div></div>
+      <div class="profile-big" style="margin-top:10px"><b>한 줄 소개</b><textarea id="td-bio" maxlength="120" rows="3" placeholder="예) 치킨 좋아하는 무릉도장 고수 🍗">${escapeHtml(me.bio || '')}</textarea>
+      <b>프로필 사진</b><div class="gallery" id="td-photos"><div class="ph" data-ph="">🪳<small>캐릭터</small></div></div>
+      <button class="btn" id="td-save" style="margin-top:8px">저장</button></div>`;
+    bindTabs();
+    $('td-bio').addEventListener('keydown', (e) => e.stopPropagation());
+    let photo = me.photo || null;
+    api(g, `/api/photos?char=${g.char}`).then(({ list }) => {
+      $('td-photos').innerHTML = `<div class="ph ${!photo ? 'on' : ''}" data-ph="" style="display:grid;place-items:center;font-size:34px;background:#ffe0e8">🪳</div>` + list.map((p) => `<div class="ph ${photo === p.id ? 'on' : ''}" data-ph="${p.id}"><img src="/photos/${p.id}.jpg"></div>`).join('');
+      body.querySelectorAll('[data-ph]').forEach((el) => { el.onclick = () => { photo = el.dataset.ph || null; body.querySelectorAll('[data-ph]').forEach((x) => x.classList.toggle('on', x === el)); }; });
+    }).catch(() => {});
+    $('td-save').onclick = () => { g.net.send({ t: 'tdProfile', bio: $('td-bio').value, photo }); ui.toast('🔥 튄더 프로필을 저장했어요'); };
   },
 
   police(ui, body, g) {

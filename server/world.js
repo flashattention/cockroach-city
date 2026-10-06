@@ -55,6 +55,7 @@ export class World {
     this.sessions = {}; // 세션 → { sub, exp }
     this.photos = {}; // 사진 id → { owner, ownerName, t, posted, caption, likes, postedAt }
     this.feedback = []; // 개발자에게 건의
+    this.matches = []; // 튄더 매칭 { id, a, b, t, msgs }
     this.photoDir = path.join(dataDir, 'photos');
     fs.mkdirSync(this.photoDir, { recursive: true });
     this.affinity = {}; // npcId → { token: value }
@@ -82,7 +83,7 @@ export class World {
   load() {
     try {
       const d = JSON.parse(fs.readFileSync(this.dataFile, 'utf8'));
-      Object.assign(this, { minutes: d.minutes ?? this.minutes, weather: d.weather ?? this.weather, accounts: d.accounts || {}, affinity: d.affinity || {}, memories: d.memories || {}, chatLogs: d.chatLogs || {}, users: d.users || {}, sessions: d.sessions || {}, photos: d.photos || {}, feedback: d.feedback || [] });
+      Object.assign(this, { minutes: d.minutes ?? this.minutes, weather: d.weather ?? this.weather, accounts: d.accounts || {}, affinity: d.affinity || {}, memories: d.memories || {}, chatLogs: d.chatLogs || {}, users: d.users || {}, sessions: d.sessions || {}, photos: d.photos || {}, feedback: d.feedback || [], matches: d.matches || [] });
       if ((d.version || 1) < WORLD_VERSION) { this.migrate(d.version || 1); d.extraCars = []; }
       for (const c of d.extraCars || []) { const car = this.traffic.spawnParked(new THREE.Vector3(c.x, c.y || 0, c.z), c.h, c.kind || 'sedan', c.color); if (c.gone) car.mode = 'gone'; this.extraCars.push(c); }
       console.log(`📂 저장된 세계를 불러왔어요 (계정 ${Object.keys(this.accounts).length}개)`);
@@ -92,7 +93,7 @@ export class World {
     const extraCars = this.traffic.cars.slice(AI_CARS).map((c) => ({ x: c.pos.x, y: c.pos.y || 0, z: c.pos.z, h: c.heading, kind: c.kind, color: c.color, gone: c.mode === 'gone' || c.mode === 'wreck' }));
     const now = Date.now();
     for (const [k, v] of Object.entries(this.sessions)) if (v.exp < now) delete this.sessions[k];
-    const data = { version: WORLD_VERSION, users: this.users, sessions: this.sessions, photos: this.photos, feedback: this.feedback, minutes: this.minutes, weather: this.weather, accounts: this.accounts, affinity: this.affinity, memories: this.memories, chatLogs: this.chatLogs, extraCars };
+    const data = { version: WORLD_VERSION, users: this.users, sessions: this.sessions, photos: this.photos, feedback: this.feedback, matches: this.matches, minutes: this.minutes, weather: this.weather, accounts: this.accounts, affinity: this.affinity, memories: this.memories, chatLogs: this.chatLogs, extraCars };
     const tmp = this.dataFile + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(data));
     fs.renameSync(tmp, this.dataFile);
@@ -364,6 +365,12 @@ export class World {
       case 'contactAdd': this.contactAdd(p, msg); break;
       case 'contactDel': { const acc = this.accounts[p.token]; acc.contacts = (acc.contacts || []).filter((c) => c.num !== msg.num); this.send(p, { t: 'contacts', list: acc.contacts }); this.dirty = true; break; }
       case 'sms': this.sendSms(p, msg); break;
+      case 'tdProfile': { const acc = this.accounts[p.token]; acc.tinder ||= { likes: [], passes: [] }; acc.tinder.bio = String(msg.bio || '').slice(0, 120); acc.tinder.photo = /^[0-9a-f]{20}$/.test(msg.photo || '') && this.photos[msg.photo]?.owner === p.token ? msg.photo : null; this.dirty = true; this.send(p, { t: 'tdMe', me: acc.tinder }); break; }
+      case 'tdCards': this.send(p, { t: 'tdCards', list: this.tinderCards(p), me: this.accounts[p.token].tinder || null }); break;
+      case 'tdSwipe': this.tinderSwipe(p, String(msg.token || ''), !!msg.like); break;
+      case 'tdMatches': this.send(p, { t: 'tdMatches', list: this.tinderMatches(p) }); break;
+      case 'tdMsgs': { const m = this.matches.find((x) => x.id === msg.mid && (x.a === p.token || x.b === p.token)); if (m) { for (const x of m.msgs) if (x.from !== p.token) x.read = true; this.send(p, { t: 'tdMsgs', mid: m.id, msgs: m.msgs.slice(-80), other: this.tinderPerson(m.a === p.token ? m.b : m.a) }); } break; }
+      case 'tdSend': this.tinderSend(p, msg); break;
       case 'smsRead': { const acc = this.accounts[p.token]; for (const m of acc.sms || []) if (m.from === msg.num) m.read = true; this.dirty = true; break; }
       case 'numReq': {
         const v = this.players.get(msg.id);
@@ -474,6 +481,56 @@ export class World {
     this.send(p, { t: 'smsOut', m: { ...m, mine: true, read: true } });
     const v = [...this.players.values()].find((x) => x.token === tok);
     if (v) this.send(v, { t: 'smsIn', m: { ...m, read: false } });
+  }
+
+  // ---------------- 튄더 (다른 플레이어와 매칭) ----------------
+  tinderPerson(token) {
+    const a = this.accounts[token];
+    if (!a) return null;
+    return { token, name: a.name, gender: a.profile.gender, age: a.profile.age, level: a.profile.level || 1, job: a.profile.jobName || '', personality: a.profile.personality, color: a.profile.color, look: a.profile.look, accessories: a.profile.accessories, badges: a.profile.badges || [], bio: a.tinder?.bio || '', photo: a.tinder?.photo || null, online: [...this.players.values()].some((x) => x.token === token) };
+  }
+  tinderCards(p) {
+    const me = this.accounts[p.token];
+    const t = (me.tinder ||= { likes: [], passes: [] });
+    const mine = new Set(this.users[me.owner]?.chars || [p.token]);
+    return Object.keys(this.accounts).filter((tok) => !mine.has(tok) && !t.likes.includes(tok) && !t.passes.includes(tok) && this.accounts[tok].owner)
+      .sort((a, b) => (this.accounts[b].last || 0) - (this.accounts[a].last || 0)).slice(0, 30).map((tok) => this.tinderPerson(tok));
+  }
+  tinderSwipe(p, token, like) {
+    const me = this.accounts[p.token], other = this.accounts[token];
+    if (!other || token === p.token) return;
+    const t = (me.tinder ||= { likes: [], passes: [] });
+    (like ? t.likes : t.passes).push(token);
+    this.dirty = true;
+    if (like && other.tinder?.likes?.includes(p.token) && !this.matches.some((m) => (m.a === p.token && m.b === token) || (m.b === p.token && m.a === token))) {
+      const m = { id: crypto.randomBytes(6).toString('hex'), a: p.token, b: token, t: Date.now(), msgs: [] };
+      this.matches.push(m);
+      this.send(p, { t: 'tdMatch', mid: m.id, other: this.tinderPerson(token) });
+      const o = [...this.players.values()].find((x) => x.token === token);
+      if (o) this.send(o, { t: 'tdMatch', mid: m.id, other: this.tinderPerson(p.token) });
+    }
+  }
+  tinderMatches(p) {
+    return this.matches.filter((m) => m.a === p.token || m.b === p.token).map((m) => {
+      const last = m.msgs.at(-1);
+      return { mid: m.id, other: this.tinderPerson(m.a === p.token ? m.b : m.a), last: last ? (last.contact ? '📇 연락처' : last.text) : '', t: last?.t || m.t, unread: m.msgs.filter((x) => x.from !== p.token && !x.read).length };
+    }).filter((x) => x.other).sort((a, b) => b.t - a.t);
+  }
+  tinderSend(p, msg) {
+    const m = this.matches.find((x) => x.id === msg.mid && (x.a === p.token || x.b === p.token));
+    if (!m || Date.now() - (p.lastTd || 0) < 500) return;
+    p.lastTd = Date.now();
+    const me = this.accounts[p.token];
+    const item = { from: p.token, t: Date.now(), read: false };
+    if (msg.contact) item.contact = { name: me.name, num: me.phone };
+    else { item.text = String(msg.text || '').trim().slice(0, 300); if (!item.text) return; }
+    m.msgs.push(item);
+    if (m.msgs.length > 300) m.msgs.shift();
+    this.dirty = true;
+    const otherTok = m.a === p.token ? m.b : m.a;
+    this.send(p, { t: 'tdMsg', mid: m.id, msg: item });
+    const o = [...this.players.values()].find((x) => x.token === otherTok);
+    if (o) this.send(o, { t: 'tdMsg', mid: m.id, msg: item, name: me.name });
   }
 
   // ---------------- 사진 · 인스타그램 ----------------

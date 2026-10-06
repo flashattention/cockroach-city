@@ -40,7 +40,7 @@
 
   <!-- 상단 버튼 -->
   <div id="topbar" class="hidden">
-    <button id="tb-phone" title="휴대폰 (Tab)">📱 휴대폰</button>
+    <button id="tb-phone" title="휴대폰 (K 또는 Tab)">📱 휴대폰 <kbd>K</kbd></button>
     <button id="tb-feedback" title="개발자에게 건의하기">💡 건의하기</button>
     <button id="tb-exit" title="저장하고 캐릭터 선택으로">💾 저장하고 나가기</button>
   </div>
@@ -102,27 +102,19 @@
     </div>
   </div>
 
-  <!-- 휴대폰 메뉴 -->
+  <!-- 휴대폰 (오른쪽 아래, 아이폰처럼) -->
   <div id="phone" class="hidden">
-    <div id="phone-inner">
-      <div id="phone-tabs">
-        <button data-tab="quests">📋 퀘스트</button>
-        <button data-tab="camera">📷 카메라</button>
-        <button data-tab="gallery">🖼️ 갤러리</button>
-        <button data-tab="insta">📸 인스타</button>
-        <button data-tab="contacts">📞 연락처</button>
-        <button data-tab="sms">💬 문자</button>
-        <button data-tab="police">🚨 112</button>
-        <button data-tab="citizens" class="active">👥 시민 도감</button>
-        <button data-tab="me">🙂 내 정보</button>
-        <button data-tab="map">🗺️ 지도</button>
-        <button data-tab="settings">⚙️ 설정</button>
-        <button data-tab="help">❓ 도움말</button>
-        <button data-tab="feedback">💡 건의</button>
-        <button data-tab="admin" id="tab-admin" class="hidden">📮 건의함</button>
-        <button id="phone-close">✕</button>
+    <div id="iphone">
+      <div class="island"></div>
+      <div class="ph-status"><span id="ph-time">9:41</span><span class="ph-icons">📶 <span id="ph-batt">🔋</span></span></div>
+      <div id="phone-screen">
+        <div id="phone-home"><div id="ph-clock"></div><div id="ph-apps"></div><div id="ph-dock"></div></div>
+        <div id="phone-app" class="hidden">
+          <div class="app-bar"><button id="app-back">‹ 홈</button><b id="app-title"></b><button id="phone-close">✕</button></div>
+          <div id="phone-body"></div>
+        </div>
       </div>
-      <div id="phone-body"></div>
+      <div class="homebar" id="homebar" title="홈 화면"></div>
     </div>
   </div>
 
