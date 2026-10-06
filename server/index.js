@@ -40,7 +40,9 @@ const server = http.createServer((req, res) => {
   });
 });
 
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 });
+// WS_COMPRESS=1 이면 메시지를 압축해서 보낸다 (트래픽 ↓, CPU ↑)
+const COMPRESS = process.env.WS_COMPRESS === '1';
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024, perMessageDeflate: COMPRESS ? { zlibDeflateOptions: { level: 3 }, threshold: 512 } : false });
 wss.on('connection', (ws) => {
   let player = null;
   ws.on('message', (raw) => {
