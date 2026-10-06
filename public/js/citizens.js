@@ -321,7 +321,7 @@ export class Sim {
     const byType = this.city.byType;
     const workerCount = new Map();
     const pickWork = (type) => {
-      const list = byType[type] || [];
+      const list = (byType[type] || []).filter((b) => !b.outer);
       if (!list.length) return null;
       let best = list[0];
       for (const b of list) if ((workerCount.get(b) || 0) < (workerCount.get(best) || 0)) best = b;
@@ -512,8 +512,8 @@ export class Sim {
   }
 
   leisureAt(c, type, until) {
-    const list = this.city.byType[type];
-    if (!list || !list.length) return { kind: 'leisure', building: c.home, until };
+    const list = (this.city.byType[type] || []).filter((b) => !b.outer);
+    if (!list.length) return { kind: 'leisure', building: c.home, until };
     const from = c.location ? c.location.door : c.pos;
     const b = this.rng.weighted(list, (x) => 1 / (20 + x.door.distanceTo(from)));
     return { kind: 'leisure', building: b, until };

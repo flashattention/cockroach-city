@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { HALF, CITY } from './config.js';
+import { WORLD_HALF } from './terrain.js';
 import { JOBS, BUILDING_TYPES, EMOTE } from './data.js';
 import { ITEMS, GEMS, SHOPS, ENCHANT_FEE, CLUB_CHARM, RARITY, itemDef, shopItems, weaponStats, isWeapon, ammoName } from './items.js';
 import { SLOTS } from './inventory.js';
@@ -302,61 +303,74 @@ export class UI {
     for (const [k, el] of this.labels) if (!seen.has(k)) el.style.display = 'none';
   }
 
+  // 미니맵: 미터 단위 좌표계로 세계 지도 + 도시 지도를 겹쳐 그린다
   drawMinimap() {
     const g = this.game;
     const cv = $('minimap');
     const ctx = cv.getContext('2d');
     const S = cv.width;
-    const scale = 1024 / CITY; // mapImage px per unit
-    const zoom = 1.6; // 화면 px per unit
     const p = g.mode === 'interior' ? g.interior.building.door : g.player.inCar ? g.player.inCar.pos : g.player.pos;
+    const outside = Math.abs(p.x) > HALF || Math.abs(p.z) > HALF;
+    const zoom = outside ? 0.55 : 1.6; // 화면 px / m (밖에서는 넓게)
     const yaw = g.player.cam.yaw;
+    const k = 1 / zoom; // 1px 크기 (m)
     ctx.save();
-    ctx.fillStyle = '#9fd38a'; ctx.fillRect(0, 0, S, S);
+    ctx.fillStyle = '#4fa3d9'; ctx.fillRect(0, 0, S, S);
     ctx.translate(S / 2, S / 2);
-    ctx.rotate(yaw); // 카메라가 보는 방향이 위쪽
-    ctx.scale(zoom / scale, zoom / scale);
-    ctx.translate(-(p.x + HALF) * scale, -(p.z + HALF) * scale);
-    ctx.drawImage(g.mapImage, 0, 0);
-    // 시민 점
-    const u = scale;
+    ctx.rotate(yaw);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-p.x, -p.z);
+    if (g.worldImage) ctx.drawImage(g.worldImage, -WORLD_HALF, -WORLD_HALF, WORLD_HALF * 2, WORLD_HALF * 2);
+    ctx.drawImage(g.mapImage, -HALF, -HALF, CITY, CITY);
     for (const c of g.sim.citizens) {
       if (c.location && c.mode !== 'park') continue;
       ctx.fillStyle = c.affinity >= 65 ? '#ff4f81' : '#6b4a3a';
-      ctx.beginPath(); ctx.arc((c.pos.x + HALF) * u, (c.pos.z + HALF) * u, 2.2 / zoom * u, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(c.pos.x, c.pos.z, 2.2 * k, 0, Math.PI * 2); ctx.fill();
     }
     for (const car of g.traffic.cars) {
+      if (car.mode === 'gone') continue;
       ctx.fillStyle = car.mode === 'player' ? '#ff6f91' : '#455a64';
-      ctx.fillRect((car.pos.x + HALF) * u - 1.5 * u / zoom * 1.3, (car.pos.z + HALF) * u - 1.5 * u / zoom * 1.3, 3 * u / zoom * 1.3, 3 * u / zoom * 1.3);
+      ctx.fillRect(car.pos.x - 2 * k, car.pos.z - 2 * k, 4 * k, 4 * k);
     }
-    for (const o of g.players.list.values()) {
-      const op = o.loc >= 0 ? g.city.buildings[o.loc].door : o.pos;
-      ctx.fillStyle = '#7c4dff'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 * u / zoom;
-      ctx.beginPath(); ctx.arc((op.x + HALF) * u, (op.z + HALF) * u, 4 / zoom * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    for (const a of g.animals?.list || []) {
+      if (!a.alive || Math.abs(a.pos.x - p.x) > 200 || Math.abs(a.pos.z - p.z) > 200) continue;
+      ctx.fillStyle = a.hostile ? '#ff5252' : '#fff59d';
+      ctx.beginPath(); ctx.arc(a.pos.x, a.pos.z, 2.6 * k, 0, Math.PI * 2); ctx.fill();
     }
     for (const un of g.units.list.values()) {
       if (un.loc >= 0) continue;
       ctx.fillStyle = '#ff1744';
-      ctx.beginPath(); ctx.arc((un.pos.x + HALF) * u, (un.pos.z + HALF) * u, 3.5 / zoom * u, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(un.pos.x, un.pos.z, 3.5 * k, 0, Math.PI * 2); ctx.fill();
     }
     for (const gi of g.ground.list.values()) {
       if (!gi.rarity || gi.loc !== -1) continue;
-      ctx.fillStyle = gi.rarity.color; ctx.strokeStyle = '#000'; ctx.lineWidth = 1 * u / zoom;
-      const x = (gi.x + HALF) * u, y = (gi.z + HALF) * u, r = 4 / zoom * u;
+      ctx.fillStyle = gi.rarity.color; ctx.strokeStyle = '#000'; ctx.lineWidth = k;
+      const x = gi.x, y = gi.z, r = 4 * k;
       ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill(); ctx.stroke();
     }
     if (g.route?.length) {
-      ctx.strokeStyle = '#2979ff'; ctx.lineWidth = 3 * u / zoom; ctx.setLineDash([6 * u / zoom, 4 * u / zoom]);
-      ctx.beginPath(); ctx.moveTo((p.x + HALF) * u, (p.z + HALF) * u);
-      for (const r of g.route) ctx.lineTo((r.x + HALF) * u, (r.z + HALF) * u);
+      ctx.strokeStyle = '#2979ff'; ctx.lineWidth = 3 * k; ctx.setLineDash([6 * k, 4 * k]);
+      ctx.beginPath(); ctx.moveTo(p.x, p.z);
+      for (const r of g.route) ctx.lineTo(r.x, r.z);
       ctx.stroke(); ctx.setLineDash([]);
     }
+    // 글자·이모지는 화면을 따라 똑바로 세운다
+    const upright = (x, z, fn) => { ctx.save(); ctx.translate(x, z); ctx.scale(k, k); ctx.rotate(-yaw); fn(); ctx.restore(); };
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const home = g.homeBuilding();
-    ctx.font = `${16 * u / zoom}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(g.stats.homeId != null ? '🏡' : '🏨', (home.x + HALF) * u, (home.z + HALF) * u);
+    upright(home.x, home.z, () => { ctx.font = '16px sans-serif'; ctx.fillText(g.stats.homeId != null ? '🏡' : '🏨', 0, 0); });
     const wb = g.workBuilding();
-    if (wb) ctx.fillText('💼', (wb.x + HALF) * u, (wb.z + HALF) * u);
-    if (g.waypoint) ctx.fillText('📍', (g.waypoint.pos.x + HALF) * u, (g.waypoint.pos.z + HALF) * u);
+    if (wb) upright(wb.x, wb.z, () => { ctx.font = '16px sans-serif'; ctx.fillText('💼', 0, 0); });
+    if (g.waypoint) upright(g.waypoint.pos.x, g.waypoint.pos.z, () => { ctx.font = '16px sans-serif'; ctx.fillText('📍', 0, 0); });
+    // 접속 중인 다른 플레이어 (닉네임과 위치)
+    for (const o of g.players.list.values()) {
+      const op = o.loc >= 0 ? g.city.buildings[o.loc].door : o.pos;
+      upright(op.x, op.z, () => {
+        ctx.fillStyle = '#7c4dff'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.font = 'bold 11px sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.strokeText(o.name, 0, -11); ctx.fillStyle = '#fff'; ctx.fillText(o.name, 0, -11);
+      });
+    }
     ctx.restore();
     // 플레이어 화살표
     ctx.save();
@@ -1043,27 +1057,35 @@ export class UI {
   }
 
   // ---------------- 월드맵 ----------------
-  openWorldMap() {
+  openWorldMap(view) {
     const g = this.game;
-    this.openModal(`<h3 class="mh">🗺️ 바퀴시티 지도 <small>건물이나 길을 클릭하면 목적지가 돼요</small></h3>
+    this.mapView = view || this.mapView || 'world';
+    this.openModal(`<h3 class="mh">🗺️ 지도 <small>건물이나 장소를 클릭하면 목적지가 돼요</small></h3>
+      <div class="tabs-row"><button class="btn mini ${this.mapView === 'world' ? '' : 'ghost'}" id="wm-world">🌍 전체 세계</button><button class="btn mini ${this.mapView === 'city' ? '' : 'ghost'}" id="wm-city">🏙️ 바퀴시티 확대</button></div>
       <canvas id="worldmap" width="1024" height="1024"></canvas>
       <div id="wm-info" class="money-line"></div>
       <div><button class="btn" id="wm-walk">🚶 자동으로 걸어가기 (R)</button> <button class="btn ghost" id="wm-clear">목적지 지우기</button> <button class="btn ghost" id="wm-close">닫기 (M)</button></div>`, 'map');
     $('modal-inner').classList.add('wide');
     const cv = $('worldmap');
+    const half = this.mapView === 'city' ? HALF + 8 : WORLD_HALF;
+    const u = 1024 / (half * 2);
+    const X = (x) => (x + half) * u;
     const draw = () => {
       const ctx = cv.getContext('2d');
-      ctx.drawImage(g.mapImage, 0, 0);
-      const u = 1024 / CITY;
-      const X = (x) => (x + HALF) * u;
+      ctx.fillStyle = '#4fa3d9'; ctx.fillRect(0, 0, 1024, 1024);
+      if (g.worldImage) ctx.drawImage(g.worldImage, X(-WORLD_HALF), X(-WORLD_HALF), WORLD_HALF * 2 * u, WORLD_HALF * 2 * u);
+      ctx.drawImage(g.mapImage, X(-HALF), X(-HALF), CITY * u, CITY * u);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = 'bold 13px sans-serif';
+      const big = this.mapView === 'city';
+      ctx.font = `bold ${big ? 13 : 10}px sans-serif`;
       for (const b of g.city.buildings) {
         if (isHomeType(b) && !g.ownsHome?.(b)) continue;
+        if (!big && !b.outer) continue;
         ctx.fillStyle = 'rgba(255,255,255,.85)';
         const w = ctx.measureText(b.name).width + 8;
-        ctx.fillRect(X(b.x) - w / 2, X(b.z) + 9, w, 16);
-        ctx.fillStyle = '#4a3428'; ctx.fillText(b.name, X(b.x), X(b.z) + 17);
+        ctx.fillRect(X(b.x) - w / 2, X(b.z) + 9, w, big ? 16 : 13);
+        ctx.fillStyle = '#4a3428'; ctx.fillText(b.name, X(b.x), X(b.z) + (big ? 17 : 15));
+        if (!big) { ctx.font = '14px sans-serif'; ctx.fillText(b.def.emoji, X(b.x), X(b.z)); ctx.font = 'bold 10px sans-serif'; }
       }
       if (g.route?.length) {
         ctx.strokeStyle = '#2979ff'; ctx.lineWidth = 5; ctx.setLineDash([10, 6]);
@@ -1072,26 +1094,33 @@ export class UI {
         for (const r of g.route) ctx.lineTo(X(r.x), X(r.z));
         ctx.stroke(); ctx.setLineDash([]);
       }
-      ctx.font = '28px sans-serif';
+      ctx.font = big ? '28px sans-serif' : '20px sans-serif';
       const home = g.homeBuilding();
       ctx.fillText(g.stats.homeId != null ? '🏡' : '🏨', X(home.x), X(home.z) - 10);
       if (g.workBuilding()) ctx.fillText('💼', X(g.workBuilding().x), X(g.workBuilding().z) - 10);
       if (g.waypoint) ctx.fillText('📍', X(g.waypoint.pos.x), X(g.waypoint.pos.z) - 14);
-      for (const o of g.players.list.values()) { const op = o.loc >= 0 ? g.city.buildings[o.loc].door : o.pos; ctx.fillStyle = '#7c4dff'; ctx.beginPath(); ctx.arc(X(op.x), X(op.z), 9, 0, 7); ctx.fill(); ctx.fillStyle = '#4a3428'; ctx.font = 'bold 14px sans-serif'; ctx.fillText(o.name, X(op.x), X(op.z) - 16); ctx.font = '28px sans-serif'; }
+      for (const o of g.players.list.values()) {
+        const op = o.loc >= 0 ? g.city.buildings[o.loc].door : o.pos;
+        ctx.fillStyle = '#7c4dff'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(X(op.x), X(op.z), 8, 0, 7); ctx.fill(); ctx.stroke();
+        ctx.font = 'bold 14px sans-serif'; ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.strokeText(o.name, X(op.x), X(op.z) - 16); ctx.fillStyle = '#311b92'; ctx.fillText(o.name, X(op.x), X(op.z) - 16);
+      }
       const pp = g.mode === 'interior' ? g.interior.building.door : g.player.pos;
       ctx.fillStyle = '#ff1744'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4;
       ctx.beginPath(); ctx.arc(X(pp.x), X(pp.z), 11, 0, 7); ctx.fill(); ctx.stroke();
-      $('wm-info').innerHTML = g.waypoint ? `📍 목적지: <b>${escapeHtml(g.waypoint.label)}</b> · 걸어서 ${Math.round(g.routeLen || g.waypoint.pos.distanceTo(pp))}m (약 ${Math.max(1, Math.round((g.routeLen || 0) / 9.5 / 6) / 10)}분)` : '목적지를 클릭하세요';
+      ctx.font = 'bold 14px sans-serif'; ctx.fillStyle = '#b71c1c'; ctx.fillText('나', X(pp.x), X(pp.z) + 22);
+      $('wm-info').innerHTML = g.waypoint ? `📍 목적지: <b>${escapeHtml(g.waypoint.label)}</b> · ${Math.round(g.routeLen || g.waypoint.pos.distanceTo(pp))}m` : '목적지를 클릭하세요';
     };
     draw();
     cv.onclick = (e) => {
       const r = cv.getBoundingClientRect();
-      const x = ((e.clientX - r.left) / r.width) * CITY - HALF, z = ((e.clientY - r.top) / r.height) * CITY - HALF;
-      let best = null, bd = 14;
-      for (const b of g.city.buildings) { const d = Math.hypot(b.x - x, b.z - z); if (d < bd) { bd = d; best = b; } }
+      const x = ((e.clientX - r.left) / r.width) * half * 2 - half, z = ((e.clientY - r.top) / r.height) * half * 2 - half;
+      let best = null, bd = this.mapView === 'city' ? 14 : 30;
+      for (const b of g.city.buildings) { if (this.mapView !== 'city' && !b.outer && Math.abs(x) < HALF && Math.abs(z) < HALF) continue; const d = Math.hypot(b.x - x, b.z - z); if (d < bd) { bd = d; best = b; } }
       if (best) g.setWaypoint(best); else g.setWaypoint(new THREE.Vector3(x, 0, z), '찍은 위치');
       draw();
     };
+    $('wm-world').onclick = () => this.openWorldMap('world');
+    $('wm-city').onclick = () => this.openWorldMap('city');
     $('wm-walk').onclick = () => { this.closeModal(); if (!g.autoWalk) g.toggleAutoWalk(); };
     $('wm-clear').onclick = () => { g.waypoint = null; g.route = null; g.autoWalk = false; draw(); };
     $('wm-close').onclick = () => this.closeModal();
@@ -1151,6 +1180,19 @@ export class UI {
     el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
   }
   rangeHud(text) { $('range-hud').classList.toggle('hidden', !text); if (text) $('range-hud').innerHTML = text; }
+    // ---------------- 전리품 팔기 ----------------
+  openSell() {
+    const g = this.game;
+    const items = g.stats.items.filter((it) => itemDef(it.id).sell > 0);
+    this.openModal(`<h3 class="mh">💰 전리품 팔기 <small>가죽·고기·트로피를 사들여요</small></h3>
+      <div class="money-line">💰 소지금 <b>₩${Math.floor(g.stats.money).toLocaleString()}</b></div>
+      <div class="itemlist">${items.map((it) => { const d = itemDef(it.id); return `<div class="item"><div class="ic">${d.emoji}</div><div class="info"><b>${escapeHtml(d.name)} ×${it.n || 1}</b><small>개당 ₩${d.sell.toLocaleString()}</small></div><div class="acts"><button class="btn mini ghost" data-s1="${it.uid}">1개 팔기</button><button class="btn mini" data-sa="${it.uid}">모두 ₩${(d.sell * (it.n || 1)).toLocaleString()}</button></div></div>`; }).join('') || '<div style="padding:14px">팔 전리품이 없어요. 숲·늪·정글·아마존에서 사냥해 보세요! 🏹</div>'}</div>
+      <div style="margin-top:10px"><button class="btn ghost" id="sell-close">닫기</button></div>`, 'sell');
+    $('sell-close').onclick = () => this.closeModal();
+    $('modal-inner').querySelectorAll('[data-s1]').forEach((b) => { b.onclick = () => { g.sell(b.dataset.s1, 1); this.openSell(); }; });
+    $('modal-inner').querySelectorAll('[data-sa]').forEach((b) => { b.onclick = () => { g.sell(b.dataset.sa, 9999); this.openSell(); }; });
+  }
+
   shutter() { const f = $('shutter'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
 
   // ---------------- 자동차 쇼룸 ----------------

@@ -74,6 +74,10 @@ export class Combat {
       if (!u || u.loc !== p.loc || u.pos.distanceTo(p.pos) > maxDist + 6) return;
       this.damageUnit(u, damageTaken(dmg, UNIT[u.kind].def, stats.pierce), p, crit);
       this.lifesteal(p, dmg, stats);
+    } else if (msg.tt === 'animal') {
+      const a = this.w.wild.list[msg.id];
+      if (!a || p.loc !== -1 || Math.hypot(a.x - p.pos.x, a.z - p.pos.z) > maxDist + 3) return;
+      this.w.wild.damage(a, dmg, p);
     } else if (msg.tt === 'car') {
       const car = this.w.traffic.cars[msg.id];
       if (car && p.loc < 0 && car.pos.distanceTo(p.pos) < maxDist + 4) this.damageCar(car, dmg * 0.5, p);
@@ -251,6 +255,11 @@ export class Combat {
       if (u.loc !== loc) continue;
       const d = u.pos.distanceTo(center);
       if (d < R + 1) this.damageUnit(u, damageTaken(base * (0.4 + 0.6 * fall(d)), UNIT[u.kind].def, stats.pierce || 0), attacker);
+    }
+    if (loc < 0 && attacker) for (const a of this.w.wild.list) {
+      if (a.dead) continue;
+      const d = Math.hypot(a.x - center.x, a.z - center.z);
+      if (d < R + 1) this.w.wild.damage(a, base * (0.4 + 0.6 * fall(d)), attacker);
     }
     if (loc < 0) for (const car of this.w.traffic.cars) {
       const d = car.pos.distanceTo(center);

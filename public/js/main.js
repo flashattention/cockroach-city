@@ -20,6 +20,9 @@ import { expNeed, levelStats, addExp } from './level.js';
 import { dailyQuests, questDef } from './quests.js';
 import { SPORT_KINDS, vehicleName, CAR_KINDS } from './traffic.js';
 import { DROP_POOL } from './items.js';
+import { buildWilds, renderWorldImage } from './wilds.js';
+import { AnimalsView } from './animals.js';
+import { WORLD_HALF, WATER_Y, regionAt } from './terrain.js';
 
 // ------------------------------------------------------------------
 // 렌더러 & 장면
@@ -191,8 +194,12 @@ game.ui = ui;
 game.hour = () => (game.minutes % 1440) / 60;
 game.day = () => Math.floor(game.minutes / 1440);
 game.loc = () => (game.mode === 'interior' ? game.interior.building.id : -1);
+game.regionName = (pos) => { const r = regionAt(pos.x, pos.z); return r ? `${r.emoji} ${r.name}` : null; };
 game.placeText = () => {
   if (game.mode === 'interior') return `${game.interior.building.name} 안`;
+  const rn = game.regionName(game.player.pos);
+  if (rn) return rn;
+  if (Math.abs(game.player.pos.x) > HALF || Math.abs(game.player.pos.z) > HALF) return '바퀴시티 외곽';
   let best = null, bd = 30;
   for (const b of game.city.buildings) {
     const d = Math.hypot(b.door.x - game.player.pos.x, b.door.z - game.player.pos.z);
@@ -312,6 +319,14 @@ function buildWorld(w) {
   const { buildings, sim } = setupWorld(SEED);
   for (const [id, name] of Object.entries(w.homes)) buildings[id].name = name;
   const city = buildCity(scene, buildings, SEED);
+  // 도시 밖 넓은 세상: 지형·숲·바다·대교
+  const wild = buildWilds(scene, city);
+  game.wild = wild;
+  const cityGround = city.groundY;
+  city.groundY = (x, z, y) => (Math.abs(x) <= HALF && Math.abs(z) <= HALF ? cityGround(x, z) : wild.groundY(x, z, y));
+  game.worldImage = renderWorldImage(wild.grid);
+  game.animals = new AnimalsView(scene, w.animals || [], city.groundY);
+  for (const key of w.smashed || []) smashProp(key, [1, 0], true);
   sim.city = city;
   game.city = city; game.sim = sim;
   game.mapImage = renderMapImage(buildings, 1024);
@@ -437,6 +452,7 @@ function setupNet() {
     }
     game.players.applySnap(s.p);
     game.units.apply(s.u || []);
+    if (s.a) game.animals.apply(s.a);
     for (const ev of s.ev) game.citizens.applyEvent(ev);
   });
   net.on('pjoin', (m) => { game.players.add(m.p); if (!game.started) return; ui.toast(`👋 ${m.p.name}님이 바퀴시티에 왔어요`); ui.addChatLine('sys', `${m.p.name}님이 입장했어요`); });
@@ -533,6 +549,9 @@ function setupNet() {
     ui.toast('🚗💥 차에 치여서 뒤집혔어요!');
   });
   net.on('xp', (m) => gainExp(m.v, m.reason));
+  net.on('smash', (m) => smashProp(m.key, m.dir, true));
+  net.on('unsmash', (m) => smashProp(m.key, null, false));
+  net.on('hunted', (m) => { game.stats.hunted = (game.stats.hunted || 0) + 1; game.questEvent('hunt'); });
   // 휴대폰
   const refreshPhone = (tab) => { if (!document.getElementById('phone').classList.contains('hidden') && ui.phoneTab === tab) ui.openPhone(tab); };
   net.on('contacts', (m) => { game.contacts = m.list; refreshPhone('contacts'); });
@@ -820,6 +839,7 @@ async function enterBuilding(b) {
   game.interior = I;
   game.mode = 'interior';
   game.city.root.visible = false;
+  game.wild.root.visible = false;
   const p = game.player;
   p.pos.copy(I.entry);
   p.heading = Math.PI;
@@ -842,6 +862,7 @@ async function exitBuilding(silent) {
   game.interior = null;
   game.mode = 'city';
   game.city.root.visible = true;
+  game.wild.root.visible = true;
   const p = game.player;
   p.pos.copy(b.door).addScaledVector(new THREE.Vector3(0, 0, b.dir), 1.2);
   p.pos.y = game.city.groundY(p.pos.x, p.pos.z);
@@ -886,6 +907,7 @@ async function doAction(a) {
   if (a.enchant) { ui.openEnchant(); return; }
   if (a.houses) { ui.openHouses(); return; }
   if (a.restyle) { ui.openStyle(a.cost); return; }
+  if (a.sell) { ui.openSell(); return; }
   if (a.dealer) { ui.openDealer(); return; }
   if (a.rangeStart) { startRange(); return; }
   if (a.rangeRent) {
@@ -1015,6 +1037,18 @@ game.buy = async (id) => {
 };
 
 // 자동차 구매: 차 키를 받고 가게 앞에 배송
+// 전리품 팔기
+game.sell = (uid, n) => {
+  const it = game.inv.find(uid);
+  if (!it) return;
+  const d = itemDef(it.id);
+  const k = Math.min(n, it.n || 1);
+  game.inv.remove(uid, k);
+  game.stats.money += d.sell * k;
+  ui.toast(`💰 ${d.emoji} ${d.name} ${k}개를 ₩${(d.sell * k).toLocaleString()}에 팔았어요`);
+  game.sendProfile();
+};
+
 game.buyCar = async (kind, color, price) => {
   const S = game.stats;
   if (S.money < price) { ui.toast('💸 돈이 부족해요!'); return false; }
@@ -1039,6 +1073,18 @@ function summonCar(it) {
   const pos = p.pos.clone().addScaledVector(side, 3.2);
   game.net.send({ t: 'summonCar', kind: it.car.kind, color: it.car.color, x: pos.x, z: pos.z, h: p.heading });
   ui.toast(`🔑 ${vehicleName(it.car.kind)}을(를) 불렀어요! F로 타세요`);
+}
+
+// 차로 들이받은 가로등·나무 (c: 도시, w: 야생)
+function smashProp(key, dir, broken) {
+  if (!key || !game.city) return;
+  const props = key[0] === 'c' ? game.city.props : game.wild?.props;
+  props?.setBroken(+key.slice(1), broken, dir || [1, 0]);
+}
+// 지금 위치 근처의 충돌 상자 (도시 + 숲 나무)
+function wildColliders(pos) {
+  if (Math.abs(pos.x) < HALF - 20 && Math.abs(pos.z) < HALF - 20) return game.city.colliders;
+  return game.city.colliders.concat(game.wild.near(pos.x, pos.z, 6));
 }
 
 // ------------------------------------------------------------------
@@ -1384,7 +1430,15 @@ game.setWaypoint = setWaypoint;
 function updateRoute() {
   if (!game.waypoint) { game.route = null; return; }
   const from = game.mode === 'interior' ? game.interior.building.door : game.player.pos;
-  game.route = routeTo(from, game.waypoint.building || { point: game.waypoint.pos }, game.sim.blockers);
+  const to = game.waypoint.pos;
+  const out = (v) => Math.abs(v.x) > HALF - 4 || Math.abs(v.z) > HALF - 4;
+  // 도시 밖이 끼면: 가장 가까운 도시 출입구(사방 고속도로)를 거쳐 곧장
+  const GATES = [new THREE.Vector3(0, 0, -HALF), new THREE.Vector3(0, 0, HALF), new THREE.Vector3(-HALF, 0, 0), new THREE.Vector3(HALF, 0, 0)];
+  const gateNear = (v) => GATES.reduce((a, b) => (a.distanceTo(v) < b.distanceTo(v) ? a : b));
+  if (out(from) && out(to)) game.route = [to.clone()];
+  else if (out(to)) { const gate = gateNear(to); game.route = [...routeTo(from, { point: gate }, game.sim.blockers), to.clone()]; }
+  else if (out(from)) { const gate = gateNear(from); game.route = [gate, ...routeTo(gate, game.waypoint.building || { point: to }, game.sim.blockers)]; }
+  else game.route = routeTo(from, game.waypoint.building || { point: to }, game.sim.blockers);
   game.routeLen = routeLength(from, game.route);
 }
 // 1초마다: 길에서 벗어났거나 걷지 않을 때는 경로를 새로 계산
@@ -1457,8 +1511,8 @@ function frame() {
   input.moveDir = blocked ? null : autoWalkDir();
   const indoor = game.mode === 'interior';
   const world = indoor
-    ? { colliders: game.interior.colliders, groundY: () => 0.1, bounds: game.interior.bounds, npcs: game.sim.citizens, cameraColliders: null, platforms: game.interior.platforms, tired: game.stats.needs.energy < 8, ceiling: 4.2 }
-    : { colliders: game.city.colliders, groundY: game.city.groundY, npcs: game.sim.citizens, cameraColliders: game.city.colliders, tired: game.stats.needs.energy < 8, bounds: { minX: -HALF + 0.5, maxX: HALF - 0.5, minZ: -HALF + 0.5, maxZ: HALF - 0.5 } };
+    ? { colliders: game.interior.colliders, climbable: false, groundY: () => 0.1, bounds: game.interior.bounds, npcs: game.sim.citizens, cameraColliders: null, platforms: game.interior.platforms, tired: false, ceiling: 4.2 }
+    : { colliders: game.autoWalk ? wildColliders(p.pos).filter((c) => !c.small) : wildColliders(p.pos), platforms: game.city.roofs, groundY: game.city.groundY, npcs: game.sim.citizens, cameraColliders: game.city.colliders, tired: false, water: WATER_Y, bounds: { minX: -WORLD_HALF + 5, maxX: WORLD_HALF - 5, minZ: -WORLD_HALF + 5, maxZ: WORLD_HALF - 5 } };
   world.mouseActive = game.mouseT > 0;
 
   // 차량: 내 차는 직접 운전, 나머지는 서버 위치로 보간
@@ -1466,7 +1520,13 @@ function frame() {
   for (const car of game.traffic.cars) {
     if (car.bubble) { car.bubble.t -= dt; if (car.bubble.t <= 0) car.bubble = null; }
     if (car === p.inCar) {
-      game.traffic.updatePlayer(car, dt, { input, city: game.city, onBump: () => ui.toast('쿵! 💥') });
+      const near = indoor ? [] : game.wild.near(car.pos.x, car.pos.z, 10);
+      game.traffic.updatePlayer(car, dt, {
+        input, city: game.city, colliders: near.length ? game.city.colliders.concat(near) : game.city.colliders, groundY: game.city.groundY,
+        onBump: () => ui.toast('쿵! 💥'),
+        onWater: () => { if (performance.now() - (game.waterMsg || 0) > 3000) { game.waterMsg = performance.now(); ui.toast('🌊 차는 물에 못 들어가요! 대교로 건너세요'); } },
+        onSmash: (c, dir) => { smashProp(c.pkey, dir, true); game.net.send({ t: 'smash', key: c.pkey, dir }); game.shake(0.25); },
+      });
       if (car.kind === 'tank') car.turret = angleLerp(car.turret || 0, (p.cam.yaw + Math.PI) - car.heading, Math.min(1, dt * 6));
       continue;
     }
@@ -1507,6 +1567,17 @@ function frame() {
   ui.setScope(selD?.zoom >= 4 && p.aim > 0.85);
   if (p.inCar) { seatRoach(p.roach, p.inCar); p.roach.update(dt, 0, {}); }
   game.citizens.update(dt, camera.position, game.loc());
+  game.animals.update(dt, camera.position, !indoor);
+  if (!indoor) game.wild.update(camera.position);
+  // 지역에 들어서면 알려준다
+  if ((game.regionT = (game.regionT || 0) - dt) <= 0) {
+    game.regionT = 1;
+    const r = indoor ? null : regionAt(p.pos.x, p.pos.z);
+    if ((r?.id || null) !== (game.region || null)) {
+      game.region = r?.id || null;
+      if (r) ui.lootBanner(`${r.emoji} ${r.name}`, { forest: '곰·늑대·사슴이 사는 숲 — 조심하세요!', swamp: '악어가 숨어 있어요 🐊', jungle: '호랑이 출몰 지역 🐯', amazon: '아나콘다와 재규어의 땅 🐍🐆', island: '대교 건너 평화로운 목장 마을', mountain: '바퀴산 — 정상은 눈으로 덮여 있어요', valley: '맑은 강이 흐르는 계곡', meadow: '사슴과 토끼가 뛰노는 들판', sea: '' }[r.id] || '', '#43a047', '');
+    }
+  }
   game.players.update(dt, game.loc(), game.traffic);
   game.units.update(dt, game.loc(), game.city.groundY);
   game.ground.update(t, game.loc());
@@ -1561,6 +1632,7 @@ function spectateFrame(dt, t) {
     car.heading = angleLerp(car.heading, tg.h, k);
   }
   tourFrame(dt, t);
+  game.wild.update(camera.position);
   game.traffic.render(true, camera.position, dt);
   game.citizens.update(dt, camera.position, -1);
   game.players.update(dt, -1, game.traffic);

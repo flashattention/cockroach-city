@@ -8,6 +8,7 @@ import { setupWorld, housePrice, freeUnits, isHomeType, homeLabel, WORLD_VERSION
 import { sanitizeLook, BASIC_ACC } from '../public/js/look.js';
 import { levelStats } from '../public/js/level.js';
 import { Combat } from './combat.js';
+import { Wildlife } from './wildlife.js';
 import { itemDef } from '../public/js/items.js';
 import { MODES, PLAN_KINDS } from '../public/js/citizens.js';
 import { Traffic, AI_CARS, CAR_KINDS } from '../public/js/traffic.js';
@@ -23,7 +24,7 @@ const MAX_CHARS = 4;
 // 건의함을 볼 수 있는 관리자 (쉼표로 여러 명)
 const ADMINS = (process.env.ADMIN_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 export const isAdmin = (user) => !!user?.email && ADMINS.includes(user.email.toLowerCase());
-const SPECTATOR_TYPES = new Set(['pjoin', 'pleave', 'pmeta', 'carSpawn', 'gdrop', 'gpick', 'homes', 'fx', 'eject', 'carSay', 'hearts']);
+const SPECTATOR_TYPES = new Set(['smash', 'unsmash', 'pjoin', 'pleave', 'pmeta', 'carSpawn', 'gdrop', 'gpick', 'homes', 'fx', 'eject', 'carSay', 'hearts']);
 
 export class World {
   constructor({ dataDir }) {
@@ -67,6 +68,8 @@ export class World {
     this.lastMeta = new Map();
     this.dirty = false;
     this.combat = new Combat(this);
+    this.wild = new Wildlife(this);
+    this.smashed = new Map(); // 부서진 소품 → 복구 시각
     this.snapN = 0;
     this.hotel = city.byType.hotel[0];
     sim.onReport = (c, rep) => this.handleReport(c, rep);
@@ -226,7 +229,7 @@ export class World {
       affinity: aff, memories: mem, players: [...this.players.values()].map(playerMeta),
       extraCars: this.traffic.cars.slice(AI_CARS).map((c) => ({ id: c.id, x: c.pos.x, z: c.pos.z, h: c.heading, kind: c.kind, color: c.color })),
       npcMeta: this.sim.citizens.map((c) => this.npcMeta(c)),
-      ground: this.combat.groundList(), hotelId: this.hotel.id,
+      ground: this.combat.groundList(), hotelId: this.hotel.id, animals: this.wild.kinds(), smashed: [...this.smashed.keys()],
       extraKinds: this.traffic.cars.slice(AI_CARS).map((c) => c.kind),
     });
     this.broadcast({ t: 'pjoin', p: playerMeta(p) }, p.id);
@@ -267,7 +270,7 @@ export class World {
       players: [...this.players.values()].map(playerMeta),
       extraCars: this.traffic.cars.slice(AI_CARS).map((c) => ({ id: c.id, x: c.pos.x, z: c.pos.z, h: c.heading, kind: c.kind, color: c.color })),
       npcMeta: this.sim.citizens.map((c) => this.npcMeta(c)),
-      ground: this.combat.groundList(), hotelId: this.hotel.id,
+      ground: this.combat.groundList(), hotelId: this.hotel.id, animals: this.wild.kinds(), smashed: [...this.smashed.keys()],
     }));
   }
 
@@ -349,6 +352,14 @@ export class World {
       }
       case 'pickup': this.combat.pickup(p, msg.gid); break;
       case 'holy': this.combat.holy(p, msg); break;
+      case 'smash': {
+        // 차로 가로등·나무를 들이받음 → 모두에게 알리고 1분 뒤 복구
+        const key = String(msg.key || '').slice(0, 12);
+        if (!/^[cw]\d+$/.test(key) || this.smashed.has(key)) break;
+        this.smashed.set(key, Date.now() + 60000);
+        this.broadcast({ t: 'smash', key, dir: Array.isArray(msg.dir) ? msg.dir.slice(0, 2).map(Number) : [1, 0] });
+        break;
+      }
       case 'contactAdd': this.contactAdd(p, msg); break;
       case 'contactDel': { const acc = this.accounts[p.token]; acc.contacts = (acc.contacts || []).filter((c) => c.num !== msg.num); this.send(p, { t: 'contacts', list: acc.contacts }); this.dirty = true; break; }
       case 'sms': this.sendSms(p, msg); break;
@@ -740,6 +751,8 @@ export class World {
     this.sim.update(dt, this.minutes, { players });
     this.traffic.update(dt, { players, sim: this.sim });
     this.combat.tick(dt);
+    this.wild.tick(dt);
+    if (this.smashed.size) { const now = Date.now(); for (const [k, t] of this.smashed) if (now > t) { this.smashed.delete(k); this.broadcast({ t: 'unsmash', key: k }); } }
     // 대화 중인 플레이어가 멀어지거나 오래 말이 없으면 대화 종료
     for (const p of this.players.values()) {
       if (p.talking === null) continue;
@@ -776,6 +789,7 @@ export class World {
     for (const car of this.traffic.cars) cars.push(q(car.pos.x), q(car.pos.z), q(car.heading, 100), q(car.speed), CAR_MODES.indexOf(car.mode), car.owner ?? -1, q(car.pos.y || 0), car.occ || 0, q(car.turret || 0, 100));
     const players = [...this.players.values()].map((p) => [p.id, q(p.pos.x, 100), q(p.pos.y, 100), q(p.pos.z, 100), q(p.heading, 100), q(p.speed), p.loc, p.car, p.air, p.sleeping ? 1 : 0, Math.round(p.hp), p.dead ? 1 : 0, p.stars || 0]);
     const snap = { t: 'snap', m: this.minutes, w: this.weather, n: npcs, meta, c: cars, p: players, u: this.combat.unitSnap(), ev: this.sim.drainEvents() };
+    if (this.snapN % 3 === 0) snap.a = this.wild.snap();
     if (++this.snapN % 10 === 0) {
       const nd = [];
       for (const c of this.sim.citizens) nd.push(Math.round(c.hp), Math.round(c.needs.hunger), Math.round(c.needs.energy), Math.round(c.needs.fun), Math.round(c.needs.social), Math.round(c.needs.hygiene), Math.round(c.mood));

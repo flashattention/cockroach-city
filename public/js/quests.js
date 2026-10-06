@@ -14,6 +14,7 @@ export const QUEST_POOL = [
   { id: 'drive1500', text: '🚗 1.5km 운전하기', ev: 'drive', n: 1500, xp: 130, money: 40 },
   { id: 'sms2', text: '💬 친구에게 문자 2통 보내기', ev: 'sms', n: 2, xp: 80, money: 20 },
   { id: 'magic5', text: '🪄 마법 5번 쓰기', ev: 'magic', n: 5, xp: 110, money: 30 },
+  { id: 'hunt2', text: '🏹 야생동물 2마리 사냥하기', ev: 'hunt', n: 2, xp: 200, money: 60 },
   { id: 'sleep1', text: '😴 푹 자기', ev: 'sleep', n: 1, xp: 60, money: 10 },
 ];
 export const questDef = (id) => QUEST_POOL.find((q) => q.id === id);

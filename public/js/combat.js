@@ -182,6 +182,10 @@ export class Combat {
       const big = u.kind === 'tank' || u.kind === 'heli';
       out.push({ tt: 'unit', id: u.id, base: u.obj.position, r: big ? 2.4 : 0.55, h: big ? 3 : 2 });
     }
+    if (g.mode === 'city') for (const a of g.animals?.list || []) {
+      if (!a.visible || !a.alive || a.def.livestock) continue;
+      out.push({ tt: 'animal', id: a.id, base: a.pos, r: a.def.r, h: a.def.h });
+    }
     if (g.mode === 'interior') for (const t of g.interior.targets || []) if (t.up) out.push({ tt: 'rtarget', id: t.id, base: t.obj.getWorldPosition(new THREE.Vector3()).setY(t.y0 - t.r), r: t.r, h: t.r * 2, rt: t });
     if (g.mode === 'city') for (const car of g.traffic.cars) {
       if (car === g.player.inCar || car.mode === 'wreck' || car.mode === 'gone') continue;

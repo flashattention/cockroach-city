@@ -47,7 +47,7 @@ export class Player {
 
   // 발판을 포함한 바닥 높이
   groundAt(world, x, z, y) {
-    let g = world.groundY(x, z);
+    let g = world.groundY(x, z, y);
     if (world.platforms) for (const p of world.platforms) {
       if (x > p.minX - 0.3 && x < p.maxX + 0.3 && z > p.minZ - 0.3 && z < p.maxZ + 0.3 && y >= p.top - 0.45) g = Math.max(g, p.top);
     }

@@ -1,0 +1,138 @@
+// 야생동물 AI (서버): 돌아다니고, 사냥감은 도망치고, 맹수는 덤빈다. 쓰러지면 전리품을 떨어뜨리고 잠시 뒤 다시 태어난다
+import { ANIMALS, ANIMAL_KINDS } from '../public/js/fauna.js';
+import { REGIONS, terrainH, WATER_Y } from '../public/js/terrain.js';
+import { HALF } from '../public/js/config.js';
+import { RNG } from '../public/js/utils.js';
+
+const q = (v, k = 10) => Math.round(v * k);
+
+export class Wildlife {
+  constructor(world) {
+    this.w = world;
+    this.rng = new RNG(31337);
+    this.list = [];
+    for (const kind of ANIMAL_KINDS) for (let i = 0; i < ANIMALS[kind].n; i++) {
+      const a = { id: this.list.length, kind, x: 0, z: 0, h: 0, hp: ANIMALS[kind].hp, mv: 0, dead: false, deadT: 0, atkT: 0, t: 0, tx: 0, tz: 0, angry: null, angryT: 0 };
+      this.place(a);
+      this.list.push(a);
+    }
+  }
+
+  rects(kind) {
+    const d = ANIMALS[kind];
+    if (d.pen) return [d.pen];
+    return REGIONS.filter((r) => d.region.includes(r.id)).map((r) => r.rect);
+  }
+  okSpot(kind, x, z) {
+    if (Math.abs(x) < HALF + 40 && Math.abs(z) < HALF + 40) return false;
+    const h = terrainH(x, z);
+    const d = ANIMALS[kind];
+    if (d.swim) return h < WATER_Y + 2.5; // 물가 근처
+    return h > WATER_Y + 0.3 && h < 95;
+  }
+  randomPoint(kind) {
+    const rects = this.rects(kind);
+    for (let i = 0; i < 40; i++) {
+      const [x0, z0, x1, z1] = this.rng.pick(rects);
+      const x = this.rng.range(x0 + 5, x1 - 5), z = this.rng.range(z0 + 5, z1 - 5);
+      if (this.okSpot(kind, x, z)) return [x, z];
+    }
+    const [x0, z0, x1, z1] = rects[0];
+    return [(x0 + x1) / 2, (z0 + z1) / 2];
+  }
+  place(a) {
+    [a.x, a.z] = this.randomPoint(a.kind);
+    a.tx = a.x; a.tz = a.z; a.hp = ANIMALS[a.kind].hp; a.dead = false; a.angry = null;
+  }
+
+  inRange(a) {
+    return this.rects(a.kind).some(([x0, z0, x1, z1]) => a.x > x0 - 30 && a.x < x1 + 30 && a.z > z0 - 30 && a.z < z1 + 30);
+  }
+
+  tick(dt) {
+    // 차 안이나 하늘에 있는 플레이어는 공격하지 않는다
+    const outside = [...this.w.players.values()].filter((p) => !p.dead && p.loc < 0 && !p.jailed);
+    const players = outside.filter((p) => p.car < 0 && !(p.air & 2) && p.pos.y - terrainH(p.pos.x, p.pos.z) < 3);
+    for (const a of this.list) {
+      const d = ANIMALS[a.kind];
+      if (a.dead) { a.deadT -= dt; if (a.deadT <= 0) this.place(a); continue; }
+      // 가장 가까운 플레이어 (아무도 근처에 없으면 쉬고 있는다 → 서버 부담 ↓)
+      let tgt = null, td = 1e9;
+      let near = 1e9;
+      for (const p of outside) near = Math.min(near, Math.hypot(p.pos.x - a.x, p.pos.z - a.z));
+      if (near > 320) { a.mv = 0; continue; }
+      for (const p of players) { const dd = Math.hypot(p.pos.x - a.x, p.pos.z - a.z); if (dd < td) { td = dd; tgt = p; } }
+      a.atkT -= dt; a.angryT -= dt; a.t -= dt;
+      if (a.angry && a.angryT > 0) { const p = this.w.players.get(a.angry); if (p && players.includes(p)) { tgt = p; td = Math.hypot(p.pos.x - a.x, p.pos.z - a.z); } }
+      let speed = 0, mx = 0, mz = 0;
+      if (d.livestock) {
+        // 가축: 우리 안에서 느긋하게
+        if (a.t <= 0) { a.t = this.rng.range(4, 10); [a.tx, a.tz] = this.randomPoint(a.kind); if (this.rng.chance(0.4)) { a.tx = a.x; a.tz = a.z; } }
+        speed = d.speed;
+      } else if (d.hostile && tgt && (td < d.aggro || (a.angry && a.angryT > 0)) && td < 60) {
+        // 맹수: 쫓아가서 공격
+        a.tx = tgt.pos.x; a.tz = tgt.pos.z; speed = d.run;
+        if (td < d.r + 1.4) {
+          speed = 0;
+          if (a.atkT <= 0) {
+            a.atkT = 1.4;
+            a.attacking = 0.4;
+            this.w.combat.damagePlayer(tgt, d.dmg, { name: `${d.emoji} ${d.name}` }, { x: a.x, y: 0, z: a.z });
+          }
+        }
+      } else if (!d.hostile && tgt && (td < (d.flee || 0) || (a.angry && a.angryT > 0))) {
+        // 사냥감: 반대쪽으로 도망
+        const dx = a.x - tgt.pos.x, dz = a.z - tgt.pos.z, L = Math.hypot(dx, dz) || 1;
+        a.tx = a.x + (dx / L) * 20; a.tz = a.z + (dz / L) * 20; speed = d.run;
+      } else {
+        if (a.t <= 0 || Math.hypot(a.tx - a.x, a.tz - a.z) < 1.5) {
+          a.t = this.rng.range(5, 14);
+          if (this.rng.chance(0.35)) { a.tx = a.x; a.tz = a.z; } else { [a.tx, a.tz] = [a.x + this.rng.range(-40, 40), a.z + this.rng.range(-40, 40)]; }
+        }
+        speed = d.speed;
+        if (!this.inRange(a)) [a.tx, a.tz] = this.randomPoint(a.kind);
+      }
+      a.attacking = Math.max(0, (a.attacking || 0) - dt);
+      const dx = a.tx - a.x, dz = a.tz - a.z, L = Math.hypot(dx, dz);
+      if (L > 0.5 && speed > 0) {
+        mx = dx / L; mz = dz / L;
+        const nx = a.x + mx * speed * dt, nz = a.z + mz * speed * dt;
+        // 땅 동물은 깊은 물에 안 들어가고, 아무도 도시로는 안 들어온다
+        const h = terrainH(nx, nz);
+        const blocked = (Math.abs(nx) < HALF + 25 && Math.abs(nz) < HALF + 25) || (!d.swim && h < WATER_Y + 0.1);
+        if (blocked) { a.t = 0; a.tx = a.x - mx * 10; a.tz = a.z - mz * 10; }
+        else { a.x = nx; a.z = nz; a.h = Math.atan2(mx, mz); }
+        a.mv = speed > d.speed + 0.5 ? 2 : 1;
+      } else a.mv = 0;
+    }
+  }
+
+  // 사냥 (플레이어가 때림)
+  damage(a, dmg, p) {
+    const d = ANIMALS[a.kind];
+    if (a.dead || d.livestock) return false;
+    a.hp -= dmg;
+    a.angry = p.id; a.angryT = 25;
+    this.w.broadcast({ t: 'fx', k: 'dmgnum', p: [a.x, terrainH(a.x, a.z) + d.h + 0.8, a.z], v: Math.round(dmg), loc: -1 });
+    if (a.hp > 0) return true;
+    a.dead = true; a.deadT = 90; a.mv = 0;
+    const y = Math.max(terrainH(a.x, a.z), WATER_Y) + 0.1;
+    for (const [id, n, chance] of d.loot) if (this.rng.chance(chance)) this.w.combat.dropItem({ id, n, gems: [] }, a.x + this.rng.range(-1, 1), y, a.z + this.rng.range(-1, 1), -1, 180);
+    this.w.send(p, { t: 'xp', v: d.xp, reason: `${d.emoji} ${d.name} 사냥` });
+    this.w.send(p, { t: 'hunted', kind: a.kind });
+    return true;
+  }
+
+  // 플레이어 근처의 동물만 보낸다 [id, x, z, 방향, 움직임, 체력%, 상태]
+  snap() {
+    const players = [...this.w.players.values()].filter((p) => p.loc < 0 && (Math.abs(p.pos.x) > HALF - 80 || Math.abs(p.pos.z) > HALF - 80));
+    if (!players.length) return [];
+    const out = [];
+    for (const a of this.list) {
+      if (!players.some((p) => Math.abs(p.pos.x - a.x) < 260 && Math.abs(p.pos.z - a.z) < 260)) continue;
+      out.push(a.id, q(a.x), q(a.z), q(a.h, 100), a.mv, Math.round((a.hp / ANIMALS[a.kind].hp) * 100), (a.dead ? 1 : 0) | (a.attacking > 0 ? 2 : 0));
+    }
+    return out;
+  }
+  kinds() { return this.list.map((a) => ANIMAL_KINDS.indexOf(a.kind)); }
+}

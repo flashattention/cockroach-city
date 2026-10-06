@@ -4,6 +4,8 @@ import { BUILDING_TYPES, CITY_PLAN, CATEGORY_COLORS, isSuburbBlock } from './dat
 import { toon, basic, box, cyl, sph, cone, G, signMesh, windowPlane, stripeMat, bakeStatic, RNG } from './utils.js';
 import { Roach } from './roach.js';
 import { makeCarMesh } from './traffic.js';
+import { OUTER_BUILDINGS, terrainH } from './terrain.js';
+import { Props, defineCommonProps } from './props.js';
 
 const FH = 3.4; // 층 높이
 const BASE = 0.12; // 블록/보도 윗면 높이
@@ -57,6 +59,20 @@ export function planCity(seed) {
         buildings.push(b);
       }
     }
+  }
+  // 도시 밖 건물 (교도소, 사냥꾼 오두막, 휴게소...)
+  for (const e of OUTER_BUILDINGS) {
+    const def = BUILDING_TYPES[e.type];
+    const door = new THREE.Vector3(e.x, 0.15, e.z + e.dir * (e.d / 2 + 0.9));
+    const b = {
+      type: e.type, def, size: e.w > 30 ? 'B' : 'S', cat: def.cat, row: -1, col: -1,
+      x: e.x, z: e.z, w: e.w, d: e.d, floors: e.floors, dir: e.dir, door, walk: door.clone().add(new THREE.Vector3(0, 0, e.dir * 4)),
+      lot: { x0: e.x - e.w / 2, z0: e.z - e.d / 2, x: e.x, z: e.z, size: 'S' }, residents: [], workers: [],
+      seed: Math.floor(rng.next() * 1e9), color: rng.pick(PASTELS), roof: rng.pick(ROOFS), outer: true, base: terrainH(e.x, e.z),
+    };
+    b.id = buildings.length;
+    b.name = e.name;
+    buildings.push(b);
   }
   return buildings;
 }
@@ -122,8 +138,8 @@ export function buildCity(scene, buildings, seed) {
   const colliders = [];
   const anim = { smokes: [], spins: [], flags: [], blinks: [], fountains: [], cranes: [], roaches: [] };
 
-  // 바닥 잔디
-  const grass = new THREE.Mesh(new THREE.PlaneGeometry(CITY + 400, CITY + 400), toon('#a8dc8c'));
+  // 바닥 잔디 (도시 바깥은 지형 메쉬가 덮는다)
+  const grass = new THREE.Mesh(new THREE.PlaneGeometry(CITY + 40, CITY + 40), toon('#a8dc8c'));
   grass.rotation.x = -Math.PI / 2; grass.position.y = -0.02; grass.receiveShadow = true;
   stat.add(grass);
   // 아스팔트
@@ -176,12 +192,19 @@ export function buildCity(scene, buildings, seed) {
   const flowers = ['#ff80ab', '#ffeb3b', '#ffffff', '#ce93d8'];
   for (const s of [-1, 1]) {
     for (const along of [0, 1]) {
-      const len = CITY + 3.2;
-      const x = along ? 0 : s * (HALF + 0.8), z = along ? s * (HALF + 0.8) : 0;
-      box(stat, along ? len : 1.4, 1.3, along ? 1.4 : len, hedge, x, 0.65, z);
-      box(stat, along ? len : 1.5, 0.25, along ? 1.5 : len, hedgeTop, x, 1.38, z, { cast: false });
+      // 가운데는 고속도로 출입구 (폭 16m)
+      const len = CITY + 3.2, gap = 9;
+      const half = (len / 2 - gap);
+      for (const side of [-1, 1]) {
+        const mid = side * (gap + half / 2);
+        const x = along ? mid : s * (HALF + 0.8), z = along ? s * (HALF + 0.8) : mid;
+        box(stat, along ? half : 1.4, 1.3, along ? 1.4 : half, hedge, x, 0.65, z);
+        box(stat, along ? half : 1.5, 0.25, along ? 1.5 : half, hedgeTop, x, 1.38, z, { cast: false });
+      }
       for (let i = 0; i < 40; i++) {
         const u = -len / 2 + (i + 0.5) * (len / 40);
+        if (Math.abs(u) < gap) continue;
+        const x = along ? 0 : s * (HALF + 0.8), z = along ? s * (HALF + 0.8) : 0;
         sph(stat, 0.18, 0.18, 0.18, flowers[i % 4], along ? u : x + s * -0.72, 1.0, along ? z + s * -0.72 : u, { low: true, cast: false });
       }
     }
@@ -229,6 +252,19 @@ export function buildCity(scene, buildings, seed) {
     sph(arm, 0.32, 0.22, 0.32, lampMat, 0, -0.12, 1.0, { cast: false, low: true });
     colliders.push({ minX: x - 0.2, maxX: x + 0.2, minZ: z - 0.2, maxZ: z + 0.2, h: 5, small: true });
   };
+  // 거리의 가로등·가로수는 부서지는 소품 (인스턴스)
+  const props = new Props(root);
+  defineCommonProps(props, { lamp: lampMat });
+  const streetTree = (x, z, s) => {
+    const id = props.add('tree', x, BASE, z, s, rng.range(0, 6), rng.pick(leafColors));
+    const c = { minX: x - 0.35, maxX: x + 0.35, minZ: z - 0.35, maxZ: z + 0.35, h: 4 * s, small: true, pkey: 'c' + id };
+    props.list[id].collider = c; colliders.push(c);
+  };
+  const streetLamp = (x, z, ry) => {
+    const id = props.add('lamp', x, BASE, z, 1, ry);
+    const c = { minX: x - 0.2, maxX: x + 0.2, minZ: z - 0.2, maxZ: z + 0.2, h: 5, small: true, pkey: 'c' + id };
+    props.list[id].collider = c; colliders.push(c);
+  };
   const doorXs = new Map(); // 블록 가장자리의 문 위치 (나무 피하기)
   for (const b of buildings) {
     const key = `${b.row},${b.col},${b.dir}`;
@@ -245,8 +281,8 @@ export function buildCity(scene, buildings, seed) {
       for (let k = 0; k < 5; k++) {
         const x = x0 + 4 + k * 8;
         if (doors.some((dx) => Math.abs(dx - x) < 2.6)) continue;
-        if (k % 2 === 0) addLamp(stat, x, z, dirKey === -1 ? Math.PI : 0);
-        else addTree(stat, x, z, 0.8);
+        if (k % 2 === 0) streetLamp(x, z, dirKey === -1 ? Math.PI : 0);
+        else streetTree(x, z, 0.8);
       }
     }
     // 동/서 가장자리
@@ -254,8 +290,8 @@ export function buildCity(scene, buildings, seed) {
       const x = x0 + dx;
       for (let k = 0; k < 5; k++) {
         const z = z0 + 4 + k * 8;
-        if (k % 2 === 0) addLamp(stat, x, z, ry);
-        else addTree(stat, x, z, 0.8);
+        if (k % 2 === 0) streetLamp(x, z, ry);
+        else streetTree(x, z, 0.8);
       }
     }
   }
@@ -263,7 +299,7 @@ export function buildCity(scene, buildings, seed) {
   // 건물
   for (const b of buildings) {
     const g = new THREE.Group();
-    g.position.set(b.x, BASE, b.z);
+    g.position.set(b.x, b.outer ? 0.15 : BASE, b.z);
     g.rotation.y = b.dir === 1 ? 0 : Math.PI;
     const ctx = { rng: new RNG(b.seed), anim, colliders, addTree, b, dynParent: dyn, stat };
     (BUILDERS[b.type] || BUILDERS.generic)(g, b, ctx);
@@ -271,7 +307,7 @@ export function buildCity(scene, buildings, seed) {
     if (b.type === 'dojang') {
       colliders.push({ minX: b.x - b.w / 2, maxX: b.x + b.w / 2, minZ: b.z - b.d / 2, maxZ: b.z + b.d / 2, h: 14, building: b });
     } else if (b.type !== 'park') {
-      colliders.push({ minX: b.x - b.w / 2, maxX: b.x + b.w / 2, minZ: b.z - b.d / 2, maxZ: b.z + b.d / 2, h: b.floors * FH + (b.type === 'concerthall' ? b.d / 2 + 1 : 4), building: b });
+      colliders.push({ minX: b.x - b.w / 2, maxX: b.x + b.w / 2, minZ: b.z - b.d / 2, maxZ: b.z + b.d / 2, h: b.floors * FH + (b.type === 'concerthall' ? b.d / 2 + 1 : 4), top: (b.outer ? 0.15 : BASE) + b.floors * FH + 0.45, building: b });
     }
     // 현관 매트 (입구 표시)
     if (b.type !== 'park') {
@@ -297,14 +333,16 @@ export function buildCity(scene, buildings, seed) {
   }
   const merged = bakeStatic(stat);
   root.add(merged);
+  props.build({ castShadow: true });
   scene.add(root);
 
   const city = {
-    root, buildings, colliders, anim, tl, lampMat,
+    root, buildings, colliders, anim, tl, lampMat, props,
+    roofs: colliders.filter((c) => c.top !== undefined).map((c) => ({ minX: c.minX, maxX: c.maxX, minZ: c.minZ, maxZ: c.maxZ, top: c.top })),
     byType: {},
     groundY(x, z) {
       // 블록(보도 포함) 위면 BASE, 차도면 0
-      if (Math.abs(x) > HALF || Math.abs(z) > HALF) return 0;
+      if (Math.abs(x) > HALF || Math.abs(z) > HALF) return 0.01;
       const P = BLOCK + ROAD;
       // 가장 가까운 도로 중심선까지의 거리
       const dist = (v) => {
@@ -784,6 +822,43 @@ const BUILDERS = {
       cone(g, 1.4, 0.6, ctx.rng.pick(['#ff8a80', '#ffd180', '#a7ffeb']), s * (b.w / 2 - 1.6), 2.9, b.d / 2 + 2.6);
     }
   },
+
+
+  hunter(g, b, ctx) {
+    // 통나무 오두막
+    const logs = ['#8d6e63', '#795548'];
+    for (let i = 0; i < 8; i++) {
+      for (const [x, z, w, d] of [[0, b.d / 2, b.w, 0.5], [0, -b.d / 2, b.w, 0.5], [b.w / 2, 0, 0.5, b.d], [-b.w / 2, 0, 0.5, b.d]]) {
+        const m = cyl(g, 0.28, 1, logs[i % 2], x, 0.3 + i * 0.5, z, { rz: w > d ? Math.PI / 2 : 0, rx: w > d ? 0 : Math.PI / 2 });
+        m.scale.set(0.28, Math.max(w, d) + 0.6, 0.28);
+      }
+    }
+    gable(g, b.w, b.d, 4.1, 3, '#4e342e', 0.9);
+    door(g, b.d, '#5d4037');
+    // 문 위 사슴뿔 + 간판
+    const ant = new THREE.Group(); ant.position.set(0, 3.6, b.d / 2 + 0.3); g.add(ant);
+    for (const s of [-1, 1]) { const a = cyl(ant, 0.06, 1.2, '#efebe9', s * 0.35, 0.4, 0, { rz: s * -0.6 }); void a; cyl(ant, 0.05, 0.6, '#efebe9', s * 0.6, 0.8, 0, { rz: s * 0.4 }); }
+    sph(ant, 0.25, 0.3, 0.25, '#8d6e63', 0, 0, 0.05);
+    sign(g, b, 2.6, 5, '#4e342e', '#ffe0b2');
+    // 장작더미 + 모닥불
+    for (let i = 0; i < 6; i++) cyl(g, 0.2, 1.6, '#6d4c41', b.w / 2 + 1.5, 0.2 + Math.floor(i / 3) * 0.4, -1 + (i % 3) * 0.45, { rx: Math.PI / 2 });
+    cyl(g, 1, 0.2, '#616161', -b.w / 2 - 3, 0.1, b.d / 2 + 2);
+    sph(g, 0.5, 0.8, 0.5, toon('#ff9100', { emissive: '#ff6d00', emissiveIntensity: 0.9 }), -b.w / 2 - 3, 0.6, b.d / 2 + 2, { low: true });
+    void ctx;
+  },
+
+  ranch(g, b, ctx) {
+    const h = shell(g, b.w, b.d, b.floors, '#fff8e1', { roof: false, frontStart: 1 });
+    gable(g, b.w, b.d, h, 3.2, '#c62828');
+    shopFront(g, b, { door: '#c62828' });
+    awning(g, b, '#c62828', '#ffffff');
+    sign(g, b, h + 1, 8, '#ffffff', '#c62828');
+    // 우유통 + 건초
+    for (let i = 0; i < 3; i++) cyl(g, 0.35, 1.0, '#cfd8dc', -b.w / 2 + 1 + i * 0.8, 0.5, b.d / 2 + 1.6);
+    cyl(g, 1, 1.4, '#ffd54f', b.w / 2 - 1.2, 0.9, b.d / 2 + 2, { rz: Math.PI / 2 });
+    void ctx;
+  },
+
 
   range(g, b, ctx) {
     const h = shell(g, b.w, b.d, b.floors, '#cfd8c4', { roofColor: '#556b2f', frontStart: 1 });

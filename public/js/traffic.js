@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GRID, roadC, LANE_OFF, ASPHALT_HALF, HALF } from './config.js';
+import { WORLD_HALF, WATER_Y } from './terrain.js';
 import { toon, box, cyl, sph, RNG, angleLerp, signMesh } from './utils.js';
 
 const STOP = ASPHALT_HALF + 1.6; // 교차로 중심 → 정지선
@@ -370,6 +371,7 @@ export class Traffic {
       m.g.rotation.y = car.heading;
       m.body.position.y = car.kind === 'heli' ? 0 : Math.abs(Math.sin(performance.now() / 120 + car.pos.x)) * 0.04 * Math.min(1, Math.abs(car.speed) / 5);
       m.body.rotation.z = (car.steerVis || 0) * (car.kind === 'heli' ? -0.25 : -0.05);
+      if (car.kind !== 'heli') m.body.rotation.x = -(car.pitch || 0) * 0.6;
       if (car.kind === 'heli') {
         m.body.rotation.x = Math.max(-0.25, Math.min(0.25, car.speed / 60));
         const spin = car.mode === 'player' || (car.pos.y || 0) > 0.3 ? 25 : 0;
@@ -472,11 +474,12 @@ export class Traffic {
     car.steerVis = steer;
     car.pos.x += Math.sin(car.heading) * car.speed * dt;
     car.pos.z += Math.cos(car.heading) * car.speed * dt;
-    const L = HALF - 1;
+    const L = WORLD_HALF - 5;
     car.pos.x = Math.max(-L, Math.min(L, car.pos.x));
     car.pos.z = Math.max(-L, Math.min(L, car.pos.z));
+    if (ctx.groundY) car.pos.y = Math.max(car.pos.y, ctx.groundY(car.pos.x, car.pos.z, car.pos.y));
     const r = car.mesh.radius;
-    for (const c of ctx.city.colliders) {
+    for (const c of ctx.colliders || ctx.city.colliders) {
       if (c.small || car.pos.y > (c.h ?? 10)) continue;
       if (car.pos.x < c.minX - r || car.pos.x > c.maxX + r || car.pos.z < c.minZ - r || car.pos.z > c.maxZ + r) continue;
       const cx = Math.max(c.minX, Math.min(car.pos.x, c.maxX)), cz = Math.max(c.minZ, Math.min(car.pos.z, c.maxZ));
@@ -547,16 +550,35 @@ export class Traffic {
     const turn = car.kind === 'tank' ? steer * 1.2 : steer * 1.9 * Math.min(1, Math.abs(car.speed) / 6) * Math.sign(car.speed || 1);
     car.heading += turn * dt;
     car.steerVis = steer * Math.min(1, Math.abs(car.speed) / 8);
+    const ox = car.pos.x, oz = car.pos.z;
     car.pos.x += Math.sin(car.heading) * car.speed * dt;
     car.pos.z += Math.cos(car.heading) * car.speed * dt;
-    // 경계: 외곽 도로 끝까지
-    const L = HALF - car.mesh.radius;
+    // 경계: 세계 끝까지
+    const L = WORLD_HALF - car.mesh.radius - 5;
     car.pos.x = Math.max(-L, Math.min(L, car.pos.x));
     car.pos.z = Math.max(-L, Math.min(L, car.pos.z));
-    // 건물 충돌
+    // 지형을 따라 달린다. 깊은 물에는 못 들어간다
+    if (ctx.groundY) {
+      const gy = ctx.groundY(car.pos.x, car.pos.z, (car.pos.y || 0) + 1);
+      if (gy < WATER_Y - 0.4) { car.pos.x = ox; car.pos.z = oz; car.speed *= -0.3; ctx.onWater?.(); }
+      else {
+        const prevY = car.pos.y || 0;
+        car.pos.y = gy;
+        car.pitch = Math.max(-0.5, Math.min(0.5, Math.atan2(gy - prevY, Math.max(0.05, Math.abs(car.speed) * dt)) * Math.sign(car.speed || 1)));
+      }
+    }
+    // 건물 충돌 (가로등·나무는 부서진다)
     const r = car.mesh.radius;
-    for (const c of ctx.city.colliders) {
+    for (const c of ctx.colliders || ctx.city.colliders) {
+      if (c.broken) continue;
       if (car.pos.x < c.minX - r || car.pos.x > c.maxX + r || car.pos.z < c.minZ - r || car.pos.z > c.maxZ + r) continue;
+      // 가로등·나무는 닿기만 해도 부서진다 (아주 천천히 밀면 그냥 막힘)
+      if (c.pkey && car.kind !== 'heli' && Math.abs(car.speed) > 1.2) {
+        ctx.onSmash?.(c, [Math.sin(car.heading) * Math.sign(car.speed), Math.cos(car.heading) * Math.sign(car.speed)]);
+        c.broken = true;
+        car.speed *= 0.85;
+        continue;
+      }
       const cx = Math.max(c.minX, Math.min(car.pos.x, c.maxX));
       const cz = Math.max(c.minZ, Math.min(car.pos.z, c.maxZ));
       const dx = car.pos.x - cx, dz = car.pos.z - cz;

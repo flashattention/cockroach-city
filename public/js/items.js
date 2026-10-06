@@ -170,6 +170,29 @@ export const ITEMS = {
   wand_dark: { name: '어둠 지팡이', emoji: '🌑', cat: 'wand', shop: 'magicshop', price: 4200, dmg: 65, radius: 2.5, rate: 1.4, range: 70, kind: 'magic', element: 'dark', mana: 28, held: 'wand:#7e57c2', sockets: 3, skill: '암흑구 — 느리지만 강력한 유도 구체' },
   mana_potion: { name: '마나 물약', emoji: '🧪', cat: 'food', shop: 'magicshop', price: 25, stack: true, food: {}, heal: 0, mana: 60, eat: ['drink', 'cup:#5c6bc0'] },
 
+  // ---------------- 사냥 전리품 (사냥꾼 오두막에서 팔 수 있어요) ----------------
+  bear_hide: { name: '곰가죽', emoji: '🐻', cat: 'loot', price: 0, sell: 420, stack: true },
+  bear_meat: { name: '곰고기', emoji: '🥩', cat: 'food', price: 0, sell: 70, stack: true, food: { hunger: 60, fun: 6 }, heal: 20, eat: ['drumstick', 'drumstick:#8d3b2f'] },
+  deer_meat: { name: '사슴고기', emoji: '🍖', cat: 'food', price: 0, sell: 50, stack: true, food: { hunger: 45 }, heal: 14, eat: ['drumstick', 'drumstick:#a1453a'] },
+  deer_trophy: { name: '사슴머리 장식', emoji: '🦌', cat: 'loot', price: 0, sell: 650, stack: true, charm: 0 },
+  wolf_pelt: { name: '늑대가죽', emoji: '🐺', cat: 'loot', price: 0, sell: 300, stack: true },
+  boar_meat: { name: '멧돼지고기', emoji: '🍖', cat: 'food', price: 0, sell: 55, stack: true, food: { hunger: 50 }, heal: 15, eat: ['drumstick', 'drumstick:#8d5a3f'] },
+  rabbit_fur: { name: '토끼털', emoji: '🐇', cat: 'loot', price: 0, sell: 80, stack: true },
+  croc_skin: { name: '악어가죽', emoji: '🐊', cat: 'loot', price: 0, sell: 700, stack: true },
+  croc_meat: { name: '악어고기', emoji: '🍗', cat: 'food', price: 0, sell: 90, stack: true, food: { hunger: 50, fun: 10 }, heal: 18, eat: ['drumstick', 'drumstick:#c8b37a'] },
+  tiger_pelt: { name: '호랑이가죽', emoji: '🐯', cat: 'loot', price: 0, sell: 1300, stack: true },
+  tiger_meat: { name: '호랑이고기', emoji: '🥩', cat: 'food', price: 0, sell: 120, stack: true, food: { hunger: 65, fun: 15 }, heal: 30, eat: ['drumstick', 'drumstick:#b7472a'] },
+  snake_skin: { name: '아나콘다 가죽', emoji: '🐍', cat: 'loot', price: 0, sell: 1000, stack: true },
+  jaguar_pelt: { name: '재규어 가죽', emoji: '🐆', cat: 'loot', price: 0, sell: 1100, stack: true },
+  hunting_rifle: { name: '사냥용 엽총', emoji: '🔫', cat: 'gun', shop: 'hunter', price: 1800, dmg: 55, rate: 1.1, range: 110, ammo: 'ammo_762', kind: 'hitscan', held: 'sniper', sockets: 1 },
+  hunter_bow: { name: '사냥꾼의 활', emoji: '🏹', cat: 'gun', shop: 'hunter', price: 900, dmg: 34, rate: 0.85, range: 70, kind: 'arrow', ammo: 'arrow', held: 'bow', sockets: 1 },
+  hunter_knife: { name: '사냥칼', emoji: '🔪', cat: 'melee', shop: 'hunter', price: 250, dmg: 22, rate: 0.4, range: 2.0, kind: 'melee', held: 'knife', sockets: 1 },
+  // 목장 직판장
+  milk: { name: '목장 우유', emoji: '🥛', cat: 'food', shop: 'ranch', price: 3, stack: true, food: { hunger: 12, fun: 4 }, heal: 4, gift: true, eat: ['drink', 'cup:#fafafa'] },
+  cheese: { name: '수제 치즈', emoji: '🧀', cat: 'food', shop: 'ranch', price: 6, stack: true, food: { hunger: 20, fun: 6 }, heal: 6, gift: true, eat: ['bite', 'box:#ffd54f'] },
+  steak: { name: '한우 스테이크', emoji: '🥩', cat: 'food', shop: 'ranch', price: 25, stack: true, food: { hunger: 70, fun: 15 }, heal: 25, eat: ['knife', 'plate:#8d3b2f'] },
+  icecream: { name: '목장 소프트아이스크림', emoji: '🍦', cat: 'food', shop: 'ranch', shops: ['convenience'], price: 4, stack: true, food: { hunger: 8, fun: 14 }, heal: 2, gift: true, eat: ['bite', 'cup:#fff8e1'] },
+
   cash: { name: '현금', emoji: '💵', cat: 'cash', price: 1, stack: true },
   car_key: { name: '차 키', emoji: '🔑', cat: 'carkey', price: 0 },
   house_key: { name: '집 열쇠', emoji: '🔑', cat: 'key', price: 0 },
@@ -214,6 +237,8 @@ export const GEMS = {
 export const ENCHANT_FEE = 100;
 
 export const SHOPS = {
+  hunter: { title: '사냥꾼 오두막', subtitle: '사냥 장비 · 전리품 매입' },
+  ranch: { title: '바퀴 목장 직판장', subtitle: '우유 · 치즈 · 스테이크' },
   magicshop: { title: '마법봉 공방', subtitle: '속성 지팡이 · 마나 물약' },
   dealer: { title: '바퀴 모터스 쇼룸', subtitle: '새 차 구매 · 차 키로 언제든 호출' },
   armory_3k: { title: '관우네 병기점', subtitle: '삼국지 영웅들의 무기와 갑옷' },
