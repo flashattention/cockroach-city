@@ -17,6 +17,28 @@ export class FX {
     this.flash = new THREE.PointLight('#ffb74d', 0, 30, 1.5);
     scene.add(this.flash);
     this.flashT = 0;
+    this.holes = [];
+  }
+
+  // 총알 자국: 맞은 면(normal)에 총 종류별 탄흔을 붙인다. 45초 뒤 서서히 사라짐
+  hole(point, normal, wid, color) {
+    const st = holeStyle(wid);
+    const m = new THREE.Mesh(holeGeo, holeMat(st, color));
+    const n = new THREE.Vector3(normal[0] ?? normal.x, normal[1] ?? normal.y, normal[2] ?? normal.z).normalize();
+    m.position.copy(point).addScaledVector(n, 0.015);
+    m.lookAt(m.position.clone().add(n));
+    m.rotateZ(Math.random() * Math.PI * 2);
+    const sz = HOLE_SIZE[st] * (0.85 + Math.random() * 0.3);
+    m.scale.set(sz, sz, 1);
+    m.renderOrder = 2;
+    this.scene.add(m);
+    this.holes.push({ m, t: 45 });
+    if (this.holes.length > 160) { const old = this.holes.shift(); this.scene.remove(old.m); }
+    // 맞은 자리에서 튀는 파편
+    const dust = new THREE.Mesh(G.sphereLow(), new THREE.MeshBasicMaterial({ color: st === 'energy' ? (color || '#18ffff') : '#bdbdbd', transparent: true, opacity: 0.8, depthWrite: false }));
+    dust.scale.setScalar(sz * 0.8); dust.position.copy(point).addScaledVector(n, 0.08);
+    this.scene.add(dust);
+    this.items.push({ m: dust, t: 0.25, life: 0.25, kind: 'smoke' });
   }
 
   tracer(a, b, color = '#fff59d', width = 1) {
@@ -110,8 +132,65 @@ export class FX {
       else it.m.material.opacity = k;
       if (it.t <= 0) { this.scene.remove(it.m); it.m.material.dispose(); this.items.splice(i, 1); }
     }
+    for (let i = this.holes.length - 1; i >= 0; i--) {
+      const h = this.holes[i];
+      h.t -= dt;
+      if (h.t < 3) h.m.scale.multiplyScalar(1 - Math.min(1, dt * 1.2));
+      if (h.t <= 0) { this.scene.remove(h.m); this.holes.splice(i, 1); }
+    }
     if (this.flashT > 0) { this.flashT -= dt; this.flash.intensity = Math.max(0, this.flashT / 0.25) * 40; }
   }
+}
+
+// ---------------- 총알 자국 (총 종류별) ----------------
+const HOLE_STYLE = {
+  pistol: 'small', revolver: 'small', uzi: 'small', mp5: 'small',
+  deagle: 'big', sniper: 'big', hunting_rifle: 'big',
+  rifle: 'rifle', ak47: 'rifle', scar: 'rifle', m249: 'rifle', minigun: 'rifle',
+  shotgun: 'pellet', double_barrel: 'pellet',
+  barrett: 'anti',
+  blaster: 'energy', blaster_rifle: 'energy', plasma_smg: 'energy',
+};
+const HOLE_SIZE = { pellet: 0.08, small: 0.13, rifle: 0.17, big: 0.24, anti: 0.5, energy: 0.3 };
+const holeStyle = (wid) => HOLE_STYLE[wid] || 'small';
+const holeGeo = new THREE.PlaneGeometry(1, 1);
+const holeMats = new Map();
+function holeMat(st, color) {
+  const key = st === 'energy' ? st + (color || '') : st;
+  let m = holeMats.get(key);
+  if (m) return m;
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d');
+  const R = 64;
+  const crack = (n, len, w) => {
+    x.strokeStyle = 'rgba(40,36,32,0.85)'; x.lineWidth = w;
+    for (let i = 0; i < n; i++) {
+      let a = (i / n) * Math.PI * 2 + Math.random() * 0.5, r = 10, px = R + Math.cos(a) * r, py = R + Math.sin(a) * r;
+      x.beginPath(); x.moveTo(px, py);
+      while (r < len) { r += 5 + Math.random() * 8; a += (Math.random() - 0.5) * 0.5; px = R + Math.cos(a) * r; py = R + Math.sin(a) * r; x.lineTo(px, py); }
+      x.stroke();
+    }
+  };
+  if (st === 'energy') {
+    // 그을린 자국 + 빛나는 중심 (총의 빔 색)
+    const gr = x.createRadialGradient(R, R, 2, R, R, R);
+    gr.addColorStop(0, color || '#18ffff'); gr.addColorStop(0.18, '#ffffff'); gr.addColorStop(0.3, 'rgba(20,20,20,0.95)'); gr.addColorStop(0.65, 'rgba(30,30,30,0.6)'); gr.addColorStop(1, 'rgba(30,30,30,0)');
+    x.fillStyle = gr; x.beginPath(); x.arc(R, R, R, 0, 7); x.fill();
+  } else {
+    const chip = { pellet: 30, small: 34, rifle: 40, big: 46, anti: 56 }[st];
+    const hole = { pellet: 12, small: 13, rifle: 15, big: 18, anti: 24 }[st];
+    // 깨진 벽면(밝은 테두리) → 그을음 → 검은 구멍
+    const gr = x.createRadialGradient(R, R, hole, R, R, chip);
+    gr.addColorStop(0, 'rgba(60,55,50,0.9)'); gr.addColorStop(0.45, 'rgba(200,195,185,0.75)'); gr.addColorStop(1, 'rgba(200,195,185,0)');
+    x.fillStyle = gr; x.beginPath(); x.arc(R, R, chip, 0, 7); x.fill();
+    crack({ pellet: 0, small: 4, rifle: 6, big: 8, anti: 12 }[st], { pellet: 0, small: 40, rifle: 50, big: 58, anti: 63 }[st], st === 'anti' ? 3 : 2);
+    x.fillStyle = '#0d0b0a'; x.beginPath(); x.arc(R, R, hole, 0, 7); x.fill();
+    x.fillStyle = 'rgba(0,0,0,0.5)'; x.beginPath(); x.arc(R + 2, R + 2, hole * 0.6, 0, 7); x.fill();
+  }
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  m = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  holeMats.set(key, m);
+  return m;
 }
 
 const spriteCache = new Map();
@@ -232,16 +311,39 @@ export class Combat {
       const hit = rayCylinder(o, d, t.base, t.r, t.h);
       if (hit !== null && hit < bt) { bt = hit; best = t; }
     }
-    // 건물에 막힘
-    if (this.g.mode === 'city') {
-      for (const b of this.g.city.colliders) {
-        if (b.small) continue;
-        const t = rayBox(o, d, b);
-        if (t !== null && t < bt) { bt = t; best = null; }
+    // 건물·벽·땅에 막힘 → 맞은 면(normal)을 기억해 총알 자국을 남긴다
+    let surf = null;
+    const g = this.g;
+    const boxes = g.mode === 'city' ? g.city.colliders : g.mode === 'interior' ? g.interior?.colliders || [] : [];
+    for (const b of boxes) {
+      if (b.small || b.broken) continue;
+      const t = rayBox(o, d, b);
+      if (t !== null && t < bt) { bt = t; best = null; surf = b; }
+    }
+    if (g.mode === 'interior' && g.interior?.bounds) {
+      // 방 벽(경계보다 살짝 바깥)과 바닥
+      const B = g.interior.bounds, e = 0.55;
+      for (const [k, v, n] of [['x', B.minX - e, [1, 0, 0]], ['x', B.maxX + e, [-1, 0, 0]], ['z', B.minZ - e, [0, 0, 1]], ['z', B.maxZ + e, [0, 0, -1]], ['y', 0.1, [0, 1, 0]]]) {
+        if (Math.abs(d[k]) < 1e-6) continue;
+        const t = (v - o[k]) / d[k];
+        if (t > 0 && t < bt) { bt = t; best = null; surf = n; }
       }
+    } else if (g.mode === 'city' && d.y < -1e-4) {
+      // 땅: 지형 높이를 따라 몇 번 보정
+      let t = (g.city.groundY(o.x, o.z) - o.y) / d.y;
+      for (let i = 0; i < 4 && t > 0; i++) { const px = o.x + d.x * t, pz = o.z + d.z * t; t = (g.city.groundY(px, pz, o.y + d.y * t + 1) - o.y) / d.y; }
+      if (t > 0 && t < bt) { bt = t; best = null; surf = [0, 1, 0]; }
     }
     void skipSelf;
-    return { target: best, t: bt, point: o.clone().addScaledVector(d, bt) };
+    const point = o.clone().addScaledVector(d, bt);
+    let normal = null;
+    if (surf && !Array.isArray(surf)) {
+      // 상자: 가장 가까운 면
+      const b = surf, h = b.h ?? 10;
+      const c = [[Math.abs(point.x - b.minX), [-1, 0, 0]], [Math.abs(point.x - b.maxX), [1, 0, 0]], [Math.abs(point.z - b.minZ), [0, 0, -1]], [Math.abs(point.z - b.maxZ), [0, 0, 1]], [Math.abs(point.y - h), [0, 1, 0]]];
+      normal = c.reduce((a, x) => (x[0] < a[0] ? x : a))[1];
+    } else if (surf) normal = surf;
+    return { target: best, t: bt, point, normal };
   }
 
   handPos() {
@@ -448,7 +550,8 @@ export class Combat {
       const camDist = o.distanceTo(hand);
       const r = this.raycast(o, dd, s.range + camDist);
       this.fx.tracer(hand, r.point, s.tracer || '#fff59d', w.id === 'sniper' ? 1.5 : 1);
-      if (i === 0) g.net.send({ t: 'fx', k: 'tracer', a: [hand.x, hand.y, hand.z], b: [r.point.x, r.point.y, r.point.z], c: s.tracer });
+      if (r.normal && !r.target) this.fx.hole(r.point, r.normal, w.id, s.tracer);
+      if (i === 0 || r.normal) g.net.send({ t: 'fx', k: 'tracer', a: [hand.x, hand.y, hand.z], b: [r.point.x, r.point.y, r.point.z], c: s.tracer, n: !r.target && r.normal ? r.normal : undefined, w: w.id });
       if (r.target) { const k = r.target.tt + r.target.id; hits.set(k, { ...r.target, n: (hits.get(k)?.n || 0) + 1, point: r.point }); }
     }
     for (const h of hits.values()) this.sendHit(h, w, h.tt === 'rtarget' ? { point: h.point } : { n: h.n });
@@ -642,7 +745,10 @@ export class Combat {
     const g = this.g;
     if (m.loc !== undefined && m.loc !== g.loc()) return;
     const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
-    if (m.k === 'tracer') this.fx.tracer(v3(m.a), v3(m.b), m.c || '#fff59d', m.w || 1);
+    if (m.k === 'tracer') {
+      this.fx.tracer(v3(m.a), v3(m.b), m.c || '#fff59d', typeof m.w === 'number' ? m.w : 1);
+      if (Array.isArray(m.n) && typeof m.w === 'string') this.fx.hole(v3(m.b), m.n.map(Number), m.w, m.c);
+    }
     else if (m.k === 'boom') { this.fx.boom(v3(m.p), m.r || 5, m.small); if (!m.small && g.player) g.shake(Math.max(0, 1 - g.player.pos.distanceTo(v3(m.p)) / 40)); }
     else if (m.k === 'proj') this.spawnProj(m.type, v3(m.p), v3(m.v), { id: m.w }, false);
     else if (m.k === 'bolt') this.fx.bolt(v3(m.a), v3(m.b), m.c);
