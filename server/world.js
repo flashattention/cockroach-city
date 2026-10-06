@@ -631,7 +631,7 @@ export class World {
     let r, error;
     try {
       if (!llmEnabled) throw new Error('offline');
-      const out = await complete([{ role: 'system', content: profileSystemPrompt(c, ctx) }, ...log.slice(-14), { role: 'user', content }], { schema: SCHEMAS.talk, temperature: 0.95, max_tokens: 260 });
+      const out = await complete([{ role: 'system', content: profileSystemPrompt(c, ctx) }, ...log.slice(-14), { role: 'user', content }], { schema: SCHEMAS.talk, temperature: 0.95, max_tokens: 450 });
       r = { reply: String(out.reply || '...').slice(0, 400), emotion: out.emotion || 'neutral', affinity_delta: clampInt(out.affinity_delta, -3, 3), mood_delta: clampInt(out.mood_delta, -10, 10), insulted: out.insulted === true, action: out.action || 'none', amount: clampInt(out.amount, 0, 30) };
       // LLM이 놓친 노골적인 욕설도 잡아낸다
       if (text && INSULT.test(text) && !r.insulted) { r.insulted = true; r.mood_delta = Math.min(r.mood_delta, -6); }
@@ -672,7 +672,7 @@ export class World {
     if (llmEnabled) {
       try {
         const recent = log.slice(-12).map((m) => `${m.role === 'user' ? p.name : c.name}: ${m.content}`).join('\n');
-        const out = await complete([{ role: 'system', content: memoryPrompt(c, p.name) }, { role: 'user', content: recent }], { schema: SCHEMAS.memory, temperature: 0.5, max_tokens: 120 });
+        const out = await complete([{ role: 'system', content: memoryPrompt(c, p.name) }, { role: 'user', content: recent }], { schema: SCHEMAS.memory, temperature: 0.5, max_tokens: 200 });
         text = out.memory ? String(out.memory).slice(0, 80) : null;
       } catch { /* 무시 */ }
     } else {
@@ -725,7 +725,7 @@ export class World {
     if (this.streetChatTimes.length >= this.streetChatPerMin) return null; // 비용 상한
     this.streetChatTimes.push(now);
     try {
-      const out = await complete([{ role: 'user', content: streetChatPrompt(a, b, { timeText: this.timeText() }) }], { schema: SCHEMAS.street, temperature: 1.0, max_tokens: 300 });
+      const out = await complete([{ role: 'user', content: streetChatPrompt(a, b, { timeText: this.timeText() }) }], { schema: SCHEMAS.street, temperature: 1.0, max_tokens: 500 });
       const lines = (out.lines || []).filter((l) => l && l.text).slice(0, 6).map((l) => ({ speaker: l.speaker === 'B' ? 'B' : 'A', text: String(l.text).slice(0, 60) }));
       return lines.length ? lines : null;
     } catch { return null; }
