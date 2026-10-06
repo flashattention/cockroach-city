@@ -1382,6 +1382,17 @@ export function buildInterior(b, opts = {}) {
     m.position.set(0, 2.8, 0.16);
   }
 
+  // 출구 문: 벽이 투명해져도 문틀·문·출구 표시는 항상 보인다
+  {
+    const dg = new THREE.Group(); dg.position.set(0, 0, D / 2 - 0.25); group.add(dg);
+    box(dg, 0.25, 3.1, 0.3, '#5d4037', -1.35, 1.55, 0); box(dg, 0.25, 3.1, 0.3, '#5d4037', 1.35, 1.55, 0); box(dg, 2.95, 0.3, 0.3, '#5d4037', 0, 3.1, 0);
+    box(dg, 2.4, 2.9, 0.1, '#a1887f', 0, 1.45, -0.05);
+    sph(dg, 0.1, 0.1, 0.1, '#ffd54f', 0.85, 1.4, -0.12, { low: true });
+    const ex = signMesh('출구 EXIT', '🚪', 2.4, '#2e7d32', '#ffffff');
+    ex.position.set(0, 3.75, -0.1); ex.rotation.y = Math.PI; dg.add(ex);
+    const glow = new THREE.Mesh(G.plane(), new THREE.MeshBasicMaterial({ color: '#b9f6ca', transparent: true, opacity: 0.35 }));
+    glow.scale.set(2.4, 2.9, 1); glow.position.set(0, 1.45, -0.12); glow.rotation.y = Math.PI; dg.add(glow);
+  }
   // 출구 매트
   const exitMat = new THREE.Mesh(G.plane(), new THREE.MeshBasicMaterial({ color: '#ffe082' }));
   exitMat.rotation.x = -Math.PI / 2; exitMat.scale.set(2.4, 1.4, 1);

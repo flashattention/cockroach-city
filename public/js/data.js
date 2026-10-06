@@ -74,12 +74,12 @@ const AB = 'M:apartment|M:apartment';
 export const CITY_PLAN = [
   [HB, 'S:villa,villa,house,house', AB, HB, 'S:convenience,chicken,villa,villa', HB, 'M:apartment|S:villa,villa', HB],
   ['S:house,house,magicshop,pizza', 'S:house,pizza,house,house', 'M:apartment|S:house,flowershop', 'B:school', 'B:university', 'M:apartment|S:chicken,house', 'S:house,gukbap,vet,house', VB],
-  [VB, 'M:kindergarten|S:house,convenience', 'S:cafe,bakery,restaurant,pharmacy', 'M:library|M:postoffice', 'M:bank|M:office', 'S:salon,clothing,cafe,bookstore', 'M:gym|S:bunsik,house', 'S:house,house,chinese,realestate'],
+  [VB, 'M:kindergarten|S:house,convenience', 'S:cafe,bakery,restaurant,pharmacy', 'M:library|M:postoffice', 'M:bank|M:office', 'S:salon,clothing,cafe,bookstore', 'M:gym|S:convenience,house', 'S:house,house,chinese,realestate'],
   [AB, 'B:hospital', 'M:police|M:fire', 'B:cityhall', 'M:office|M:tvstation', 'M:hotel|M:cinema', 'S:chinese,realestate,dental,convenience', HB],
-  ['S:gukbap,bunsik,house,house', 'M:apartment|S:burger,house', 'M:supermarket|S:cafe,gallery', 'M:court|M:office', 'B:museum', 'M:concerthall|S:pizza,bakery', 'M:apartment|M:apartment', AB],
-  [HB, 'S:hatshop,eyewear,chicken,convenience', 'B:park', 'M:lab|S:cafe,gukbap', 'M:apartment|S:chinese,salon', 'B:construction', 'M:garage|S:bunsik,house', 'S:villa,villa,burger,convenience'],
+  ['S:gukbap,convenience,house,house', 'M:apartment|S:burger,house', 'M:supermarket|S:cafe,gallery', 'M:court|M:office', 'B:museum', 'M:concerthall|S:pizza,bakery', 'M:apartment|M:apartment', AB],
+  [HB, 'S:hatshop,eyewear,chicken,convenience', 'B:park', 'M:lab|S:cafe,convenience', 'M:apartment|S:chinese,salon', 'B:construction', 'M:garage|S:bunsik,house', 'S:villa,villa,burger,convenience'],
   ['S:villa,villa,realestate,range', 'S:armory_3k,armory_mil,armory_sf,jeweler', 'M:apartment|S:house,burger', 'M:apartment|S:convenience,flowershop', 'B:factory', 'M:club|S:pizza,house', 'B:dojang', VB],
-  [HB, AB, 'S:house,house,dealer,pizza', VB, HB, 'S:villa,villa,gukbap,chinese', HB, 'M:apartment|S:house,house'],
+  [HB, AB, 'S:house,house,dealer,pizza', VB, HB, 'S:villa,villa,convenience,seafood', HB, 'M:apartment|S:house,house'],
 ];
 export const isSuburbBlock = (r, c) => r === 0 || c === 0 || r === CITY_PLAN.length - 1 || c === CITY_PLAN.length - 1;
 export const HOME_TYPES = ['house', 'villa', 'apartment'];

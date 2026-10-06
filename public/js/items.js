@@ -285,7 +285,7 @@ export function equipTotals(items) {
 // 방어력 → 받는 피해 배율
 export const damageTaken = (dmg, def, pierce = 0) => dmg * (60 / (60 + def * (1 - pierce)));
 
-export const CLUB_CHARM = 40;
+export const CLUB_CHARM = 0; // 매력과 상관없이 누구나 클럽 입장
 
 // ---------------- 희귀도 (맵에 떨어지는 무기) ----------------
 export const RARITY = {

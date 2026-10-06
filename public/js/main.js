@@ -750,7 +750,7 @@ function findFocus() {
   if (f) f.key = 'E';
   if (game.mode === 'city') {
     const car = game.traffic.nearestCar(pos, 3.6);
-    if (car) return { ...(f || {}), car, carLabel: car.mode === 'ai' ? (car.occ ? '자동차 빼앗기 (GTA 스타일!) 🚗' : '자동차 타기 🚗') : car.kind === 'tank' ? '전차 타기 🪖' : car.kind === 'heli' ? '헬기 타기 🚁' : '자동차 타기 🚗' };
+    if (car) return { ...(f || {}), car, carLabel: car.mode === 'ai' ? (car.occ ? '자동차 빼앗기 🚗' : '자동차 타기 🚗') : car.kind === 'tank' ? '전차 타기 🪖' : car.kind === 'heli' ? '헬기 타기 🚁' : '자동차 타기 🚗' };
   }
   return f;
 }
@@ -910,7 +910,6 @@ async function doAction(a) {
     const job = game.playerJob();
     if (S.workedDay !== game.day()) { S.workedDay = game.day(); S.workedToday = 0; }
     if (S.workedToday >= 24) { ui.toast('😮‍💨 오늘은 충분히 일했어요. 내일 또 해요!'); return; }
-    if (S.needs.energy < 15) { ui.toast('😪 너무 피곤해서 일할 수 없어요. 좀 쉬세요!'); return; }
     const hours = 4;
     await busyFor(`💼 ${job.name}(으)로 열심히 일하는 중...`, 6000);
     const pay = job.wage * hours;
@@ -1340,13 +1339,13 @@ function addNeeds(fx) {
 }
 game.addNeeds = addNeeds;
 
-const DECAY = { hunger: 4.5, energy: 3.2, fun: 3, social: 2.5, hygiene: 2 };
+const DECAY = { hunger: 4.5, fun: 3, social: 2.5, hygiene: 2 }; // 에너지는 없앴어요 (언제든 달리고 날 수 있게)
 function decayNeeds(mins) {
   const N = game.stats.needs;
   for (const k of Object.keys(DECAY)) N[k] = clamp(N[k] - (DECAY[k] * mins) / 60, 0, 100);
 }
 const warned = {};
-const NEED_MSG = { hunger: '🍜 배가 고파요! 식당이나 편의점에 가보세요', energy: '😪 피곤해요... 집에서 자거나 커피를 마셔요', fun: '🎈 심심해요! 영화관이나 클럽은 어때요?', social: '💬 외로워요... 이웃과 대화해보세요', hygiene: '🚿 씻을 때가 됐어요 (집, 헬스장, 미용실)' };
+const NEED_MSG = { hunger: '🍜 포만감이 바닥이에요! 식당이나 편의점에 가보세요', fun: '🎈 심심해요! 영화관이나 클럽은 어때요?', social: '💬 외로워요... 이웃과 대화해보세요', hygiene: '🚿 씻을 때가 됐어요 (집, 헬스장, 미용실)' };
 function checkNeeds() {
   for (const [k, v] of Object.entries(game.stats.needs)) {
     if (v < 20 && !warned[k]) { warned[k] = true; ui.toast(NEED_MSG[k]); }
@@ -1496,7 +1495,6 @@ function frame() {
     }
   }
   // 날기는 에너지를 쓴다
-  if (p.flying) { addNeeds({ energy: -dt * 0.6 }); if (game.stats.needs.energy < 3) { p.flying = false; ui.toast('😪 지쳐서 날개를 접었어요'); } }
   // 마나 재생
   if (game.maxMana) game.mana = Math.min(game.maxMana, (game.mana || 0) + dt * 7);
   // 우클릭 조준: 총·활·마법봉 줌 (저격총은 스코프)

@@ -132,7 +132,7 @@ export class Citizen {
     if (N.fun < 25) out.push('심심하다');
     if (N.social < 25) out.push('외롭고 누군가와 얘기하고 싶다');
     if (N.hygiene < 25) out.push('씻고 싶다');
-    return `체력 ${Math.round(this.hp)}/${this.maxHp}, 배고픔 ${Math.round(N.hunger)}, 에너지 ${Math.round(N.energy)}, 재미 ${Math.round(N.fun)}, 사교 ${Math.round(N.social)}, 청결 ${Math.round(N.hygiene)} (100이 최상)${out.length ? ' → ' + out.join(', ') : ''}`;
+    return `체력 ${Math.round(this.hp)}/${this.maxHp}, 포만감 ${Math.round(N.hunger)}, 에너지 ${Math.round(N.energy)}, 재미 ${Math.round(N.fun)}, 사교 ${Math.round(N.social)}, 청결 ${Math.round(N.hygiene)} (100이 최상)${out.length ? ' → ' + out.join(', ') : ''}`;
   }
 
   get label() { return `${this.name} (${this.age}세 · ${this.job.name})`; }

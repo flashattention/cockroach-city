@@ -19,8 +19,7 @@ import { fmtTime, DAYS, escapeHtml } from './utils.js';
 const $ = (id) => document.getElementById(id);
 const CUTE_ROACH = `<svg class="cute-roach" viewBox="0 0 120 130" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">  <path d="M46 34 Q30 6 14 8" stroke="#5d3a24" stroke-width="4" fill="none" stroke-linecap="round"/>  <path d="M74 34 Q90 6 106 8" stroke="#5d3a24" stroke-width="4" fill="none" stroke-linecap="round"/>  <circle cx="14" cy="8" r="6" fill="#a86b3e"/><circle cx="106" cy="8" r="6" fill="#a86b3e"/>  <ellipse cx="60" cy="98" rx="30" ry="28" fill="#8a5634"/>  <ellipse cx="60" cy="102" rx="19" ry="19" fill="#c08a5c"/>  <path d="M30 92 l-14 10 M30 104 l-14 8 M90 92 l14 10 M90 104 l14 8" stroke="#5d3a24" stroke-width="5" stroke-linecap="round"/>  <ellipse cx="60" cy="52" rx="34" ry="31" fill="#8a5634"/>  <ellipse cx="46" cy="52" rx="10" ry="12" fill="#fff"/><ellipse cx="74" cy="52" rx="10" ry="12" fill="#fff"/>  <ellipse cx="47" cy="54" rx="6" ry="7.5" fill="#1d1410"/><ellipse cx="75" cy="54" rx="6" ry="7.5" fill="#1d1410"/>  <circle cx="45" cy="50" r="2.4" fill="#fff"/><circle cx="73" cy="50" r="2.4" fill="#fff"/>  <ellipse cx="34" cy="64" rx="6" ry="3.6" fill="#ff9fb2"/><ellipse cx="86" cy="64" rx="6" ry="3.6" fill="#ff9fb2"/>  <path d="M53 66 Q60 73 67 66" stroke="#1d1410" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`;
 const NEEDS = [
-  ['hunger', '🍙', '배고픔', '#ff9f6b'],
-  ['energy', '⚡', '에너지', '#ffd54f'],
+  ['hunger', '🍙', '포만감', '#ff9f6b'],
   ['fun', '🎈', '재미', '#c99bff'],
   ['social', '💬', '사교', '#7ec8a9'],
   ['hygiene', '🫧', '청결', '#80d8ff'],
@@ -197,7 +196,7 @@ export class UI {
     if ((this.chatAgeT = (this.chatAgeT || 0) - dt) <= 0) { this.chatAgeT = 1; const now = Date.now(); for (const el of $('pchat-log').children) el.classList.toggle('old', now - (+el.dataset.t || 0) > 20000); }
     $('hp-num').textContent = Math.round(g.hp);
     const charm = g.charm();
-    $('charm').textContent = `✨ 매력 ${charm}${charm >= CLUB_CHARM ? ' 🪩' : ''}`;
+    $('charm').textContent = `✨ 매력 ${charm}`;
     $('stars').innerHTML = g.stars ? '★'.repeat(g.stars) + '<span style="opacity:.25">' + '★'.repeat(5 - g.stars) + '</span>' : '';
     $('stars').classList.toggle('hidden', !g.stars);
     const sel = g.inv.selected();
@@ -705,11 +704,11 @@ export class UI {
       body.innerHTML = `<div class="profile-big">
         <h3>📘 바퀴시티 생활 가이드</h3>
         <b>조작</b>: WASD 이동 · Shift 달리기 · Space 점프(배우면 2·3단) · C 대쉬 · 마우스(클릭 후) 시점 · 클릭 공격/먹기 · 1~0 핫바 · E 대화/입장/줍기 · F 차 타기/빼앗기 · Q 버리기 · I 가방 · M 지도 · R 자동 이동 · Enter 채팅 · Tab 휴대폰 · Esc 닫기<br>
-        <b>생활</b>: 배고픔·에너지·재미·사교·청결과 체력을 관리하세요. NPC들도 똑같은 욕구가 있어서 배고프면 밥을 먹으러 가고, 다치면 병원에 가요.<br>
+        <b>생활</b>: 포만감·재미·사교·청결과 체력을 관리하세요. NPC들도 똑같은 욕구가 있어서 배고프면 밥을 먹으러 가고, 다치면 병원에 가요.<br>
         <b>직업</b>: 시청 🏛️ 일자리 게시판에서 직업을 골라 직장에서 일하세요.<br>
         <b>집</b>: 처음엔 호텔에서 지내요. 부동산 🏘️ 에서 집을 사면 그 집에서 자고 부활해요.<br>
         <b>무기 상점</b>: 관우네 병기점(삼국지), 바퀴 택티컬(밀리터리·전차·헬기), 은하 무기상(광선검·블래스터). 보석상 💎 에서 보석을 사서 무기와 방어구에 박을 수 있어요.<br>
-        <b>치장</b>: 모자 가게·안경원·옷가게의 아이템을 장착하면 매력이 올라가요. 매력 ${CLUB_CHARM} 이상이면 클럽 🪩 에 들어갈 수 있어요.<br>
+        <b>치장</b>: 모자 가게·안경원·옷가게의 아이템을 장착하면 매력이 올라가요. 클럽 🪩 은 누구나 들어갈 수 있어요.<br>
         <b>무릉도장</b> 🥋: 점프맵은 점프력 강화, 고급 점프맵은 3단 점프, 용암 징검다리는 대쉬 거리 강화를 배워요.<br>
         <b>범죄 · 112</b>: 경찰은 누군가 112에 신고해야만 출동해요. 시민은 맞으면 화가 나서 신고하고, 플레이어는 휴대폰 🚨 112에서 나를 공격한 사람을 신고할 수 있어요. 신고가 쌓이면 별 4~5개에 군대가 출동해요.<br>
         <b>레벨</b>: 일하기·퀘스트·수련·사격장·플레이어 쓰러뜨리기로 경험치를 얻어 레벨업! 레벨이 오르면 체력·파워·명중률이 좋아져요 (만렙 없음).<br>
@@ -790,7 +789,7 @@ export class UI {
       if (d.def) parts.push(`방어 ${d.def}`);
       if (d.charm) parts.push(`매력 ${d.charm}`);
       if (d.sockets) parts.push(`보석 ${(it.gems || []).length}/${d.sockets}${(it.gems || []).length ? ' ' + it.gems.map((x) => `<span style="color:${GEMS[x].color}">◆</span>`).join('') : ''}`);
-      if (d.food) parts.push(Object.entries(d.food).map(([k, v]) => `${{ hunger: '🍚', energy: '⚡', fun: '🎉' }[k] || k}+${v}`).join(' ') + (d.heal ? ` ❤️+${d.heal}` : '') + (d.mana ? ` 💧+${d.mana}` : ''));
+      if (d.food) parts.push(Object.entries(d.food).map(([k, v]) => `${{ hunger: '🍚', energy: '☕', fun: '🎉' }[k] || k}+${v}`).join(' ') + (d.heal ? ` ❤️+${d.heal}` : '') + (d.mana ? ` 💧+${d.mana}` : ''));
       if (d.ammo) parts.push(`탄약 ${ammoName(d.ammo)} ${inv.count(d.ammo)}발`);
       if (it.car) parts.push(`${MODELS[it.car.kind]?.name || it.car.kind} · 핫바에서 쓰면 호출`);
       if (it.expiresAt) parts.push(`<span style="color:${RARITY[it.rarity]?.color || '#999'}">[${RARITY[it.rarity]?.name || ''}] ⏳ ${Math.max(0, Math.ceil((it.expiresAt - Date.now()) / 60000))}분 남음</span>`);
@@ -857,7 +856,7 @@ export class UI {
       if (d.charm) p.push(`매력 +${d.charm}`);
       if (d.sockets) p.push(`보석칸 ${d.sockets}`);
       if (d.gem) p.push(`무기: ${GEMS[d.gem].weapon} / 방어구: ${GEMS[d.gem].armor}`);
-      if (d.food) p.push(Object.entries(d.food).map(([k, v]) => `${{ hunger: '배고픔', energy: '에너지', fun: '재미' }[k]} +${v}`).join(' '), d.heal ? `체력 +${d.heal}` : '');
+      if (d.food) p.push(Object.entries(d.food).map(([k, v]) => `${{ hunger: '포만감', energy: '활력', fun: '재미' }[k]} +${v}`).join(' '), d.heal ? `체력 +${d.heal}` : '');
       if (d.stack && d.cat === 'throw') p.push('3개 묶음');
       if (d.ammo) p.push(`탄약: ${ammoName(d.ammo)} (첫 ${ITEMS[d.ammo].pack}발 증정)`);
       if (d.cat === 'ammo') p.push(`${d.pack}발 묶음`);
