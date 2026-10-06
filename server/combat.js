@@ -55,7 +55,7 @@ export class Combat {
     let dmg = stats.dmg * pellets * pw * lv.dmg;
     const crit = this.rng.chance(stats.crit + lv.crit);
     if (crit) dmg *= 2;
-    const maxDist = stats.range + 4;
+    const maxDist = stats.range * 1.15 + 8; // 하늘에서 내려다보고 쏘는 것도 허용 (3D 거리)
     if (msg.tt === 'npc') {
       const c = this.w.sim.citizens[msg.id];
       if (!c || c.mode === 'dead') return;

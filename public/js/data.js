@@ -291,7 +291,7 @@ export const ACTIONS = {
   hotel: [{ id: 'stay', label: '🛏️ 호텔 숙박', cost: 40, dur: 0, fx: { energy: 100, hygiene: 40 }, sleep: true }],
   realestate: [{ id: 'buyhouse', label: '🏠 집 구매하기', houses: true }],
   range: [
-    { id: 'range_start', label: '🎯 사격 시작 (60초 · 탄약 무료)', rangeStart: true },
+    { id: 'range_start', label: '🎯 사격 시작 (60초)', rangeStart: true },
     { id: 'range_rent', label: '🔫 연습용 총 빌리기 (10분)', rangeRent: true },
   ],
   magicshop: [{ id: 'shop', label: '🪄 지팡이 둘러보기 (상점)', shop: true }],

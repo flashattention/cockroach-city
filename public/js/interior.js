@@ -649,16 +649,18 @@ const LAYOUTS = {
     for (let i = 0; i < 4; i++) k.v(-W / 2 + 3 + i * 4, D / 2 - 6.6, Math.PI);
     // 뒤쪽 흙벽 + 레일
     box(k.g, W, 3.5, 1, '#8d6e63', 0, 1.75, -D / 2 + 0.6, { cast: false });
-    for (const z of [-6, -12, -16]) box(k.g, W - 2, 0.06, 0.12, '#616161', 0, 0.12, z, { cast: false });
+    for (const z of [5, -5, -12, -20, -26, -31, -35, -9]) box(k.g, W - 2, 0.05, 0.12, '#616161', 0, 0.13, z, { cast: false });
+    for (const [z, m] of [[5, 25], [-12, 42], [-26, 56], [-35, 65]]) k.label(`${m}m`, '', -W / 2 + 1.6, 0.6, z, 1.8, '#ffffff', '#33691e', Math.PI / 2);
     // 과녁 (링 텍스처)
     const ringMat = targetMaterial();
     k.targets = [];
-    const defs = [[-6, 1.4, 0.75, 0.7, 7], [-12, 1.7, 0.6, 1.1, 9], [-16, 2.0, 0.5, 1.6, 10], [-9, 2.6, 0.45, 2.0, 8], [-14, 1.2, 0.7, 0.9, 9], [-18, 2.8, 0.4, 2.4, 10]];
+    // 사대에서 25m ~ 65m (멀수록 작고 빠르다)
+    const defs = [[5, 1.4, 0.8, 0.7, 7], [-5, 1.7, 0.7, 1.0, 9], [-12, 2.0, 0.6, 1.4, 10], [-20, 2.4, 0.55, 1.8, 9], [-26, 1.3, 0.6, 1.1, 10], [-31, 2.8, 0.5, 2.2, 10], [-35, 1.9, 0.45, 2.6, 8], [-9, 3.2, 0.4, 2.8, 9]];
     defs.forEach(([z, y, r, speed, amp], i) => {
       const grp = new THREE.Group(); grp.position.set(0, 0, z); k.g.add(grp);
       const pole = box(grp, 0.08, y, 0.08, '#424242', 0, y / 2, 0);
       const disc = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.08, 28), [toon('#fafafa'), ringMat, toon('#fafafa')]);
-      disc.rotation.x = Math.PI / 2; disc.position.y = y; disc.castShadow = true;
+      disc.rotation.x = Math.PI / 2; disc.position.y = y; disc.castShadow = false; disc.receiveShadow = false; // 그림자 깜빡임 방지
       grp.add(disc);
       k.targets.push({ id: i, obj: grp, disc, pole, r, y0: y, speed, amp, phase: i * 1.7, up: 1, downT: 0, z });
     });
@@ -1328,7 +1330,7 @@ const LAYOUTS = {
 function W2(k) { return k.W / 2; }
 
 function roomSize(b, key) {
-  if (key === 'range') return [26, 40];
+  if (key === 'range') return [26, 76];
   if (key === 'dealer') return [26, 18];
   if (key === 'unit') return [15, 11];
   if (key === 'villa') return [14, 11];

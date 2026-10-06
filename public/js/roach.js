@@ -1055,8 +1055,10 @@ export class Roach {
     // 무기 자세
     const ar = this.arms[1], al = this.arms[0];
     if (ck > 0.5) { /* 기어갈 때는 무기를 품에 안는다 */ } else if (this.heldPose === 'gun' || this.heldPose === 'heavy') {
-      ar.rotation.x = -1.45; ar.rotation.z = 0.15;
-      al.rotation.x = -1.3; al.rotation.z = -0.1;
+      const kick = this.kick || 0; // 총 반동으로 팔이 튄다
+      this.kick = Math.max(0, kick - dt * 6);
+      ar.rotation.x = -1.45 - kick * 0.5; ar.rotation.z = 0.15;
+      al.rotation.x = -1.3 - kick * 0.4; al.rotation.z = -0.1;
     } else if (this.heldPose === 'melee' && this.waveT <= 0) {
       ar.rotation.x = -0.55 + Math.sin(this.t * 2) * 0.05;
     } else if (this.heldPose === 'doll') {

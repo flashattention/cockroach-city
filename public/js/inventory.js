@@ -1,5 +1,5 @@
 // 인벤토리 · 핫바 · 장비
-import { ITEMS, itemDef, isWeapon, equipTotals } from './items.js';
+import { ITEMS, itemDef, isWeapon, equipTotals, NO_AMMO } from './items.js';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const OLD_GIFTS = { 꽃다발: 'flowers', 빵: 'bread', 커피: 'coffee', 과자: 'snack', 책: 'book' };
@@ -19,7 +19,7 @@ export class Inventory {
       for (const name of S.inventory) if (OLD_GIFTS[name]) this.add(OLD_GIFTS[name]);
       delete S.inventory;
     }
-    S.items = S.items.filter((it) => ITEMS[it.id]);
+    S.items = S.items.filter((it) => ITEMS[it.id] && !NO_AMMO.has(it.id)); // 이제 총알·화살은 필요 없음
   }
 
   get S() { return this.g.stats; }

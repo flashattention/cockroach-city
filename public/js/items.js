@@ -35,6 +35,16 @@ export const ITEMS = {
   rifle: { name: '돌격소총', emoji: '🔫', cat: 'gun', shop: 'armory_mil', price: 2000, dmg: 14, rate: 0.12, range: 60, ammo: 'ammo_556', kind: 'hitscan', auto: true, held: 'rifle', tracer: '#fff59d', sockets: 2 },
   sniper: { name: '저격총', emoji: '🎯', cat: 'gun', shop: 'armory_mil', price: 3200, dmg: 75, rate: 1.3, range: 140, ammo: 'ammo_762', kind: 'hitscan', held: 'sniper', tracer: '#ffffff', sockets: 3 },
   minigun: { name: '미니건', emoji: '🌀', cat: 'gun', shop: 'armory_mil', price: 5500, dmg: 9, rate: 0.05, range: 50, ammo: 'ammo_belt', kind: 'hitscan', auto: true, held: 'minigun', tracer: '#ffab40', sockets: 2 },
+  revolver: { name: '리볼버 (.357)', emoji: '🔫', cat: 'gun', shop: 'armory_mil', price: 900, dmg: 34, rate: 0.55, range: 50, ammo: 'ammo_9mm', kind: 'hitscan', held: 'pistol', sockets: 1 },
+  deagle: { name: '데저트 이글', emoji: '🦅', cat: 'gun', shop: 'armory_mil', price: 1800, dmg: 48, rate: 0.6, range: 55, ammo: 'ammo_9mm', kind: 'hitscan', held: 'pistol', sockets: 2 },
+  uzi: { name: '우지 기관단총', emoji: '🔫', cat: 'gun', shop: 'armory_mil', price: 1400, dmg: 9, rate: 0.07, range: 35, ammo: 'ammo_9mm', kind: 'hitscan', auto: true, held: 'pistol', sockets: 1 },
+  mp5: { name: 'MP5 기관단총', emoji: '🔫', cat: 'gun', shop: 'armory_mil', price: 1700, dmg: 11, rate: 0.08, range: 45, ammo: 'ammo_9mm', kind: 'hitscan', auto: true, held: 'rifle', sockets: 2 },
+  ak47: { name: 'AK-47', emoji: '🔫', cat: 'gun', shop: 'armory_mil', price: 2400, dmg: 19, rate: 0.12, range: 65, ammo: 'ammo_762', kind: 'hitscan', auto: true, held: 'rifle', sockets: 2 },
+  scar: { name: 'SCAR-H 전투소총', emoji: '🔫', cat: 'gun', shop: 'armory_mil', price: 3600, dmg: 24, rate: 0.14, range: 80, ammo: 'ammo_762', kind: 'hitscan', auto: true, held: 'rifle', sockets: 3 },
+  m249: { name: 'M249 경기관총', emoji: '🌀', cat: 'gun', shop: 'armory_mil', price: 4800, dmg: 13, rate: 0.075, range: 60, ammo: 'ammo_belt', kind: 'hitscan', auto: true, held: 'minigun', sockets: 2 },
+  double_barrel: { name: '더블배럴 샷건', emoji: '💥', cat: 'gun', shop: 'armory_mil', price: 1600, dmg: 12, pellets: 9, spread: 0.11, rate: 1.1, range: 18, ammo: 'ammo_shell', kind: 'hitscan', held: 'shotgun', sockets: 1 },
+  barrett: { name: '바렛 대물저격총 (.50)', emoji: '🎯', cat: 'gun', shop: 'armory_mil', price: 7800, dmg: 160, rate: 2.2, range: 200, ammo: 'ammo_762', kind: 'hitscan', held: 'sniper', sockets: 3 },
+  plasma_smg: { name: '플라즈마 기관단총', emoji: '🔫', cat: 'gun', shop: 'armory_sf', price: 3800, dmg: 14, rate: 0.08, range: 55, ammo: 'ammo_cell', kind: 'hitscan', auto: true, held: 'blaster_rifle', tracer: '#18ffff', sockets: 2 },
   grenade: { name: '수류탄', emoji: '💣', cat: 'throw', shop: 'armory_mil', price: 120, stack: true, dmg: 70, radius: 6, rate: 0.8, range: 30, kind: 'grenade', held: 'grenade', sockets: 0 },
   rpg: { name: '로켓포 (RPG)', emoji: '🚀', cat: 'launcher', shop: 'armory_mil', price: 4200, dmg: 90, radius: 6, rate: 2.2, range: 90, ammo: 'ammo_rocket', kind: 'rocket', held: 'rpg', sockets: 2 },
   kevlar_helmet: { name: '방탄모', emoji: '🪖', cat: 'head', slot: 'head', shop: 'armory_mil', price: 600, def: 14, vis: 'kevlar_helmet', sockets: 1 },
@@ -252,9 +262,33 @@ export const DEALER_CARS = [
   ['limo', '🚘', 25000], ['convertible', '🚙', 16000], ['ev', '⚡', 15000], ['jeep', '🛻', 12000], ['truck', '🚚', 10000],
   ['suv', '🚙', 9000], ['van', '🚐', 8500], ['pickup', '🛻', 8000], ['icecream', '🍦', 7000], ['wagon', '🚗', 6500], ['sedan', '🚗', 6000], ['hatch', '🚗', 5000], ['mini', '🚗', 3500],
 ];
+// 총알·화살 없이 쏜다: 무기의 탄약 표시를 지우고, 탄약 상품은 팔지 않는다 (낚시 미끼만 남김)
+export const NO_AMMO = new Set(Object.keys(ITEMS).filter((id) => ITEMS[id].cat === 'ammo' && id !== 'bait'));
+for (const d of Object.values(ITEMS)) delete d.ammo;
+for (const id of NO_AMMO) delete ITEMS[id].shop;
+// 실제 총의 유효사거리와 비슷하게 (m)
+const REAL_RANGE = {
+  pistol: 50, revolver: 50, deagle: 70, blaster: 120, uzi: 100, mp5: 150, plasma_smg: 150,
+  rifle: 400, ak47: 350, scar: 600, blaster_rifle: 400, m249: 800, minigun: 1000,
+  shotgun: 40, double_barrel: 35, sniper: 1000, hunting_rifle: 400, barrett: 1800,
+  rpg: 500, ion_cannon: 600, bow: 150, composite_bow: 200, hunter_bow: 180, zhuge_crossbow: 80,
+};
+for (const [id, r] of Object.entries(REAL_RANGE)) if (ITEMS[id]) ITEMS[id].range = r;
 // 조준(우클릭) 배율
-const ZOOM = { pistol: 1.5, blaster: 1.6, shotgun: 1.3, rifle: 2.4, blaster_rifle: 2.4, minigun: 1.5, sniper: 6, rpg: 1.8, ion_cannon: 2, bow: 2.2, composite_bow: 2.6, zhuge_crossbow: 2 };
+const ZOOM = { revolver: 1.6, deagle: 1.7, uzi: 1.3, mp5: 1.8, ak47: 2.2, scar: 3.0, m249: 1.7, double_barrel: 1.2, barrett: 8, plasma_smg: 1.8, hunting_rifle: 4.5, hunter_bow: 2.4, pistol: 1.5, blaster: 1.6, shotgun: 1.3, rifle: 2.4, blaster_rifle: 2.4, minigun: 1.5, sniper: 6, rpg: 1.8, ion_cannon: 2, bow: 2.2, composite_bow: 2.6, zhuge_crossbow: 2 };
 for (const [id, z] of Object.entries(ZOOM)) if (ITEMS[id]) ITEMS[id].zoom = z;
+// 반동: [위로 튀는 각도, 좌우 흔들림, 화면 흔들림] — 총마다 실제처럼
+const RECOIL = {
+  pistol: [0.035, 0.012, 0.08], revolver: [0.07, 0.02, 0.15], deagle: [0.11, 0.03, 0.25], blaster: [0.025, 0.01, 0.05],
+  uzi: [0.018, 0.02, 0.04], mp5: [0.013, 0.012, 0.03], plasma_smg: [0.01, 0.01, 0.03],
+  rifle: [0.016, 0.01, 0.05], ak47: [0.024, 0.016, 0.07], scar: [0.03, 0.014, 0.09], blaster_rifle: [0.012, 0.008, 0.04],
+  minigun: [0.008, 0.012, 0.06], m249: [0.012, 0.016, 0.07],
+  shotgun: [0.12, 0.03, 0.35], double_barrel: [0.16, 0.04, 0.45],
+  sniper: [0.14, 0.02, 0.4], hunting_rifle: [0.12, 0.02, 0.35], barrett: [0.26, 0.04, 0.8],
+  rpg: [0.1, 0.03, 0.6], ion_cannon: [0.08, 0.02, 0.5],
+  bow: [0.01, 0.004, 0], composite_bow: [0.012, 0.004, 0], hunter_bow: [0.01, 0.004, 0], zhuge_crossbow: [0.01, 0.006, 0.02],
+};
+for (const [id, r] of Object.entries(RECOIL)) if (ITEMS[id]) ITEMS[id].recoil = r;
 for (const d of Object.values(ITEMS)) if (d.cat === 'wand') d.zoom = 1.4;
 // 포장 음식은 손에 포장 봉투/박스를 든다
 for (const d of Object.values(ITEMS)) if (d.cat === 'food' && d.eat) d.held = `food:${d.pack || d.eat[1].split(':')[0]}:${d.eat[1].split(':')[1]}`;

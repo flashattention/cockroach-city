@@ -93,7 +93,8 @@ export class CitizenView {
         c.pos.x += (t.x - c.pos.x) * k; c.pos.z += (t.z - c.pos.z) * k;
         if (myLoc < 0 && this.isStreet(c)) {
           const dx = c.pos.x - camPos.x, dz = c.pos.z - camPos.z, d2 = dx * dx + dz * dz;
-          visible = d2 < 130 * 130;
+          const vd = this.viewDist || 130; // 스코프로 보면 더 멀리까지 보인다
+          visible = d2 < vd * vd;
           if (visible) {
             root.position.set(c.pos.x, this.city.groundY(c.pos.x, c.pos.z), c.pos.z);
             c.roach.setLod(d2 > 38 * 38);

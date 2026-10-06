@@ -181,23 +181,20 @@ export class Player {
       if (!world.mouseActive) c.yaw = angleLerp(c.yaw, behind, Math.min(1, dt * 2.5));
     }
     if (this.snap) c.target.copy(tgt); else c.target.lerp(tgt, Math.min(1, dt * 12));
-    // 1인칭: 머리 위치에서 보는 방향 그대로
+    // 1인칭 (V): 머리 위치에서 보는 방향 그대로
+    const head = this.pos.clone(); head.y += this.roach.height * 0.85;
+    const cp0 = Math.cos(c.pitch);
+    const headLook = new THREE.Vector3(head.x - Math.sin(c.yaw) * cp0, head.y - Math.sin(c.pitch), head.z - Math.cos(c.yaw) * cp0);
     if (this.fp && !this.inCar) {
-      const head = this.pos.clone(); head.y += this.roach.height * 0.85;
-      const cp0 = Math.cos(c.pitch);
       camera.position.copy(head);
       this.camPos.copy(head);
-      camera.lookAt(head.x - Math.sin(c.yaw) * cp0, head.y - Math.sin(c.pitch), head.z - Math.cos(c.yaw) * cp0);
+      camera.lookAt(headLook);
       this.snap = false;
       return;
     }
-    // 조준 중: 어깨 너머로 가까이
-    if (this.aim > 0.01 && !this.inCar) {
-      const rx = Math.cos(c.yaw), rz = -Math.sin(c.yaw);
-      c.target.x += rx * 0.9 * this.aim; c.target.z += rz * 0.9 * this.aim; c.target.y += 0.25 * this.aim;
-    }
     const dist0 = this.inCar ? Math.max(c.dist, this.inCar.kind === 'heli' || this.inCar.kind === 'tank' ? 16 : this.inCar.kind === 'bus' || this.inCar.kind === 'truck' ? 14 : 11) : c.dist;
-    const dist = this.inCar ? dist0 : dist0 + (Math.min(dist0, 3.4) - dist0) * this.aim;
+    // 총·활 조준(우클릭)은 1인칭으로 부드럽게 넘어가고, 마법봉 조준은 살짝 가까이
+    const dist = this.inCar || this.adsFP ? dist0 : dist0 + (Math.min(dist0, 3.4) - dist0) * this.aim;
     const cp = Math.cos(c.pitch);
     const want = new THREE.Vector3(
       c.target.x + Math.sin(c.yaw) * cp * dist,
@@ -219,8 +216,17 @@ export class Player {
     this.camPos.lerp(want, Math.min(1, dt * 14));
     if (this.snap || this.camPos.distanceTo(want) > 30) this.camPos.copy(want);
     this.snap = false;
-    camera.position.copy(this.camPos);
-    camera.lookAt(c.target);
+    const k = this.adsFP && !this.inCar ? this.aim * this.aim * (3 - 2 * this.aim) : 0; // smoothstep
+    if (k > 0.001) {
+      // 3인칭은 위에서 내려다보므로, 조준 화면은 그만큼 들어 올려 수평에 가깝게
+      const ap = c.pitch - 0.3, cpa = Math.cos(ap);
+      const adsLook = new THREE.Vector3(head.x - Math.sin(c.yaw) * cpa, head.y - Math.sin(ap), head.z - Math.cos(c.yaw) * cpa);
+      camera.position.copy(this.camPos).lerp(head, k);
+      camera.lookAt(c.target.clone().lerp(adsLook, k));
+    } else {
+      camera.position.copy(this.camPos);
+      camera.lookAt(c.target);
+    }
   }
 }
 

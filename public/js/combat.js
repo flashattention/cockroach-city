@@ -5,7 +5,7 @@ import { G } from './utils.js';
 import { levelStats } from './level.js';
 
 const ELEMENT_COLOR = { fire: '#ff5722', ice: '#4fc3f7', thunder: '#ffee58', wind: '#a5d6a7', poison: '#9ccc65', holy: '#fff59d', dark: '#7e57c2' };
-const BASE_SPREAD = { pistol: 0.018, blaster: 0.015, rifle: 0.03, blaster_rifle: 0.026, minigun: 0.045, sniper: 0.012 };
+const BASE_SPREAD = { revolver: 0.012, deagle: 0.016, uzi: 0.05, mp5: 0.028, ak47: 0.035, scar: 0.02, m249: 0.045, barrett: 0.003, plasma_smg: 0.025, hunting_rifle: 0.006, pistol: 0.018, blaster: 0.015, rifle: 0.03, blaster_rifle: 0.026, minigun: 0.045, sniper: 0.012 };
 
 const tmpV = new THREE.Vector3();
 
@@ -129,19 +129,42 @@ function makeEmojiSprite(emoji) {
 
 // 수직 원기둥과 광선의 교차 (가장 가까운 t)
 function rayCylinder(o, d, base, r, h) {
+  let best = null;
+  const take = (t) => { if (t >= 0 && (best === null || t < best)) best = t; };
+  // 옆면
   const ox = o.x - base.x, oz = o.z - base.z;
   const a = d.x * d.x + d.z * d.z;
-  if (a < 1e-8) return null;
-  const b = 2 * (ox * d.x + oz * d.z), c = ox * ox + oz * oz - r * r;
-  const disc = b * b - 4 * a * c;
-  if (disc < 0) return null;
-  const s = Math.sqrt(disc);
-  for (const t of [(-b - s) / (2 * a), (-b + s) / (2 * a)]) {
-    if (t < 0) continue;
-    const y = o.y + d.y * t;
-    if (y >= base.y && y <= base.y + h) return t;
+  if (a > 1e-8) {
+    const b = 2 * (ox * d.x + oz * d.z), c = ox * ox + oz * oz - r * r;
+    const disc = b * b - 4 * a * c;
+    if (disc >= 0) {
+      const sq = Math.sqrt(disc);
+      for (const t of [(-b - sq) / (2 * a), (-b + sq) / (2 * a)]) {
+        const y = o.y + d.y * t;
+        if (y >= base.y && y <= base.y + h) take(t);
+      }
+    }
   }
-  return null;
+  // 윗면·아랫면 (하늘에서 내려다보고 쏠 때 머리 위로 맞는다)
+  if (Math.abs(d.y) > 1e-6) {
+    for (const cy of [base.y + h, base.y]) {
+      const t = (cy - o.y) / d.y;
+      const x = ox + d.x * t, z = oz + d.z * t;
+      if (x * x + z * z <= r * r) take(t);
+    }
+  }
+  return best;
+}
+
+// 이번 프레임에 움직인 선분이 대상에 닿았는지 (빠른 투사체가 건너뛰지 않게)
+function segHits(a, b, t, pad) {
+  const d = b.clone().sub(a);
+  const L = d.length();
+  if (L < 1e-6) return false;
+  d.divideScalar(L);
+  const base = { x: t.base.x, y: t.base.y - pad, z: t.base.z };
+  const hit = rayCylinder(a, d, base, t.r + pad, t.h + pad * 2);
+  return hit !== null && hit <= L;
 }
 
 function rayBox(o, d, b) {
@@ -189,7 +212,7 @@ export class Combat {
     if (g.mode === 'interior') for (const t of g.interior.targets || []) if (t.up) out.push({ tt: 'rtarget', id: t.id, base: t.obj.getWorldPosition(new THREE.Vector3()).setY(t.y0 - t.r), r: t.r, h: t.r * 2, rt: t });
     if (g.mode === 'city') for (const car of g.traffic.cars) {
       if (car === g.player.inCar || car.mode === 'wreck' || car.mode === 'gone') continue;
-      if (car.pos.distanceTo(g.player.pos) > 150) continue;
+      if (car.pos.distanceTo(g.player.pos) > 600) continue;
       out.push({ tt: 'car', id: car.id, base: car.mesh.g.position, r: car.kind === 'bus' || car.kind === 'tank' || car.kind === 'heli' ? 2.4 : 1.6, h: 2.2 });
     }
     return out;
@@ -267,7 +290,8 @@ export class Combat {
     if (this.firing) {
       const w = this.selectedWeapon();
       const car = this.g.player.inCar;
-      if ((w && itemDef(w.id).auto) || (car && car.kind === 'heli')) this.tryFire();
+      // 연사 총·근접무기(주먹 포함)는 누르고 있으면 계속
+      if ((w && (itemDef(w.id).auto || itemDef(w.id).kind === 'melee')) || (car && car.kind === 'heli')) this.tryFire();
     }
     this.updateProjs(dt);
     this.fx.update(dt);
@@ -303,6 +327,18 @@ export class Combat {
     const { o, d } = this.aimRay();
     p.heading = Math.atan2(d.x, d.z);
     p.roach.root.rotation.y = p.heading;
+    // 반동: 연사할수록 총구가 위로 솟고 좌우로 흔들린다 (조준하면 조금 덜)
+    if (s.recoil) {
+      const [up, side, shake] = s.recoil;
+      const k = 1 - 0.35 * (p.aim || 0);
+      const climb = 1 + Math.min(1.5, (this.burst = (performance.now() - (this.lastShot || 0) < 250 ? (this.burst || 0) + 1 : 0)) * 0.08);
+      this.lastShot = performance.now();
+      const dy = up * k * climb, dx = (Math.random() - 0.5) * 2 * side * k;
+      p.cam.pitch -= dy; p.cam.yaw += dx;
+      p.recoilBack = (p.recoilBack || 0) + dy * 0.6; // 일부는 천천히 돌아온다
+      if (shake) g.shake(shake * k);
+      p.roach.kick = Math.min(1, (p.roach.kick || 0) + up * 8);
+    }
     if (s.kind === 'melee') return this.melee(w, s);
     if (s.kind === 'hitscan') return this.shoot(w, s, o, d);
     if (s.kind === 'grenade') return this.throwGrenade(w, s, d);
@@ -511,6 +547,7 @@ export class Combat {
           pr.v.lerp(want, Math.min(1, dt * 2.5));
         }
         const step = pr.v.clone().multiplyScalar(dt);
+        const prev = pr.pos.clone();
         pr.pos.add(step); pr.traveled += step.length();
         pr.m.position.copy(pr.pos);
         if (Math.random() < 0.6) { this.fx.sparkle(pr.pos, pr.color, 1, 0.3); }
@@ -520,8 +557,7 @@ export class Combat {
         }
         if (!stop && pr.t > 0.05) for (const t of this.targets()) {
           if (t.tt === 'car') continue;
-          const dx = pr.pos.x - t.base.x, dz = pr.pos.z - t.base.z;
-          if (Math.hypot(dx, dz) < t.r + 0.35 && pr.pos.y > t.base.y - 0.3 && pr.pos.y < t.base.y + t.h + 0.3) { hit = t; stop = true; break; }
+          if (segHits(prev, pr.pos, t, 0.35)) { hit = t; stop = true; break; }
         }
         if (stop) {
           g.scene.remove(pr.m);
@@ -543,17 +579,17 @@ export class Combat {
       if (pr.type === 'arrow') {
         pr.v.y -= (pr.w.pw && pr.w.pw < 0.6 ? 14 : 6) * dt;
         const step = pr.v.clone().multiplyScalar(dt);
+        const prev = pr.pos.clone();
         pr.pos.add(step); pr.traveled += step.length();
         pr.m.position.copy(pr.pos);
         pr.m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pr.v.clone().normalize());
-        let stop = pr.pos.y <= ground + 0.05 || pr.traveled > 130;
+        let stop = pr.pos.y <= ground + 0.05 || pr.traveled > Math.max(130, (itemDef(pr.w.id).range || 130) * 1.1);
         if (!stop && g.mode === 'city') for (const b of g.city.colliders) {
           if (!b.small && pr.pos.x > b.minX && pr.pos.x < b.maxX && pr.pos.z > b.minZ && pr.pos.z < b.maxZ && pr.pos.y < (b.h ?? 10)) { stop = true; break; }
         }
         if (!stop && pr.mine && pr.t > 0.03) for (const t of this.targets()) {
           if (t.tt === 'car') continue;
-          const dx = pr.pos.x - t.base.x, dz = pr.pos.z - t.base.z;
-          if (Math.hypot(dx, dz) < t.r + 0.25 && pr.pos.y > t.base.y - 0.2 && pr.pos.y < t.base.y + t.h + 0.2) {
+          if (segHits(prev, pr.pos, t, 0.25)) {
             this.sendHit(t, pr.w, t.tt === 'rtarget' ? { point: pr.pos.clone() } : { pw: pr.w.pw });
             stop = true; pr.hitTarget = true; break;
           }
@@ -574,7 +610,7 @@ export class Combat {
       } else {
         const step = pr.v.clone().multiplyScalar(dt);
         pr.pos.add(step); pr.traveled += step.length();
-        if (pr.pos.y <= ground + 0.1 || pr.traveled > 160) boom = true;
+        if (pr.pos.y <= ground + 0.1 || pr.traveled > Math.max(160, pr.w.id ? (itemDef(pr.w.id).range || 160) : 200)) boom = true;
         if (!boom && g.mode === 'city') for (const b of g.city.colliders) {
           if (!b.small && pr.pos.x > b.minX && pr.pos.x < b.maxX && pr.pos.z > b.minZ && pr.pos.z < b.maxZ && pr.pos.y < (b.h ?? 10)) { boom = true; break; }
         }

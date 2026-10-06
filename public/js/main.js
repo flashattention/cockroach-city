@@ -920,7 +920,6 @@ async function doAction(a) {
   if (a.dealer) { ui.openDealer(); return; }
   if (a.rangeStart) { startRange(); return; }
   if (a.rangeRent) {
-    if (game.inv.count('ammo_9mm') < 30) game.inv.add('ammo_9mm', 30, [], { expiresAt: Date.now() + 600000, rarity: 'common' });
     const it = game.inv.add('pistol', 1, [], { expiresAt: Date.now() + 600000, rarity: 'common' });
     if (it) game.inv.select(Math.max(0, game.stats.hotbar.indexOf(it.uid)));
     ui.toast('🔫 연습용 권총을 빌렸어요 (10분). 우클릭으로 조준해 보세요!');
@@ -1289,7 +1288,7 @@ function startRange() {
   if (!d || !['gun', 'launcher', 'wand'].includes(d.cat)) { ui.toast('🔫 총·활·마법봉을 핫바에서 골라 들고 시작하세요 (연습용 총 빌리기도 있어요)'); return; }
   game.range = { score: 0, hits: 0, left: 60 };
   for (const t of game.interior.targets) { t.up = 1; t.downT = 0; }
-  ui.toast('🎯 60초 사격 시작! 탄약은 무료예요');
+  ui.toast('🎯 60초 사격 시작!');
 }
 function updateRange(dt) {
   const R = game.range;
@@ -1669,6 +1668,8 @@ function frame() {
   }
   game.traffic.render(!indoor, camera.position, dt);
 
+  // 반동 회복
+  if (p.recoilBack > 0.0005) { const r = Math.min(p.recoilBack, dt * 0.6); p.cam.pitch += r; p.recoilBack -= r; }
   // 얼음 마법에 맞으면 느려짐
   if (game.slowT > 0) { game.slowT -= dt; p.speedBonus = -0.55; } else if (game.slowWas) game.sendProfile();
   game.slowWas = game.slowT > 0;
@@ -1692,10 +1693,15 @@ function frame() {
   const selD = game.inv.selected() ? itemDef(game.inv.selected().id) : null;
   const canZoom = !p.inCar && selD?.zoom && !blocked;
   p.aim += ((canZoom && game.aimHeld ? 1 : 0) - p.aim) * Math.min(1, dt * 10);
+  p.adsFP = !!selD && ['gun', 'launcher'].includes(selD.cat); // 총·활은 우클릭하면 1인칭 조준
   game.zoomNow = 1 + ((selD?.zoom || 1) - 1) * p.aim;
   const fov = 55 / game.zoomNow;
   if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = fov; camera.updateProjectionMatrix(); }
   ui.setScope(selD?.zoom >= 4 && p.aim > 0.85);
+  // 저격 조준 중에는 멀리 있는 시민·동물까지 그려서 맞힐 수 있게
+  const far = game.zoomNow > 2.5;
+  game.citizens.viewDist = far ? 130 * Math.min(4, game.zoomNow / 1.5) : 130;
+  game.animals.viewDist = far ? 220 * Math.min(3, game.zoomNow / 2) : 220;
   if (p.inCar) { seatRoach(p.roach, p.inCar); p.roach.update(dt, 0, {}); }
   game.citizens.update(dt, camera.position, game.loc());
   game.animals.update(dt, camera.position, !indoor);
