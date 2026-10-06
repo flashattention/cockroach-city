@@ -649,7 +649,7 @@ export class Combat {
     else if (m.k === 'sparkle') this.fx.sparkle(v3(m.p), m.c || '#fff59d', 20, 3);
     else if (m.k === 'cloud') this.fx.cloud(v3(m.p), m.c || '#e8f5e9');
     else if (m.k === 'hearts') { const a = v3(m.a), b = m.b ? v3(m.b) : null; this.fx.hearts(a, b, m.e || '💗'); const p = g.players.list.get(m.pid); p?.roach.flirt(); }
-    else if (m.k === 'eat') { const p = g.players.list.get(m.pid); if (p) p.roach.eat(m.m, m.prop, Math.min(6, +m.d || 3)); }
+    else if (m.k === 'eat') { const p = g.players.list.get(m.pid); if (p) p.roach.eat(m.m, m.prop, Math.min(6, +m.d || 3), typeof m.e === 'string' ? m.e.slice(0, 4) : null, !!m.tb); }
     else if (m.k === 'swing') { const p = g.players.list.get(m.pid); if (p && p.visible) { p.roach.attack('melee'); this.fx.slash(p.pos, p.heading); } }
     else if (m.k === 'dmgnum') {
       g.ui.floatText(v3(m.p), `${m.crit ? '💥' : ''}-${m.v}`, m.crit ? '#ffd600' : '#ff5252');

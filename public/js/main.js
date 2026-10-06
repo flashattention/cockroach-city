@@ -1003,15 +1003,16 @@ async function doAction(a) {
 // ------------------------------------------------------------------
 const EAT_WORDS = { bite: ['냠냠', '와앙', '쩝쩝'], slurp: ['후루룩', '호로록', '쓰읍'], spoon: ['후~ 후~', '냠', '캬~'], drink: ['꿀꺽', '벌컥벌컥', '캬'], slice: ['쭈욱~', '냠냠', '치즈 늘어난다~'], drumstick: ['바삭!', '와구와구', '냠냠'] };
 async function eatFood(id, secs, seated) {
+  const onTable = seated && game.mode === 'interior';
   const d = itemDef(id);
   const [motion, prop] = d.eat || ['bite', 'bun:#ffcc80'];
   const roach = game.player.roach;
   game.eating = true;
-  roach.eat(motion, prop, secs);
-  game.net.send({ t: 'fx', k: 'eat', m: motion, prop, d: secs });
+  roach.eat(motion, prop, secs, d.emoji, onTable);
+  game.net.send({ t: 'fx', k: 'eat', m: motion, prop, d: secs, e: d.emoji, tb: onTable ? 1 : 0 });
   const words = EAT_WORDS[motion] || EAT_WORDS.bite;
   const head = () => game.player.pos.clone().add(new THREE.Vector3(0, 2.3, 0));
-  for (let i = 0; i < Math.floor(secs / 0.9); i++) setTimeout(() => { if (game.eating) ui.floatText(head(), words[i % words.length], '#ff8a65'); }, 300 + i * 900);
+  for (let i = 0; i < Math.floor(secs / 0.9); i++) setTimeout(() => { if (game.eating) ui.floatText(head(), `${d.emoji} ${words[i % words.length]}`, '#ff8a65'); }, 300 + i * 900);
   await new Promise((r) => setTimeout(r, secs * 1000));
   game.eating = false;
   if (d.food) addNeeds(seated ? Object.fromEntries(Object.entries(d.food).map(([k, v]) => [k, Math.round(v * 1.2)])) : d.food);

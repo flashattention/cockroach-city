@@ -922,28 +922,76 @@ export class Roach {
   }
 
   // 먹기 연출: motion = bite | slurp | spoon | drink | slice | drumstick, prop = 'shape:color'
-  eat(motion, prop, dur = 3) {
-    this.eatT = dur; this.eatDur = dur; this.eatMotion = motion;
+  // onTable: 식당 자리에서 먹을 때는 그릇·접시를 식탁 위(앞)에 두고 수저로 떠먹는다
+  eat(motion, prop, dur = 3, emoji = null, onTable = false) {
+    this.eatT = dur; this.eatDur = dur; this.eatMotion = motion; this.eatTable = onTable;
+    // 머리 위에 지금 먹는 음식 그림
+    if (emoji && typeof document !== 'undefined') {
+      if (!this.foodSprite) {
+        const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+        this.foodCanvas = cv;
+        this.foodSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false }));
+        this.foodSprite.scale.setScalar(0.9);
+        this.root.add(this.foodSprite);
+      }
+      const x = this.foodCanvas.getContext('2d');
+      x.clearRect(0, 0, 128, 128);
+      x.fillStyle = 'rgba(255,255,255,.92)'; x.beginPath(); x.arc(64, 64, 58, 0, Math.PI * 2); x.fill();
+      x.strokeStyle = '#ff8a65'; x.lineWidth = 6; x.stroke();
+      x.font = '72px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(emoji, 64, 70);
+      this.foodSprite.material.map.needsUpdate = true;
+      this.foodSprite.position.set(0, 4.4, 0);
+      this.foodSprite.visible = true;
+    }
     if (!this.eatProp) {
       this.eatProp = new THREE.Group();
       this.hand.add(this.eatProp);
       this.handL = new THREE.Group(); this.handL.position.set(0, -0.42, 0); this.arms[0].add(this.handL);
       this.eatPropL = new THREE.Group(); this.handL.add(this.eatPropL);
+      // 식탁 위 그릇 자리 (몸 앞쪽, 식탁 높이)
+      this.tableDish = new THREE.Group(); this.tableDish.position.set(0, 1.2, 0.95); this.root.add(this.tableDish);
     }
-    this.eatProp.clear(); this.eatPropL.clear();
+    this.eatProp.clear(); this.eatPropL.clear(); this.tableDish.clear();
     this.heldGroup.visible = false;
     const [shape, col] = (prop || 'bun:#d7a86e').split(':');
-    if (motion === 'slurp' || motion === 'spoon') {
-      buildFood(this.eatPropL, shape, col);
-      const tool = toon(motion === 'slurp' ? '#c8a165' : '#cfd8dc');
-      if (motion === 'slurp') for (const x of [-0.03, 0.03]) mesh(G.cylLow(), tool, this.eatProp, x, -0.3, 0.05, 0.012, 0.6, 0.012);
-      else { mesh(G.cylLow(), tool, this.eatProp, 0, -0.2, 0.03, 0.015, 0.4, 0.015); mesh(G.sphereLow(), tool, this.eatProp, 0, -0.42, 0.05, 0.06, 0.02, 0.05); }
-    } else buildFood(this.eatProp, shape, col);
+    const utensil = { spoon: 'spoon', slurp: 'chopsticks', chopsticks: 'chopsticks', knife: 'fork' }[motion];
+    if (utensil) {
+      // 그릇은 식탁 위 (밖에서 먹을 땐 왼손에 들고), 오른손에 수저
+      const dish = new THREE.Group(); dish.position.y = 0.2; dish.scale.setScalar(1.7);
+      buildFood(dish, shape, col);
+      dish.children.forEach((o) => { o.position.y += 0; });
+      (onTable ? this.tableDish : this.eatPropL).add(dish);
+      if (!onTable) dish.position.y = 0;
+      const wood = toon('#c8a165'), steel = toon('#cfd8dc');
+      if (utensil === 'chopsticks') {
+        for (const x of [-0.03, 0.03]) mesh(G.cylLow(), wood, this.eatProp, x, -0.3, 0.05, 0.012, 0.6, 0.012);
+        // 집어 올린 면발·회 한 점
+        this.bite = new THREE.Group(); this.bite.position.set(0, -0.6, 0.05); this.eatProp.add(this.bite);
+        if (motion === 'slurp') for (let i = 0; i < 5; i++) mesh(G.cylLow(), toon(col), this.bite, -0.04 + i * 0.02, -0.12, 0, 0.008, 0.25, 0.008);
+        else mesh(G.box(), toon(col), this.bite, 0, -0.03, 0, 0.09, 0.05, 0.07);
+      } else if (utensil === 'spoon') {
+        mesh(G.cylLow(), steel, this.eatProp, 0, -0.2, 0.03, 0.015, 0.4, 0.015);
+        mesh(G.sphereLow(), steel, this.eatProp, 0, -0.42, 0.05, 0.06, 0.02, 0.05);
+        this.bite = new THREE.Group(); this.bite.position.set(0, -0.41, 0.06); this.eatProp.add(this.bite);
+        mesh(G.sphereLow(), toon(col), this.bite, 0, 0.01, 0, 0.045, 0.02, 0.04);
+      } else {
+        // 스테이크: 오른손 포크, 왼손 나이프
+        mesh(G.cylLow(), steel, this.eatProp, 0, -0.25, 0.03, 0.012, 0.5, 0.012);
+        for (const x of [-0.02, 0, 0.02]) mesh(G.cylLow(), steel, this.eatProp, x, -0.53, 0.03, 0.006, 0.08, 0.006);
+        mesh(G.box(), steel, this.eatPropL, 0, -0.3, 0.03, 0.04, 0.5, 0.012);
+        this.bite = new THREE.Group(); this.bite.position.set(0, -0.6, 0.04); this.eatProp.add(this.bite);
+        mesh(G.box(), toon(col), this.bite, 0, 0, 0, 0.08, 0.05, 0.06);
+      }
+    } else { this.bite = null; buildFood(this.eatProp, shape, col); }
+    this.eatProp.scale.setScalar(1.6); this.eatPropL.scale.setScalar(1.6); // 멀리서도 보이게 크게
     this.eatProp.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    this.tableDish.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     this.eatPropL.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   }
   stopEat() {
     this.eatT = 0;
+    this.tableDish?.clear();
+    if (this.foodSprite) this.foodSprite.visible = false;
     this.eatProp?.clear(); this.eatPropL?.clear();
     this.heldGroup.visible = true;
   }
@@ -1084,15 +1132,28 @@ export class Roach {
       this.eatT -= dt;
       const t = this.t, m = this.eatMotion;
       const chew = Math.sin(t * 14);
-      if (m === 'slurp') {
-        al.rotation.x = -1.25; al.rotation.z = 0.25;
-        ar.rotation.x = -1.9 + Math.max(0, Math.sin(t * 7)) * 0.6; ar.rotation.z = -0.15;
-        this.head.rotation.x = 0.3 + Math.sin(t * 7) * 0.05;
+      const T = this.eatTable;
+      if (m === 'slurp' || m === 'chopsticks') {
+        // 젓가락으로 그릇에서 집어 입으로 (면은 후루룩)
+        const up = (Math.sin(t * (m === 'slurp' ? 4.5 : 3)) + 1) / 2;
+        al.rotation.x = T ? -0.8 : -1.25; al.rotation.z = T ? 0.1 : 0.25;
+        ar.rotation.x = (T ? -0.9 : -1.4) - up * (T ? 1.3 : 0.9); ar.rotation.z = -0.15;
+        this.head.rotation.x = 0.35 - up * 0.2;
+        if (this.bite) this.bite.visible = up > 0.25;
       } else if (m === 'spoon') {
-        al.rotation.x = -1.1; al.rotation.z = 0.3;
+        // 숟가락으로 떠서 입으로 (그릇은 식탁 위)
+        al.rotation.x = T ? -0.8 : -1.1; al.rotation.z = T ? 0.15 : 0.3;
         const sc = (Math.sin(t * 3.2) + 1) / 2;
-        ar.rotation.x = -1.2 - sc * 1.15; ar.rotation.z = -0.2;
-        this.head.rotation.x = 0.15 + sc * 0.1;
+        ar.rotation.x = (T ? -0.85 : -1.2) - sc * (T ? 1.5 : 1.15); ar.rotation.z = -0.2;
+        this.head.rotation.x = 0.3 - sc * 0.15;
+        if (this.bite) this.bite.visible = sc > 0.15;
+      } else if (m === 'knife') {
+        // 썰고 → 포크로 한 입
+        const ph = (t * 0.6) % 1;
+        if (ph < 0.6) { ar.rotation.x = -0.85 + Math.sin(t * 9) * 0.04; al.rotation.x = -0.85 + Math.sin(t * 9 + 1) * 0.12; al.rotation.z = 0.2; if (this.bite) this.bite.visible = false; }
+        else { const u = Math.sin(((ph - 0.6) / 0.4) * Math.PI); ar.rotation.x = -0.85 - u * 1.4; al.rotation.x = -0.8; if (this.bite) this.bite.visible = true; }
+        ar.rotation.z = -0.2;
+        this.head.rotation.x = 0.25;
       } else if (m === 'drink') {
         ar.rotation.x = -2.35 + Math.sin(t * 2) * 0.05; ar.rotation.z = -0.35;
         this.head.rotation.x = -0.3;
@@ -1243,6 +1304,11 @@ export function buildFood(g, shape, col) {
     case 'can':
       mesh(G.cyl(), T(col), g, 0, -0.15, 0.1, 0.07, 0.2, 0.07);
       mesh(G.cyl(), T('#cfd8dc'), g, 0, -0.04, 0.1, 0.065, 0.02, 0.065);
+      break;
+    case 'plate': // 접시 위 음식 (볶음밥·회·스테이크·탕수육)
+      mesh(G.cyl(), T('#fafafa'), g, 0, -0.18, 0.12, 0.26, 0.03, 0.26);
+      mesh(G.sphereLow(), T(col), g, 0, -0.14, 0.12, 0.17, 0.06, 0.15);
+      for (let i = 0; i < 4; i++) mesh(G.sphereLow(), T(col), g, Math.cos(i * 1.6) * 0.08, -0.1, 0.12 + Math.sin(i * 1.6) * 0.07, 0.05, 0.04, 0.05);
       break;
     case 'pizzabox':
       mesh(G.box(), T('#f5deb3'), g, 0, -0.2, 0.2, 0.5, 0.08, 0.5);

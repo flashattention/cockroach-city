@@ -138,9 +138,9 @@ export const ITEMS = {
   // 중국집
   jjajang: { name: '짜장면', emoji: '🍝', cat: 'food', shop: 'chinese', price: 7, stack: true, food: { hunger: 50 }, heal: 8, eat: ['slurp', 'bowl:#3e2723'] },
   jjamppong: { name: '짬뽕', emoji: '🌶️', cat: 'food', shop: 'chinese', price: 8, stack: true, food: { hunger: 52, energy: 5 }, heal: 9, eat: ['slurp', 'bowl:#d84315'] },
-  tangsuyuk: { name: '탕수육', emoji: '🥘', cat: 'food', shop: 'chinese', price: 16, stack: true, food: { hunger: 50, fun: 12 }, heal: 12, eat: ['slurp', 'bowl:#ffb74d'] },
-  fried_rice: { name: '볶음밥', emoji: '🍛', cat: 'food', shop: 'chinese', price: 7, stack: true, food: { hunger: 48 }, heal: 8, eat: ['spoon', 'bowl:#ffcc80'] },
-  mandu: { name: '군만두', emoji: '🥟', cat: 'food', shop: 'chinese', price: 5, stack: true, food: { hunger: 22, fun: 4 }, heal: 4, eat: ['bite', 'box:#ffe0b2'] },
+  tangsuyuk: { name: '탕수육', emoji: '🥘', cat: 'food', shop: 'chinese', price: 16, stack: true, food: { hunger: 50, fun: 12 }, heal: 12, eat: ['chopsticks', 'plate:#ffb74d'] },
+  fried_rice: { name: '볶음밥', emoji: '🍛', cat: 'food', shop: 'chinese', price: 7, stack: true, food: { hunger: 48 }, heal: 8, eat: ['spoon', 'plate:#ffcc80'] },
+  mandu: { name: '군만두', emoji: '🥟', cat: 'food', shop: 'chinese', price: 5, stack: true, food: { hunger: 22, fun: 4 }, heal: 4, eat: ['chopsticks', 'plate:#ffe0b2'] },
   // 국밥집
   dwaeji_gukbap: { name: '돼지국밥', emoji: '🍲', cat: 'food', shop: 'gukbap', price: 8, stack: true, food: { hunger: 60, energy: 8 }, heal: 15, eat: ['spoon', 'bowl:#efebe9'] },
   sundae_gukbap: { name: '순대국밥', emoji: '🍲', cat: 'food', shop: 'gukbap', price: 8, stack: true, food: { hunger: 60, energy: 8 }, heal: 15, eat: ['spoon', 'bowl:#d7ccc8'] },
@@ -153,14 +153,14 @@ export const ITEMS = {
   fries: { name: '감자튀김', emoji: '🍟', cat: 'food', shop: 'burger', price: 4, stack: true, food: { hunger: 18, fun: 8 }, heal: 3, eat: ['bite', 'box:#e53935'] },
   milkshake: { name: '딸기 쉐이크', emoji: '🥤', cat: 'food', shop: 'burger', price: 5, stack: true, food: { hunger: 8, fun: 12 }, heal: 2, gift: true, eat: ['drink', 'cup:#f8bbd0'] },
   // 분식
-  tteokbokki: { name: '떡볶이', emoji: '🌶️', cat: 'food', shop: 'bunsik', price: 5, stack: true, food: { hunger: 35, fun: 10 }, heal: 6, eat: ['spoon', 'bowl:#e53935'] },
+  tteokbokki: { name: '떡볶이', emoji: '🌶️', cat: 'food', shop: 'bunsik', price: 5, stack: true, food: { hunger: 35, fun: 10 }, heal: 6, eat: ['chopsticks', 'plate:#e53935'] },
   ramyeon: { name: '라면', emoji: '🍜', cat: 'food', shop: 'bunsik', price: 5, stack: true, food: { hunger: 40, fun: 5 }, heal: 6, eat: ['slurp', 'bowl:#ff7043'] },
   gimbap_roll: { name: '김밥 한 줄', emoji: '🍙', cat: 'food', shop: 'bunsik', price: 4, stack: true, food: { hunger: 35 }, heal: 6, eat: ['bite', 'skewer:#263238'] },
   eomuk: { name: '어묵 꼬치', emoji: '🍢', cat: 'food', shop: 'bunsik', price: 2, stack: true, food: { hunger: 12, energy: 4 }, heal: 3, eat: ['bite', 'skewer:#ffcc80'] },
   twigim: { name: '모둠 튀김', emoji: '🍤', cat: 'food', shop: 'bunsik', price: 4, stack: true, food: { hunger: 22, fun: 6 }, heal: 4, eat: ['bite', 'box:#ffb74d'] },
   // 한식당
   bibimbap: { name: '비빔밥', emoji: '🍚', cat: 'food', shop: 'restaurant', price: 9, stack: true, food: { hunger: 55 }, heal: 12, eat: ['spoon', 'bowl:#ff7043'] },
-  bulgogi_set: { name: '불고기 정식', emoji: '🥩', cat: 'food', shop: 'restaurant', price: 12, stack: true, food: { hunger: 65, fun: 8 }, heal: 15, eat: ['spoon', 'bowl:#6d4c41'] },
+  bulgogi_set: { name: '불고기 정식', emoji: '🥩', cat: 'food', shop: 'restaurant', price: 12, stack: true, food: { hunger: 65, fun: 8 }, heal: 15, eat: ['chopsticks', 'plate:#6d4c41'] },
   kimchi_jjigae: { name: '김치찌개', emoji: '🍲', cat: 'food', shop: 'restaurant', price: 8, stack: true, food: { hunger: 55, energy: 5 }, heal: 12, eat: ['spoon', 'bowl:#d84315'] },
   medkit: { name: '구급상자', emoji: '🩹', cat: 'food', shop: 'pharmacy', price: 40, stack: true, food: {}, heal: 50 },
   flowers: { name: '꽃다발', emoji: '💐', cat: 'gift', shop: 'flowershop', price: 8, stack: true, gift: true },

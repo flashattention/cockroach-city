@@ -116,7 +116,7 @@ export class CitizenView {
       if (c.mode === 'inside' && !t.moving && c.plan?.kind !== 'work' && EAT_SHOPS.has(c.location?.type) && !(c.roach.eatT > 0) && Math.random() < dt * 0.12) {
         const menu = shopItems(c.location.type).map((id) => ITEMS[id]).filter((d) => d.eat);
         const d = menu[(c.id + Math.floor(performance.now() / 9000)) % menu.length];
-        if (d) c.roach.eat(d.eat[0], d.eat[1], 4);
+        if (d) c.roach.eat(d.eat[0], d.eat[1], 4, c.roach.root.position.distanceTo(camPos) < 25 ? d.emoji : null, true);
       }
       const sp = c.mode === 'flee' ? 7.5 : c.mode === 'fight' ? 5.5 : c.walkSpeed;
       c.roach.update(dt, sleeping || c.mode === 'dead' ? 0 : t.moving ? sp : 0, {});

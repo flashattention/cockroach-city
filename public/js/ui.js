@@ -1034,7 +1034,7 @@ export class UI {
     const info = SHOPS[type] || { title: '메뉴', subtitle: '' };
     const ids = shopItems(type).filter((id) => ITEMS[id].cat === 'food' && (!microwave || ['dosirak', 'cup_ramen', 'kimbap', 'sandwich'].includes(id)));
     const fx = (d) => Object.entries(d.food || {}).map(([k, v]) => `${{ hunger: '🍚', energy: '⚡', fun: '🎉' }[k]}+${v}`).join(' ') + (d.heal ? ` ❤️+${d.heal}` : '');
-    const motion = { bite: '냠냠 베어 물기', slurp: '후루룩 젓가락질', spoon: '숟가락으로 호호', drink: '꿀꺽꿀꺽', slice: '치즈 쭈욱~', drumstick: '두 손으로 와구와구' };
+    const motion = { bite: '냠냠 베어 물기', slurp: '젓가락으로 후루룩', spoon: '그릇은 식탁에, 숟가락으로 떠먹기', drink: '꿀꺽꿀꺽', slice: '치즈 쭈욱~', drumstick: '두 손으로 와구와구', chopsticks: '젓가락으로 집어먹기', knife: '나이프·포크로 썰어먹기' };
     const html = `<h3 class="mh">${microwave ? '♨️ 전자레인지' : escapeHtml(g.interior.building.name)} <small>${escapeHtml(microwave ? '데워서 바로 먹어요' : info.subtitle)}</small></h3>
       <div class="money-line">💰 소지금 <b>₩${Math.floor(g.stats.money)}</b> · 매장에서 먹으면 배가 20% 더 불러요 · 포장은 가방에 보관돼요</div>
       <div class="itemlist">${ids.map((id) => { const d = ITEMS[id]; return `<div class="item"><div class="ic">${d.emoji}</div><div class="info"><b>${escapeHtml(d.name)} <span style="color:var(--accent)">₩${d.price}</span></b><small>${fx(d)} · ${motion[d.eat?.[0]] || ''}</small></div>
