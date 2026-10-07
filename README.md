@@ -33,7 +33,7 @@ OPENAI_API_KEY=sk-... GAME_PASSWORD=비밀번호 npm start
 
 1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → **사용자 인증 정보 만들기 → OAuth 클라이언트 ID**
 2. 애플리케이션 유형: **웹 애플리케이션**
-3. **승인된 JavaScript 원본**에 `https://roach-city-skala4.fly.dev` 와 `http://localhost:8000` 추가 (리디렉션 URI는 필요 없음)
+3. **승인된 JavaScript 원본**에 `https://jelly-city.fly.dev` 와 `http://localhost:8000` 추가 (리디렉션 URI는 필요 없음)
 4. 처음이면 OAuth 동의 화면을 **외부 / 테스트** 로 만들고, 같이 할 동료 이메일을 테스트 사용자로 추가 (또는 앱 게시)
 5. 발급된 클라이언트 ID(`....apps.googleusercontent.com`)를 `GOOGLE_CLIENT_ID` 로 설정. 클라이언트 보안 비밀번호는 쓰지 않아요
 

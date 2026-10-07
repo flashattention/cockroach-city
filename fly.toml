@@ -1,5 +1,5 @@
 # Fly.io 배포 설정  (app 이름은 전 세계에서 고유해야 해요: fly launch 가 바꿔줍니다)
-app = "roach-city-skala4"
+app = "jelly-city"
 primary_region = "nrt"   # 도쿄 (한국에서 가장 가까움)
 
 # 배포 때 서버가 세계를 저장할 시간을 준다

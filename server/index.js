@@ -23,7 +23,15 @@ const SNAP_EVERY = 2; // 10Hz
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 
-const world = new World({ dataDir: process.env.DATA_DIR || path.join(ROOT, 'data') });
+// 서버 이전용: 데이터 폴더에 import.json 이 있으면 그걸로 세계를 복원하고 지운다
+const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
+try {
+  const imp = path.join(DATA_DIR, 'import.json');
+  if (fs.existsSync(imp)) { fs.renameSync(imp, path.join(DATA_DIR, 'world.json')); console.log('📦 import.json 으로 세계를 복원했어요'); }
+} catch (e) { console.error('복원 실패', e); }
+const world = new World({ dataDir: DATA_DIR });
+// 옛 주소: REDIRECT_TO 가 있으면 모든 요청을 새 주소로 보낸다
+const REDIRECT_TO = (process.env.REDIRECT_TO || '').replace(/\/$/, '');
 
 const json = (res, code, obj) => {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -103,6 +111,7 @@ async function api(req, res, url) {
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
+  if (REDIRECT_TO && url.pathname !== '/healthz') { res.writeHead(301, { Location: REDIRECT_TO + req.url, 'Cache-Control': 'no-store' }); res.end(); return; }
   if (url.pathname.startsWith('/api/')) {
     api(req, res, url).catch((e) => { console.warn('API 오류:', e.message); if (!res.headersSent) json(res, 400, { error: e.message }); });
     return;
@@ -132,6 +141,7 @@ const server = http.createServer((req, res) => {
 const COMPRESS = process.env.WS_COMPRESS === '1';
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024, perMessageDeflate: COMPRESS ? { zlibDeflateOptions: { level: 3 }, threshold: 512 } : false });
 wss.on('connection', (ws) => {
+  if (REDIRECT_TO) { ws.close(4000, 'moved'); return; } // 이사 간 서버는 접속을 받지 않는다
   let player = null;
   ws.on('message', (raw) => {
     let msg;
