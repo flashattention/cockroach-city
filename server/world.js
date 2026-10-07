@@ -11,7 +11,7 @@ import { Combat } from './combat.js';
 import { Wildlife } from './wildlife.js';
 import { itemDef } from '../public/js/items.js';
 import { MODES, PLAN_KINDS } from '../public/js/citizens.js';
-import { Traffic, AI_CARS, CAR_KINDS } from '../public/js/traffic.js';
+import { Traffic, AI_CARS, CAR_KINDS, BIKE_KINDS } from '../public/js/traffic.js';
 import { buildInterior } from '../public/js/interior.js';
 import { profileSystemPrompt, streetChatPrompt, memoryPrompt, fallbackReply, clampInt, INSULT } from '../public/js/prompts.js';
 import { DAYS, fmtTime } from '../public/js/utils.js';
@@ -428,7 +428,7 @@ export class World {
         break;
       }
       case 'buyVehicle': case 'summonCar': {
-        if (p.car >= 0 || !(CAR_KINDS.includes(msg.kind) || ['tank', 'heli'].includes(msg.kind))) break;
+        if (p.car >= 0 || !(CAR_KINDS.includes(msg.kind) || BIKE_KINDS.includes(msg.kind) || ['tank', 'heli'].includes(msg.kind))) break;
         if (msg.t === 'summonCar' && Date.now() - (p.lastSummon || 0) < 8000) { this.send(p, { t: 'sys', text: '🔑 차를 부른 지 얼마 안 됐어요. 잠시 후 다시 불러주세요' }); break; }
         p.lastSummon = Date.now();
         // 전에 불렀던 내 차는 차고로 돌려보낸다

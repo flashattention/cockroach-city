@@ -246,7 +246,7 @@ function makePlayerBeacon() {
 }
 
 // ---------------- 차에 앉히기 ----------------
-const SEAT_SCALE = { tank: 0.55, heli: 0.45 };
+const SEAT_SCALE = { tank: 0.55, heli: 0.45, bicycle: 0.46, scooter: 0.46, motorcycle: 0.46, chopper: 0.46, sportbike: 0.46 };
 export function seatRoach(roach, car) {
   const m = car.mesh;
   if (!m.seats?.length) return;
@@ -255,11 +255,14 @@ export function seatRoach(roach, car) {
   let sc = SEAT_SCALE[car.kind] || 0.42;
   if (m.roof) sc = Math.min(sc, (m.roof - m.seats[0].y) / seatedHeight(roach));
   roach.root.scale.setScalar(sc);
+  // 이륜차: 핸들을 잡고, 자전거는 페달을 밟는다. 차체와 같이 기운다
+  roach.riding = !!m.bike;
+  roach.pedal = m.pedal ? Math.abs(car.speed || 0) : 0;
   m.body.updateMatrixWorld(true);
   const p = m.seats[0].clone();
   m.body.localToWorld(p);
   roach.root.position.copy(p);
-  roach.root.rotation.y = car.heading;
+  roach.root.rotation.set(0, car.heading, m.bike ? m.body.rotation.z : 0);
 }
 // 앉은 자세의 키 (크기 1 기준). 액세서리가 바뀔 수 있으니 1초마다 다시 잰다
 const _box = new THREE.Box3();
@@ -275,6 +278,7 @@ function seatedHeight(roach) {
 }
 export function unseatRoach(roach) {
   roach.setSeated(false);
+  roach.riding = false; roach.pedal = 0; roach.root.rotation.z = 0;
   roach.root.scale.setScalar(roach.baseScale);
 }
 

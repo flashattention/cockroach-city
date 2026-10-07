@@ -1231,6 +1231,12 @@ export class Roach {
       this.torso.rotation.x = 0;
       // 차 안에서는 더듬이를 뒤로 눕힌다 (지붕에 닿지 않게)
       for (const a of this.antennae) a.rotation.x = -1.3 + Math.sin(this.t * 3 + a.userData.phase) * 0.08;
+      if (this.riding) {
+        // 앞다리로 핸들을 잡고, 자전거면 뒷다리로 페달
+        this.arms[0].rotation.x = this.arms[1].rotation.x = -1.25;
+        if (this.pedal > 0.2) { const ph = this.t * (3 + this.pedal * 1.6); this.legs[0].rotation.x = -1.15 + Math.sin(ph) * 0.55; this.legs[1].rotation.x = -1.15 - Math.sin(ph) * 0.55; }
+        else this.legs[0].rotation.x = this.legs[1].rotation.x = -1.2;
+      }
     }
     // 쓰러짐
     this.inner.rotation.z = this.dead ? Math.PI / 2 * 0.92 : 0;

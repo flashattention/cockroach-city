@@ -10,7 +10,7 @@ import { LOOK_PARTS, LOOK_COLORS, DEFAULT_LOOK } from './look.js';
 import { PHONE_APPS } from './phone.js';
 import { expNeed } from './level.js';
 import { questDef } from './quests.js';
-import { CAR_COLORS, MODELS } from './traffic.js';
+import { CAR_COLORS, MODELS, BIKES } from './traffic.js';
 import { DEALER_CARS } from './items.js';
 import { housePrice, freeUnits, homeLabel, isHomeType } from './world-setup.js';
 import { moodLabel, moodEmoji } from './citizens.js';
@@ -1368,12 +1368,12 @@ export class UI {
     const render = () => {
       this.openModal(`<h3 class="mh">🏎️ 바퀴 모터스 쇼룸 <small>사면 🔑 차 키를 받아요 · 핫바에서 키를 쓰면 언제든 내 앞으로 호출</small></h3>
         <div class="money-line">💰 소지금 <b>₩${Math.floor(g.stats.money).toLocaleString()}</b></div>
-        <div class="itemlist">${DEALER_CARS.map(([kind, emoji, price]) => { const md = MODELS[kind]; const c = pick[kind] || CAR_COLORS[0]; return `<div class="item"><div class="ic">${emoji}</div><div class="info"><b>${escapeHtml(md.name)} <span style="color:var(--accent)">₩${price.toLocaleString()}</span></b><small>최고속도 ${Math.round(md.max * 1.4 * 3.6 * 1.35)}km/h${md.sport ? ' · 🏁 스포츠카' : ''}</small><div class="carcols">${CAR_COLORS.map((cc) => `<span class="cc ${cc === c ? 'sel' : ''}" data-k="${kind}" data-c="${cc}" style="background:${cc}"></span>`).join('')}</div></div><div class="acts"><button class="btn mini" data-buy="${kind}" data-p="${price}">구매</button></div></div>`; }).join('')}</div>
+        <div class="itemlist">${DEALER_CARS.map(([kind, emoji, price]) => { const md = MODELS[kind] || BIKES[kind]; const c = pick[kind] || CAR_COLORS[0]; return `<div class="item"><div class="ic">${emoji}</div><div class="info"><b>${escapeHtml(md.name)} <span style="color:var(--accent)">₩${price.toLocaleString()}</span></b><small>최고속도 ${Math.round(md.max * 1.4 * 3.6 * 1.35)}km/h${BIKES[kind] ? ' · 🏍️ 이륜차' : md.sport ? ' · 🏁 스포츠카' : ''}</small><div class="carcols">${CAR_COLORS.map((cc) => `<span class="cc ${cc === c ? 'sel' : ''}" data-k="${kind}" data-c="${cc}" style="background:${cc}"></span>`).join('')}</div></div><div class="acts"><button class="btn mini" data-buy="${kind}" data-p="${price}">구매</button></div></div>`; }).join('')}</div>
         <div style="margin-top:10px"><button class="btn ghost" id="dl-close">닫기</button></div>`, 'dealer');
       const M = $('modal-inner');
       $('dl-close').onclick = () => this.closeModal();
       M.querySelectorAll('.cc').forEach((el) => { el.onclick = () => { pick[el.dataset.k] = el.dataset.c; const y = M.querySelector('.itemlist').scrollTop; render(); $('modal-inner').querySelector('.itemlist').scrollTop = y; }; });
-      M.querySelectorAll('[data-buy]').forEach((b) => { b.onclick = async () => { const k = b.dataset.buy; if (await this.confirm(`${escapeHtml(MODELS[k].name)}을(를) ₩${(+b.dataset.p).toLocaleString()}에 살까요?`, '🏎️ 살게요')) g.buyCar(k, pick[k] || CAR_COLORS[0], +b.dataset.p); else render(); }; });
+      M.querySelectorAll('[data-buy]').forEach((b) => { b.onclick = async () => { const k = b.dataset.buy; if (await this.confirm(`${escapeHtml((MODELS[k] || BIKES[k]).name)}을(를) ₩${(+b.dataset.p).toLocaleString()}에 살까요?`, '🏎️ 살게요')) g.buyCar(k, pick[k] || CAR_COLORS[0], +b.dataset.p); else render(); }; });
     };
     render();
   }

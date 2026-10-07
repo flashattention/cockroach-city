@@ -37,6 +37,15 @@ export const MODELS = {
   sport_b: M({ name: '부가디 시롱바퀴', L: 4.6, W: 2.15, c: 0.22, h1: 0.78, h2: 1.2, cab: [0.7, -0.05, -0.75, -1.5], r: 0.45, max: 32, spoiler: 'lip', twoTone: true, sport: true, hp: 260 }),
 };
 export const CAR_KINDS = Object.keys(MODELS);
+// 이륜차: 자전거·스쿠터·오토바이 (지붕 없음, 커브에서 기울어짐)
+export const BIKES = {
+  bicycle: { name: '바퀴 자전거', max: 5, hp: 60, accel: 6, pedal: true },
+  scooter: { name: '바퀴 배달 스쿠터', max: 8, hp: 90, accel: 8 },
+  motorcycle: { name: '바퀴 네이키드 바이크', max: 15, hp: 120, accel: 13 },
+  chopper: { name: '할리 바퀴슨 크루저', max: 13, hp: 150, accel: 11 },
+  sportbike: { name: '닌자 바퀴 레이싱 바이크', max: 22, hp: 110, accel: 18, sport: true },
+};
+export const BIKE_KINDS = Object.keys(BIKES);
 export const SPORT_KINDS = CAR_KINDS.filter((k) => MODELS[k].sport);
 
 const VEHICLE = {
@@ -45,13 +54,14 @@ const VEHICLE = {
   heli: { len: 7, radius: 2.4, hp: 700, max: 22 },
 };
 for (const [k, m] of Object.entries(MODELS)) VEHICLE[k] = { len: m.L, radius: Math.max(1.5, m.L * 0.38), hp: m.hp, max: m.max };
+for (const [k, m] of Object.entries(BIKES)) VEHICLE[k] = { len: 2, radius: 0.9, hp: m.hp, max: m.max };
 VEHICLE.car = VEHICLE.sedan;
 export const vehicleInfo = (kind) => VEHICLE[kind] || VEHICLE.sedan;
-export const vehicleName = (kind) => MODELS[kind]?.name || { bus: '시내버스', tank: '전차', heli: '헬기' }[kind] || '자동차';
+export const vehicleName = (kind) => MODELS[kind]?.name || BIKES[kind]?.name || { bus: '시내버스', tank: '전차', heli: '헬기' }[kind] || '자동차';
 
 // 도로 위 AI 차량 구성
 export const AI_CARS = 40;
-const AI_KINDS = ['bus', 'bus', 'bus', 'police', 'police', 'taxi', 'taxi', 'taxi', 'taxi', 'truck', 'truck', 'icecream', 'van', 'van', 'pickup', 'pickup',
+const AI_KINDS = ['scooter', 'scooter', 'motorcycle', 'bicycle', 'bus', 'bus', 'bus', 'police', 'police', 'taxi', 'taxi', 'taxi', 'taxi', 'truck', 'truck', 'icecream', 'van', 'van', 'pickup', 'pickup',
   'sport_f', 'sport_l', 'sport_p', 'sport_m', 'sport_b', 'limo', 'jeep', 'jeep', 'convertible', 'convertible', 'ev', 'ev', 'mini', 'mini', 'suv', 'suv', 'suv', 'wagon', 'hatch', 'hatch'];
 
 // 차 안에 앉아 있는 작은 바퀴벌레 (창문으로 보임)
@@ -202,6 +212,7 @@ export function makeCarMesh(kind, color, occColors = []) {
   if (kind === 'car') kind = 'sedan';
   const glassMat = new THREE.MeshToonMaterial({ color: '#bfe9ff', transparent: true, opacity: 0.3, depthWrite: false });
   if (MODELS[kind]) return buildCar(kind, color, occColors, glassMat);
+  if (BIKES[kind]) return buildBike(kind, color, occColors, glassMat);
   const g = new THREE.Group();
   const body = new THREE.Group(); g.add(body);
   const seats = [];
@@ -256,6 +267,95 @@ export function makeCarMesh(kind, color, occColors = []) {
   return { g, body, seats, occ, glass: gl, ...info };
 }
 
+// ---------------- 이륜차 ----------------
+const ROD = new THREE.CylinderGeometry(1, 1, 1, 6);
+function rod(parent, a, b, r, color) {
+  const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), d = B.clone().sub(A);
+  const m = new THREE.Mesh(ROD, typeof color === 'object' ? color : toon(color));
+  m.scale.set(r, d.length(), r); m.position.copy(A).addScaledVector(d, 0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+  m.castShadow = true; parent.add(m);
+  return m;
+}
+function bikeWheel(body, z, r, w, rim = '#b0bec5') {
+  cyl(body, r, w, '#1f1f1f', 0, r, z, { rz: Math.PI / 2 });
+  cyl(body, r * 0.78, w + 0.01, rim, 0, r, z, { rz: Math.PI / 2, low: true });
+  cyl(body, r * 0.18, w + 0.04, '#455a64', 0, r, z, { rz: Math.PI / 2, low: true });
+}
+function buildBike(kind, color, occColors, glassMat) {
+  const g = new THREE.Group();
+  const body = new THREE.Group(); g.add(body);
+  const dark = '#263238', chrome = '#cfd8dc';
+  let seat;
+  if (kind === 'bicycle') {
+    bikeWheel(body, 0.58, 0.36, 0.06, '#eceff1'); bikeWheel(body, -0.55, 0.36, 0.06, '#eceff1');
+    const bb = [0, 0.42, -0.08];
+    rod(body, [0, 0.36, -0.55], bb, 0.03, color); rod(body, [0, 0.36, -0.55], [0, 0.92, -0.22], 0.025, color);
+    rod(body, bb, [0, 0.95, -0.22], 0.035, color); rod(body, [0, 0.92, -0.2], [0, 0.98, 0.42], 0.035, color);
+    rod(body, bb, [0, 0.98, 0.42], 0.04, color); rod(body, [0, 0.98, 0.42], [0, 0.36, 0.58], 0.03, chrome);
+    rod(body, [0, 0.98, 0.42], [0, 1.14, 0.4], 0.025, chrome); box(body, 0.6, 0.04, 0.04, dark, 0, 1.15, 0.4);
+    box(body, 0.16, 0.06, 0.3, dark, 0, 1.0, -0.26);
+    cyl(body, 0.09, 0.05, chrome, 0, 0.42, -0.08, { rz: Math.PI / 2, low: true });
+    // 앞 바구니 (귀엽게)
+    box(body, 0.36, 0.22, 0.28, '#d7a86e', 0, 1.02, 0.64);
+    seat = [0, 1.02, -0.3];
+  } else if (kind === 'scooter') {
+    bikeWheel(body, 0.62, 0.27, 0.14); bikeWheel(body, -0.6, 0.27, 0.14);
+    box(body, 0.46, 0.1, 0.85, color, 0, 0.32, 0.02);
+    sph(body, 0.32, 0.3, 0.52, color, 0, 0.55, -0.45);
+    box(body, 0.42, 0.12, 0.62, dark, 0, 0.8, -0.38);
+    const shield = box(body, 0.5, 0.72, 0.1, color, 0, 0.66, 0.48, { rx: -0.25 });
+    void shield;
+    rod(body, [0, 0.62, 0.55], [0, 1.08, 0.44], 0.04, dark); box(body, 0.62, 0.06, 0.06, dark, 0, 1.08, 0.44);
+    sph(body, 0.1, 0.1, 0.06, lightMat('#fffde7', '#fff59d'), 0, 0.98, 0.56, { low: true });
+    // 배달통
+    box(body, 0.5, 0.42, 0.46, '#ffffff', 0, 1.1, -0.72); box(body, 0.51, 0.1, 0.47, '#e53935', 0, 1.18, -0.72, { cast: false });
+    seat = [0, 0.86, -0.32];
+  } else if (kind === 'chopper') {
+    bikeWheel(body, 0.98, 0.38, 0.14); bikeWheel(body, -0.85, 0.42, 0.2);
+    box(body, 0.38, 0.36, 0.55, '#9e9e9e', 0, 0.55, 0.05);
+    for (const sx of [-0.1, 0.1]) cyl(body, 0.09, 0.4, chrome, sx, 0.8, 0.05, { rx: sx * 3 });
+    sph(body, 0.26, 0.2, 0.46, color, 0, 0.95, 0.3);
+    box(body, 0.42, 0.1, 0.55, '#3e2723', 0, 0.76, -0.3); box(body, 0.32, 0.36, 0.08, '#3e2723', 0, 0.95, -0.55);
+    box(body, 0.34, 0.1, 0.5, color, 0, 0.82, -0.8);
+    for (const sx of [-0.12, 0.12]) rod(body, [sx, 1.25, 0.58], [sx, 0.38, 0.98], 0.03, chrome);
+    for (const sx of [-0.28, 0.28]) rod(body, [sx * 0.4, 1.22, 0.58], [sx, 1.45, 0.48], 0.022, chrome);
+    box(body, 0.6, 0.04, 0.04, chrome, 0, 1.45, 0.48);
+    cyl(body, 0.12, 0.08, lightMat('#fffde7', '#fff59d'), 0, 1.15, 0.7, { rx: Math.PI / 2 });
+    rod(body, [0.22, 0.4, 0.1], [0.22, 0.48, -0.95], 0.05, chrome); rod(body, [-0.22, 0.4, 0.1], [-0.22, 0.48, -0.95], 0.05, chrome);
+    seat = [0, 0.82, -0.32];
+  } else if (kind === 'sportbike') {
+    bikeWheel(body, 0.75, 0.34, 0.18, '#212121'); bikeWheel(body, -0.72, 0.34, 0.22, '#212121');
+    box(body, 0.34, 0.36, 0.55, '#424242', 0, 0.55, 0);
+    sph(body, 0.3, 0.36, 0.78, color, 0, 0.8, 0.28);
+    const ws = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), glassMat);
+    ws.scale.set(0.2, 0.22, 0.18); ws.position.set(0, 1.08, 0.55); ws.rotation.x = 0.6; body.add(ws);
+    box(body, 0.32, 0.1, 0.45, dark, 0, 0.98, -0.35);
+    const tail = box(body, 0.28, 0.16, 0.5, color, 0, 1.04, -0.72, { rx: -0.25 }); void tail;
+    for (const sx of [-0.1, 0.1]) rod(body, [sx, 1.02, 0.5], [sx, 0.34, 0.75], 0.03, '#ffd54f');
+    box(body, 0.6, 0.04, 0.04, dark, 0, 1.02, 0.42);
+    box(body, 0.22, 0.08, 0.06, lightMat('#fffde7', '#fff59d'), 0, 0.92, 0.82, { cast: false });
+    rod(body, [0.15, 0.45, -0.1], [0.15, 0.75, -0.75], 0.06, '#9e9e9e');
+    seat = [0, 1.0, -0.3];
+  } else {
+    // motorcycle (네이키드)
+    bikeWheel(body, 0.75, 0.36, 0.16); bikeWheel(body, -0.72, 0.36, 0.2);
+    box(body, 0.38, 0.36, 0.5, '#9e9e9e', 0, 0.52, 0);
+    sph(body, 0.3, 0.22, 0.44, color, 0, 0.92, 0.18);
+    box(body, 0.36, 0.1, 0.6, dark, 0, 0.9, -0.35);
+    box(body, 0.3, 0.12, 0.42, color, 0, 0.92, -0.72);
+    for (const sx of [-0.12, 0.12]) rod(body, [sx, 1.05, 0.52], [sx, 0.36, 0.75], 0.03, chrome);
+    box(body, 0.75, 0.05, 0.05, dark, 0, 1.12, 0.48);
+    cyl(body, 0.11, 0.08, lightMat('#fffde7', '#fff59d'), 0, 1.0, 0.66, { rx: Math.PI / 2 });
+    rod(body, [0.2, 0.4, -0.05], [0.2, 0.55, -0.85], 0.05, chrome);
+    seat = [0, 0.95, -0.35];
+  }
+  const seats = [new THREE.Vector3(...seat)];
+  const r = miniRoach(body, occColors[0] || OCC_COLORS[0], seat[0], seat[1] + 0.28, seat[2]);
+  r.visible = false;
+  return { g, body, seats, occ: [r], sirens: [], glass: null, bike: true, pedal: !!BIKES[kind].pedal, ...vehicleInfo(kind) };
+}
+
 // 터진 차: 그 차종 모양 그대로 새까맣게 탄 껍데기 + 연기 (버스는 버스, 트럭은 트럭)
 const BURNT = ['#151515', '#222222', '#303030', '#3d3a38'].map((c) => new THREE.MeshToonMaterial({ color: c }));
 const SMOKE = new THREE.MeshToonMaterial({ color: '#757575', transparent: true, opacity: 0.6 });
@@ -306,10 +406,10 @@ export class Traffic {
     const occColors = [0, 1, 2, 3].map(() => R.pick(OCC_COLORS));
     const m = this.makeMesh(kind, color, occColors);
     const i = R.int(0, GRID), j = R.int(0, GRID);
-    const seatsN = kind === 'bus' ? 9 : MODELS[kind]?.sport || MODELS[kind]?.cargo ? 2 : kind === 'limo' ? 6 : 4;
-    const occN = kind === 'bus' ? R.int(3, 8) : kind === 'police' ? 2 : Math.min(seatsN, 1 + (R.chance(0.5) ? R.int(1, 3) : 0));
+    const seatsN = BIKES[kind] ? 1 : kind === 'bus' ? 9 : MODELS[kind]?.sport || MODELS[kind]?.cargo ? 2 : kind === 'limo' ? 6 : 4;
+    const occN = BIKES[kind] ? 1 : kind === 'bus' ? R.int(3, 8) : kind === 'police' ? 2 : Math.min(seatsN, 1 + (R.chance(0.5) ? R.int(1, 3) : 0));
     const car = {
-      id: this.cars.length, kind, mesh: m, mode: 'ai', owner: null, speed: 0, maxSpeed: kind === 'bus' ? 8 : kind === 'truck' ? 9 : MODELS[kind]?.sport ? R.range(12, 15) : R.range(9, 13), heading: 0,
+      id: this.cars.length, kind, mesh: m, mode: 'ai', owner: null, speed: 0, maxSpeed: kind === 'bicycle' ? R.range(4.5, 6) : kind === 'scooter' ? R.range(8, 10) : kind === 'bus' ? 8 : kind === 'truck' ? 9 : MODELS[kind]?.sport ? R.range(12, 15) : R.range(9, 13), heading: 0,
       pos: new THREE.Vector3(), from: [i, j], to: null, seg: null, bubble: null, height: kind === 'bus' || kind === 'truck' ? 3.5 : 2.4,
       occ: occN, occMax: occN, hp: vehicleInfo(kind).hp, color, origin: [i, j],
     };
@@ -392,7 +492,13 @@ export class Traffic {
       m.g.position.set(car.pos.x, car.pos.y || 0, car.pos.z);
       m.g.rotation.y = car.heading;
       m.body.position.y = car.kind === 'heli' ? 0 : Math.abs(Math.sin(performance.now() / 120 + car.pos.x)) * 0.04 * Math.min(1, Math.abs(car.speed) / 5);
-      m.body.rotation.z = (car.steerVis || 0) * (car.kind === 'heli' ? -0.25 : -0.05);
+      // 이륜차는 커브에서 안쪽으로 눕고, 세워 두면 받침대에 살짝 기운다
+      if (m.bike) {
+        // 회전 속도로 기울기를 정한다 (AI·다른 플레이어 바이크도 똑같이)
+        let dh = car.heading - (car.lastH ?? car.heading); dh = Math.atan2(Math.sin(dh), Math.cos(dh)); car.lastH = car.heading;
+        car.lean = (car.lean || 0) * 0.85 + Math.max(-0.45, Math.min(0.45, -dh / Math.max(dt, 1e-3) * 0.2)) * 0.15;
+        m.body.rotation.z = Math.abs(car.speed) < 0.5 && car.mode !== 'player' ? 0.13 : car.lean;
+      } else m.body.rotation.z = (car.steerVis || 0) * (car.kind === 'heli' ? -0.25 : -0.05);
       if (car.kind !== 'heli') m.body.rotation.x = -(car.pitch || 0) * 0.6;
       if (car.kind === 'heli') {
         m.body.rotation.x = Math.max(-0.25, Math.min(0.25, car.speed / 60));
@@ -560,10 +666,10 @@ export class Traffic {
     const throttle = (inp.forward ? 1 : 0) - (inp.back ? 1 : 0);
     const steer = (inp.left ? 1 : 0) - (inp.right ? 1 : 0);
     if (car.kind === 'heli') return this.updateHeli(car, dt, ctx);
-    const md = MODELS[car.kind];
+    const md = MODELS[car.kind] || BIKES[car.kind];
     const top = md ? md.max * 1.4 : 18;
     const max = car.kind === 'tank' ? 8 : car.kind === 'bus' ? 14 : inp.run ? top * 1.35 : top;
-    const accel = md?.sport ? 16 : 9;
+    const accel = md?.accel ?? (md?.sport ? 16 : 9);
     if (throttle > 0) car.speed += (car.speed < 0 ? 22 : accel) * dt;
     else if (throttle < 0) car.speed -= (car.speed > 0 ? 22 : 6) * dt;
     else car.speed -= Math.sign(car.speed) * Math.min(Math.abs(car.speed), 5 * dt);

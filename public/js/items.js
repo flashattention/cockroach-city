@@ -264,6 +264,8 @@ export const DEALER_CARS = [
   ['sport_b', '🏎️', 90000], ['sport_l', '🐂', 45000], ['sport_f', '🐎', 40000], ['sport_m', '🏁', 38000], ['sport_p', '🏎️', 28000],
   ['limo', '🚘', 25000], ['convertible', '🚙', 16000], ['ev', '⚡', 15000], ['jeep', '🛻', 12000], ['truck', '🚚', 10000],
   ['suv', '🚙', 9000], ['van', '🚐', 8500], ['pickup', '🛻', 8000], ['icecream', '🍦', 7000], ['wagon', '🚗', 6500], ['sedan', '🚗', 6000], ['hatch', '🚗', 5000], ['mini', '🚗', 3500],
+  // 이륜차
+  ['sportbike', '🏍️', 18000], ['chopper', '🏍️', 12000], ['motorcycle', '🏍️', 7000], ['scooter', '🛵', 2500], ['bicycle', '🚲', 400],
 ];
 // 총알·화살 없이 쏜다: 무기의 탄약 표시를 지우고, 탄약 상품은 팔지 않는다 (낚시 미끼만 남김)
 export const NO_AMMO = new Set(Object.keys(ITEMS).filter((id) => ITEMS[id].cat === 'ammo' && id !== 'bait'));

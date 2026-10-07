@@ -305,7 +305,7 @@ export const ACTIONS = {
   hunter: [{ id: 'shop', label: '🏹 사냥 장비 사기 (상점)', shop: true }, { id: 'sell', label: '💰 전리품 팔기 (가죽·고기·트로피)', sell: true }],
   ranch: [{ id: 'order', label: '🐄 목장 음식 주문하기', menu: true }],
   prison: [{ id: 'visit', label: '🔒 면회실 구경', cost: 0, dur: 20, fx: { social: 5 } }],
-  dealer: [{ id: 'dealer', label: '🏎️ 자동차 구경하기 (쇼룸)', dealer: true }],
+  dealer: [{ id: 'dealer', label: '🏎️ 자동차·오토바이·자전거 구경하기 (쇼룸)', dealer: true }],
   flowershop: [{ id: 'shop', label: '💐 꽃·인형 사기 (상점)', shop: true }],
   armory_3k: [{ id: 'shop', label: '⚔️ 병기 둘러보기 (상점)', shop: true }],
   armory_mil: [{ id: 'shop', label: '🎖️ 장비 둘러보기 (상점)', shop: true }],
