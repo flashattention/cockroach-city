@@ -1,5 +1,6 @@
 // TV 방송: 캔버스에 그린 애니메이션을 화면 텍스처로 (채널 전환 가능)
 import * as THREE from 'three';
+import { cityText } from './utils.js';
 
 export const CHANNELS = [
   { id: 'news', name: 'BKB 9시 뉴스', emoji: '📰' },
@@ -65,11 +66,11 @@ export class TVScreen {
     // 자막
     x.fillStyle = '#c62828'; x.fillRect(0, H - 42, 64, 22); x.fillStyle = '#fff'; x.font = 'bold 12px sans-serif'; x.textAlign = 'center'; x.fillText('BKB 뉴스', 32, H - 31);
     x.fillStyle = '#fff'; x.fillRect(64, H - 42, W - 64, 22); x.fillStyle = '#212121'; x.textAlign = 'left'; x.font = 'bold 12px sans-serif';
-    x.fillText(info.headline || '바퀴시티 오늘도 평화롭습니다', 70, H - 31);
+    x.fillText(cityText(info.headline || '바퀴시티 오늘도 평화롭습니다'), 70, H - 31);
     x.fillStyle = '#263238'; x.fillRect(0, H - 20, W, 20); x.fillStyle = '#ffeb3b'; x.font = '11px sans-serif';
     const ticker = info.ticker || '';
     const tw = x.measureText(ticker).width + W;
-    x.fillText(ticker, W - ((t * 50) % tw), H - 10);
+    x.fillText(cityText(ticker), W - ((t * 50) % tw), H - 10);
   }
   cartoon(x, t) {
     x.fillStyle = '#81d4fa'; x.fillRect(0, 0, W, H); x.fillStyle = '#aed581'; x.fillRect(0, H - 45, W, 45);

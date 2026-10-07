@@ -37,6 +37,44 @@ export class RNG {
 export const rand = new RNG(Date.now() & 0xffffffff);
 export const HAS_DOM = typeof document !== 'undefined';
 
+// ---------------- 도시 이름: 기본은 '젤리시티', 바퀴 모드일 때만 '바퀴시티' ----------------
+export const brand = { bug: (() => { try { return !!JSON.parse(localStorage.getItem('roachcity.settings') || '{}').bugMode; } catch { return false; } })() };
+export function cityText(s) {
+  if (typeof s !== 'string') return s;
+  return brand.bug ? s.replaceAll('젤리시티', '바퀴시티').replaceAll('Jelly City', 'Roach City') : s.replaceAll('바퀴시티', '젤리시티').replaceAll('Roach City', 'Jelly City');
+}
+const BRAND_RE = /바퀴시티|젤리시티|Roach City|Jelly City/;
+const brandSigns = [];
+function brandDom(root) {
+  if (!root) return;
+  if (root.nodeType === 3) { if (BRAND_RE.test(root.nodeValue)) { const v = cityText(root.nodeValue); if (v !== root.nodeValue) root.nodeValue = v; } return; }
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = w.nextNode(); n; n = w.nextNode()) if (BRAND_RE.test(n.nodeValue)) { const v = cityText(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; }
+  if (root.querySelectorAll) for (const el of root.querySelectorAll('[placeholder],[title]')) for (const a of ['placeholder', 'title']) { const v = el.getAttribute(a); if (v && BRAND_RE.test(v)) el.setAttribute(a, cityText(v)); }
+}
+// 화면에 새로 생기는 글자(토스트·채팅·서버 메시지 등)도 자동으로 바꾼다
+export function initBrand() {
+  if (!HAS_DOM || initBrand.done) return;
+  initBrand.done = true;
+  document.body.classList.toggle('bug-mode', brand.bug);
+  document.title = cityText(document.title);
+  brandDom(document.body);
+  new MutationObserver((list) => {
+    for (const m of list) {
+      if (m.type === 'characterData') brandDom(m.target);
+      else for (const n of m.addedNodes) brandDom(n);
+    }
+  }).observe(document.body, { childList: true, subtree: true, characterData: true });
+}
+export function setBrand(bug) {
+  brand.bug = !!bug;
+  if (!HAS_DOM) return;
+  document.body.classList.toggle('bug-mode', brand.bug);
+  document.title = cityText(document.title);
+  brandDom(document.body);
+  for (let i = brandSigns.length - 1; i >= 0; i--) { const m = brandSigns[i].deref(); if (m) retitleSign(m, m.userData.sign.raw); else brandSigns.splice(i, 1); }
+}
+
 // ---------- 재질 ----------
 let gradientMap = null;
 export function toonGradient() {
@@ -157,12 +195,14 @@ export function signTexture(text, emoji, bg = '#ffffff', fg = '#4a3428', w = 512
 }
 
 export function signMesh(text, emoji, width, bg, fg) {
-  const tex = signTexture(text, emoji, bg, fg);
+  const raw = text;
+  const tex = signTexture(cityText(text), emoji, bg, fg);
   const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false });
   const m = new THREE.Mesh(G.plane(), mat);
   m.scale.set(width, width / 4, 1);
   m.userData.dynamic = true; // 고유 재질이므로 병합 제외
-  m.userData.sign = { emoji, bg, fg };
+  m.userData.sign = { emoji, bg, fg, raw };
+  if (BRAND_RE.test(raw || '') && typeof WeakRef !== 'undefined') brandSigns.push(new WeakRef(m));
   return m;
 }
 
@@ -170,8 +210,10 @@ export function signMesh(text, emoji, width, bg, fg) {
 export function retitleSign(m, text) {
   if (!m || !HAS_DOM) return;
   const { emoji, bg, fg } = m.userData.sign;
+  m.userData.sign.raw = text;
+  if (BRAND_RE.test(text) && typeof WeakRef !== 'undefined' && !brandSigns.some((r) => r.deref() === m)) brandSigns.push(new WeakRef(m));
   m.material.map?.dispose();
-  m.material.map = signTexture(text, emoji, bg, fg);
+  m.material.map = signTexture(cityText(text), emoji, bg, fg);
   m.material.needsUpdate = true;
 }
 

@@ -15,7 +15,7 @@ import { Net } from './net.js';
 import { UI } from './ui.js';
 import { settings, saveSettings } from './settings.js';
 import { getJob } from './data.js';
-import { DAYS, clamp, lerp, angleLerp, windowMaterials, retitleSign } from './utils.js';
+import { DAYS, clamp, lerp, angleLerp, windowMaterials, retitleSign, initBrand, cityText, brand } from './utils.js';
 import { expNeed, levelStats, addExp } from './level.js';
 import { dailyQuests, questDef } from './quests.js';
 import { SPORT_KINDS, vehicleName, CAR_KINDS, BIKES } from './traffic.js';
@@ -24,6 +24,7 @@ import { buildWilds, renderWorldImage } from './wilds.js';
 import { AnimalsView, makeMount } from './animals.js';
 import { Roach } from './roach.js';
 import { buildPark } from './park.js';
+initBrand(); // 화면의 '바퀴시티' → '젤리시티' (바퀴 모드면 그대로)
 import { ANIMALS, ANIMAL_KINDS } from './fauna.js';
 import { TVScreen, CHANNELS } from './tv.js';
 import { WORLD_HALF, WATER_Y, regionAt } from './terrain.js';
@@ -244,7 +245,7 @@ boot();
 async function startGame(session, char) {
   document.getElementById('start').classList.add('hidden');
   ui.disposePreview();
-  ui.showLoading('바퀴시티에 입장하는 중... 🪳');
+  ui.showLoading(`바퀴시티에 입장하는 중... ${brand.bug ? '🪳' : '🐻'}`);
   let welcome;
   try {
     welcome = await game.net.request({ t: 'hello', session, char });
@@ -1721,7 +1722,7 @@ function grabCanvas() {
   x.drawImage(canvas, 0, 0, W, H);
   // 워터마크
   x.font = 'bold 22px sans-serif'; x.fillStyle = 'rgba(255,255,255,.85)'; x.shadowColor = '#000'; x.shadowBlur = 4;
-  x.fillText(`🪳 바퀴시티 · ${game.profile.name} · ${DAYS[game.day() % 7]}요일`, 18, H - 20);
+  x.fillText(cityText(`${brand.bug ? '🪳' : '🐻'} 바퀴시티 · ${game.profile.name} · ${DAYS[game.day() % 7]}요일`), 18, H - 20);
   return c.toDataURL('image/jpeg', 0.82);
 }
 

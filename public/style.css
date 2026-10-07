@@ -116,9 +116,9 @@ button { font-family: 'Jua', sans-serif; cursor: pointer; }
 /* 로딩 */
 #loading { position: fixed; inset: 0; background: #ffe9d6; display: grid; place-content: center; text-align: center; z-index: 60; font-family: 'Jua'; font-size: 20px; color: #4a3428; }
 .spinner { animation: wiggle .6s infinite alternate ease-in-out; }
-.spinner .cute-roach { width: 96px; height: 104px; }
-.title-icon .cute-roach { width: 52px; height: 56px; vertical-align: -10px; margin-right: 6px; }
-.av .cute-roach, #chat-avatar .cute-roach { width: 78%; height: 78%; }
+.spinner .cute-roach, .spinner .cute-bear { width: 96px; height: 104px; }
+.title-icon .cute-roach, .title-icon .cute-bear { width: 52px; height: 56px; vertical-align: -10px; margin-right: 6px; }
+.av .cute-roach, #chat-avatar .cute-roach, .av .cute-bear, #chat-avatar .cute-bear { width: 78%; height: 78%; }
 @keyframes wiggle { from { transform: rotate(-12deg) translateX(-8px); } to { transform: rotate(12deg) translateX(8px); } }
 
 /* 시작 화면 */
@@ -568,3 +568,7 @@ kbd { background: #fff; color: #4a3428; border-radius: 5px; padding: 0 6px; bord
 
 .guest-btn { display: block; margin: 12px auto 0; padding: 10px 18px; font-size: 16px; }
 .guest-btn small { display: block; font-size: 11px; opacity: .75; margin-top: 2px; }
+
+/* 젤리 모드(기본)는 곰돌이 아이콘, 바퀴 모드는 바퀴벌레 아이콘 */
+body:not(.bug-mode) .cute-roach { display: none !important; }
+body.bug-mode .cute-bear { display: none !important; }

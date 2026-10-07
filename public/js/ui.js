@@ -16,9 +16,11 @@ import { housePrice, freeUnits, homeLabel, isHomeType } from './world-setup.js';
 import { moodLabel, moodEmoji } from './citizens.js';
 import { Roach } from './roach.js';
 import { settings, saveSettings } from './settings.js';
-import { fmtTime, DAYS, escapeHtml } from './utils.js';
+import { fmtTime, DAYS, escapeHtml, cityText, setBrand } from './utils.js';
 
 const $ = (id) => document.getElementById(id);
+// 젤리 모드용 귀여운 곰돌이 젤리 아이콘 (바퀴 모드면 CSS로 바퀴벌레 아이콘을 보여준다)
+const CUTE_BEAR = `<svg class="cute-bear" viewBox="0 0 120 130" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">  <circle cx="30" cy="26" r="15" fill="#ff7eb6" opacity=".9"/><circle cx="90" cy="26" r="15" fill="#ff7eb6" opacity=".9"/>  <circle cx="30" cy="27" r="7" fill="#ffc1dc"/><circle cx="90" cy="27" r="7" fill="#ffc1dc"/>  <ellipse cx="60" cy="100" rx="31" ry="27" fill="#ff7eb6" opacity=".92"/>  <ellipse cx="60" cy="104" rx="19" ry="17" fill="#ffc1dc"/>  <ellipse cx="28" cy="96" rx="9" ry="14" fill="#ff7eb6"/><ellipse cx="92" cy="96" rx="9" ry="14" fill="#ff7eb6"/>  <ellipse cx="60" cy="54" rx="35" ry="31" fill="#ff7eb6" opacity=".95"/>  <ellipse cx="60" cy="66" rx="14" ry="10" fill="#ffc1dc"/><ellipse cx="60" cy="62" rx="5" ry="3.6" fill="#7a2848"/>  <ellipse cx="45" cy="50" rx="7" ry="8.5" fill="#1d1410"/><ellipse cx="75" cy="50" rx="7" ry="8.5" fill="#1d1410"/>  <circle cx="43" cy="47" r="2.4" fill="#fff"/><circle cx="73" cy="47" r="2.4" fill="#fff"/>  <ellipse cx="34" cy="64" rx="6" ry="3.6" fill="#ff4f8f" opacity=".6"/><ellipse cx="86" cy="64" rx="6" ry="3.6" fill="#ff4f8f" opacity=".6"/>  <path d="M54 71 Q60 76 66 71" stroke="#7a2848" stroke-width="2.6" fill="none" stroke-linecap="round"/>  <ellipse cx="44" cy="36" rx="6" ry="10" fill="#fff" opacity=".45" transform="rotate(-25 44 36)"/></svg>`;
 const CUTE_ROACH = `<svg class="cute-roach" viewBox="0 0 120 130" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">  <path d="M46 34 Q30 6 14 8" stroke="#5d3a24" stroke-width="4" fill="none" stroke-linecap="round"/>  <path d="M74 34 Q90 6 106 8" stroke="#5d3a24" stroke-width="4" fill="none" stroke-linecap="round"/>  <circle cx="14" cy="8" r="6" fill="#a86b3e"/><circle cx="106" cy="8" r="6" fill="#a86b3e"/>  <ellipse cx="60" cy="98" rx="30" ry="28" fill="#8a5634"/>  <ellipse cx="60" cy="102" rx="19" ry="19" fill="#c08a5c"/>  <path d="M30 92 l-14 10 M30 104 l-14 8 M90 92 l14 10 M90 104 l14 8" stroke="#5d3a24" stroke-width="5" stroke-linecap="round"/>  <ellipse cx="60" cy="52" rx="34" ry="31" fill="#8a5634"/>  <ellipse cx="46" cy="52" rx="10" ry="12" fill="#fff"/><ellipse cx="74" cy="52" rx="10" ry="12" fill="#fff"/>  <ellipse cx="47" cy="54" rx="6" ry="7.5" fill="#1d1410"/><ellipse cx="75" cy="54" rx="6" ry="7.5" fill="#1d1410"/>  <circle cx="45" cy="50" r="2.4" fill="#fff"/><circle cx="73" cy="50" r="2.4" fill="#fff"/>  <ellipse cx="34" cy="64" rx="6" ry="3.6" fill="#ff9fb2"/><ellipse cx="86" cy="64" rx="6" ry="3.6" fill="#ff9fb2"/>  <path d="M53 66 Q60 73 67 66" stroke="#1d1410" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`;
 const NEEDS = [
   ['hunger', '🍙', '포만감', '#ff9f6b'],
@@ -430,7 +432,7 @@ export class UI {
     g.player.cam.dist = 5.5;
     $('chat').classList.remove('hidden');
     $('chat-avatar').style.background = c.color;
-    $('chat-avatar').innerHTML = CUTE_ROACH;
+    $('chat-avatar').innerHTML = CUTE_ROACH + CUTE_BEAR;
     $('chat-name').textContent = c.name;
     $('chat-sub').textContent = `${c.age}세 · ${c.gender} · ${c.job.name} · ${c.personality.name} · 기분 ${moodEmoji(c.mood)}`;
     this.renderProfile(c);
@@ -682,7 +684,7 @@ export class UI {
         list.sort((a, b) => b.affinity - a.affinity);
         $('cit-grid').innerHTML = list.map((c) => `
           <div class="cit" data-id="${c.id}">
-            <div class="av" style="background:${c.color}">${CUTE_ROACH}</div>
+            <div class="av" style="background:${c.color}">${CUTE_ROACH}${CUTE_BEAR}</div>
             <div><div class="nm">${escapeHtml(c.name)} ${c.affinity >= 65 ? '💗' : ''}</div>
             <div class="sb">${c.age}세 ${c.gender} · ${escapeHtml(c.job.name)}<br>${escapeHtml(c.personality.name)} · 친밀도 ${Math.round(c.affinity)}</div></div>
           </div>`).join('');
@@ -781,7 +783,7 @@ export class UI {
     const rels = [...c.relations.entries()].map(([id, r]) => `${escapeHtml(g.sim.citizens[id].name)}(${r.label})`).join(', ');
     const where = c.location ? c.location : null;
     $('phone-body').innerHTML = `<div class="profile-big">
-      <div style="display:flex;gap:14px;align-items:center"><div class="av" style="width:70px;height:70px;border-radius:50%;background:${c.color};display:grid;place-items:center;font-size:40px">${CUTE_ROACH}</div>
+      <div style="display:flex;gap:14px;align-items:center"><div class="av" style="width:70px;height:70px;border-radius:50%;background:${c.color};display:grid;place-items:center;font-size:40px">${CUTE_ROACH}${CUTE_BEAR}</div>
       <div><h3>${escapeHtml(c.name)} ${c.affinity >= 65 ? '💗' : ''}</h3>${c.age}세 · ${c.gender} · 친밀도 ${Math.round(c.affinity)}/100</div></div>
       <b>직업</b> ${escapeHtml(c.job.name)} — ${escapeHtml(c.job.duty)} ${c.work ? `(${escapeHtml(c.work.name)})` : ''}<br>
       ${c.shift ? `<b>근무시간</b> ${fmtH(c.shift[0])} ~ ${fmtH(c.shift[1])}<br>` : ''}
@@ -1137,7 +1139,7 @@ export class UI {
         ctx.fillStyle = 'rgba(255,255,255,.85)';
         const w = ctx.measureText(b.name).width + 8;
         ctx.fillRect(bx - w / 2, bz + 9, w, fs + 4);
-        ctx.fillStyle = '#4a3428'; ctx.fillText(b.name, bx, bz + 11 + fs / 2);
+        ctx.fillStyle = '#4a3428'; ctx.fillText(cityText(b.name), bx, bz + 11 + fs / 2);
         if (b.outer || V.s > CITYS * 2) { ctx.font = `${fs + 4}px sans-serif`; ctx.fillText(b.def.emoji, bx, bz - 2); }
       }
       if (g.route?.length) {
@@ -1365,8 +1367,9 @@ export class UI {
   setBugMode(on, quiet = false) {
     settings.bugMode = !!on; saveSettings();
     Roach.setStyle(on ? 'roach' : 'gummy');
+    setBrand(on); // 바퀴 모드일 때만 '바퀴시티', 아니면 '젤리시티'
     $('tb-mode').textContent = on ? '🐻 젤리 모드로' : '🪳 바퀴 모드로';
-    if (!quiet) this.toast(on ? '🪳 바퀴 모드! 모두 바퀴벌레로 보여요' : '🐻 곰돌이 젤리 모드! 모두 말랑한 젤리 곰이에요');
+    if (!quiet) this.toast(on ? '🪳 바퀴 모드! 모두 바퀴벌레로, 도시 이름은 바퀴시티로 보여요' : '🐻 곰돌이 젤리 모드! 모두 말랑한 젤리 곰이에요 (젤리시티)');
   }
 
   // 포획 타이밍 막대: 바늘이 초록칸에 있을 때 Z를 떼면 성공
