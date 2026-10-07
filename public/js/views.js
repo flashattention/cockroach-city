@@ -141,7 +141,7 @@ export class PlayersView {
     if (meta.id === this.myId) return;
     this.remove(meta.id);
     const pr = meta.profile || {};
-    const roach = new Roach({ seed: meta.name, color: pr.color, age: pr.age, gender: pr.gender, look: pr.look, accessories: pr.accessories || [], lashes: !pr.look && pr.gender === '여' });
+    const roach = new Roach({ own: true, seed: meta.name, color: pr.color, age: pr.age, gender: pr.gender, look: pr.look, accessories: pr.accessories || [], lashes: !pr.look && pr.gender === '여' });
     roach.root.visible = false;
     this.scene.add(roach.root);
     roach.setHeld(pr.held || null);

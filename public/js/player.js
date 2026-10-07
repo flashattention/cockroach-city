@@ -6,7 +6,7 @@ import { updateMount } from './animals.js';
 export class Player {
   constructor(scene, profile) {
     this.profile = profile;
-    this.roach = new Roach({ seed: profile.name, color: profile.color, age: profile.age, gender: profile.gender, look: profile.look, accessories: profile.accessories || [], lashes: !profile.look && profile.gender === '여' });
+    this.roach = new Roach({ own: true, seed: profile.name, color: profile.color, age: profile.age, gender: profile.gender, look: profile.look, accessories: profile.accessories || [], lashes: !profile.look && profile.gender === '여' });
     this.roach.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     scene.add(this.roach.root);
     this.pos = new THREE.Vector3();
@@ -30,7 +30,7 @@ export class Player {
     const old = this.roach;
     const scene = old.root.parent;
     this.profile.color = color;
-    const r = new Roach({ seed: this.profile.name, color, age: this.profile.age, gender: this.profile.gender, look: this.profile.look, accessories: this.profile.accessories || [], lashes: !this.profile.look && this.profile.gender === '여' });
+    const r = new Roach({ own: true, seed: this.profile.name, color, age: this.profile.age, gender: this.profile.gender, look: this.profile.look, accessories: this.profile.accessories || [], lashes: !this.profile.look && this.profile.gender === '여' });
     r.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     r.root.position.copy(old.root.position);
     r.root.rotation.y = old.root.rotation.y;

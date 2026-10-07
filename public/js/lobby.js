@@ -1,6 +1,8 @@
 // 첫 화면: 구글 로그인 → 내 캐릭터 고르기 → (새 캐릭터 꾸미기)
 import * as THREE from 'three';
-import { Roach } from './roach.js';
+import { Roach, GUMMY_COLORS } from './roach.js';
+// 젤리 모드에서는 젤리 색을 먼저, 바퀴 모드에서는 원래 피부색
+const bodyColors = () => (Roach.style === 'roach' ? SKIN_COLORS : [...GUMMY_COLORS, ...SKIN_COLORS.filter((c) => !GUMMY_COLORS.includes(c))]);
 import { PERSONALITIES } from './data.js';
 import { ITEMS } from './items.js';
 import { LOOK_PARTS, LOOK_COLORS, SKIN_COLORS, DEFAULT_LOOK, BASIC_ACC } from './look.js';
@@ -162,8 +164,8 @@ export class Lobby {
         <div class="char-acts"><button class="btn" data-play="${c.token}">플레이 ▶</button><button class="btn ghost mini" data-del="${c.token}" title="삭제">🗑️</button></div>
       </div>`).join('');
     const canMake = this.chars.length < 4;
-    list.innerHTML = cards + (canMake ? `<div class="char-card new" id="new-char"><div class="plus">＋</div><div>새 바퀴 만들기<br><small>${this.chars.length}/4</small></div></div>` : '');
-    if (!this.chars.length) list.insertAdjacentHTML('afterbegin', '<p class="tagline">아직 캐릭터가 없어요. 나만의 바퀴를 만들어 보세요! 🪳</p>');
+    list.innerHTML = cards + (canMake ? `<div class="char-card new" id="new-char"><div class="plus">＋</div><div>새 캐릭터 만들기<br><small>${this.chars.length}/4</small></div></div>` : '');
+    if (!this.chars.length) list.insertAdjacentHTML('afterbegin', '<p class="tagline">아직 캐릭터가 없어요. 나만의 캐릭터를 만들어 보세요! 🐻</p>');
     list.querySelectorAll('[data-play]').forEach((b) => { b.onclick = () => this.resolve(b.dataset.play); });
     list.querySelectorAll('.char-card[data-tok]').forEach((el) => { el.ondblclick = () => this.resolve(el.dataset.tok); });
     list.querySelectorAll('[data-del]').forEach((b) => {
@@ -194,7 +196,7 @@ export class Lobby {
       this.thumbCam.position.set(0, 1.5, 5.6); this.thumbCam.lookAt(0, 1.05, 0);
     }
     const pr = c.profile || {};
-    const r = new Roach({ seed: pr.name, color: pr.color, age: 25, gender: pr.gender, look: pr.look, accessories: pr.accessories?.length ? pr.accessories : starterVis(c.starter) });
+    const r = new Roach({ own: true, seed: pr.name, color: pr.color, age: 25, gender: pr.gender, look: pr.look, accessories: pr.accessories?.length ? pr.accessories : starterVis(c.starter) });
     r.root.rotation.y = 0.35;
     r.update(0.016, 0);
     this.thumbScene.add(r.root);
@@ -209,7 +211,7 @@ export class Lobby {
     this.show('v-create');
     const d = this.draft = {
       name: '', gender: Math.random() < 0.5 ? '여' : '남', age: 25, personality: PERSONALITIES[0].name,
-      color: SKIN_COLORS[0], look: { ...DEFAULT_LOOK }, starter: { head: null, face: null, body: null, acc: null },
+      color: Roach.style === 'roach' ? SKIN_COLORS[0] : GUMMY_COLORS[Math.floor(Math.random() * GUMMY_COLORS.length)], look: { ...DEFAULT_LOOK }, starter: { head: null, face: null, body: null, acc: null },
     };
     this.tab = 'basic';
     this.startPreview();
@@ -232,14 +234,15 @@ export class Lobby {
   randomize() {
     const d = this.draft;
     const pick = (a) => a[Math.floor(Math.random() * a.length)];
-    d.color = pick(SKIN_COLORS);
+    d.color = pick(Roach.style === 'roach' ? SKIN_COLORS : GUMMY_COLORS);
     for (const [k, p] of Object.entries(LOOK_PARTS)) d.look[k] = Math.floor(Math.random() * p.options.length);
     for (const [k, p] of Object.entries(LOOK_COLORS)) d.look[k] = pick(p.options);
     for (const [slot, list] of Object.entries(BASIC_ACC)) d.starter[slot] = Math.random() < 0.7 ? pick(list)[0] : null;
   }
 
   renderTabs() {
-    const tabs = { basic: '📝 기본', body: '🎨 몸·날개', face: '😊 얼굴', antenna: '📡 더듬이', acc: '🎀 악세서리' };
+    // 젤리 모드에서는 더듬이가 없으니 더듬이 탭을 숨긴다
+    const tabs = Roach.style === 'roach' ? { basic: '📝 기본', body: '🎨 몸·날개', face: '😊 얼굴', antenna: '📡 더듬이', acc: '🎀 악세서리' } : { basic: '📝 기본', body: '🎨 젤리 색·날개', face: '😊 얼굴', acc: '🎀 악세서리' };
     $('create-tabs').innerHTML = Object.entries(tabs).map(([k, v]) => `<button class="${k === this.tab ? 'active' : ''}" data-tab="${k}">${v}</button>`).join('');
     $('create-tabs').querySelectorAll('[data-tab]').forEach((b) => { b.onclick = () => { this.tab = b.dataset.tab; this.renderTabs(); }; });
     const d = this.draft;
@@ -252,7 +255,7 @@ export class Lobby {
         <div class="opt-row"><div class="opt-label">나이 <b id="c-age-v">${d.age}</b>살</div><input id="c-age" type="range" min="18" max="80" value="${d.age}"></div>
         <div class="opt-row"><div class="opt-label">성격</div><select id="c-pers">${PERSONALITIES.map((p) => `<option ${p.name === d.personality ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>`;
     } else if (this.tab === 'body') {
-      html = `<div class="opt-row"><div class="opt-label">피부색</div><div class="chips">${SKIN_COLORS.map((c) => `<span class="swatch ${d.color === c ? 'sel' : ''}" data-skin="${c}" style="background:${c}"></span>`).join('')}</div></div>`
+      html = `<div class="opt-row"><div class="opt-label">${Roach.style === 'roach' ? '피부색' : '젤리 색'}</div><div class="chips">${bodyColors().map((c) => `<span class="swatch ${d.color === c ? 'sel' : ''}" data-skin="${c}" style="background:${c}"></span>`).join('')}</div></div>`
         + colors('belly', LOOK_COLORS.belly) + chips('wings', LOOK_PARTS.wings);
     } else if (this.tab === 'face') {
       html = chips('eyes', LOOK_PARTS.eyes) + colors('pupil', LOOK_COLORS.pupil) + chips('nose', LOOK_PARTS.nose) + chips('mouth', LOOK_PARTS.mouth) + colors('cheek', LOOK_COLORS.cheek);
@@ -335,7 +338,7 @@ export class Lobby {
     if (!this.pv) return;
     const d = this.draft;
     if (this.pvRoach) this.pv.scene.remove(this.pvRoach.root);
-    this.pvRoach = new Roach({ seed: d.name, color: d.color, age: d.age, gender: d.gender, look: d.look, accessories: starterVis(d.starter) });
+    this.pvRoach = new Roach({ own: true, seed: d.name, color: d.color, age: d.age, gender: d.gender, look: d.look, accessories: starterVis(d.starter) });
     this.pvRoach.root.scale.setScalar(1);
     this.pv.scene.add(this.pvRoach.root);
   }

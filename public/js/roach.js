@@ -94,7 +94,8 @@ export class Roach {
     const age = o.age ?? 30;
     const gummy = this.gummy = Roach.style !== 'roach';
     let color = o.color || '#8a5634';
-    if (gummy) color = this.jellyColor = gummyColorFor(`${o.seed ?? ''}|${o.color}|${o.gender}|${age}|${JSON.stringify(o.look || {})}`);
+    // 플레이어 캐릭터는 만들 때 고른 색 그대로 젤리가 되고, 시민·경찰 등은 색이 무작위로 정해진다
+    if (gummy) color = this.jellyColor = o.own && /^#[0-9a-fA-F]{6}$/.test(o.color || '') ? o.color : gummyColorFor(`${o.seed ?? ''}|${o.color}|${o.gender}|${age}|${JSON.stringify(o.look || {})}`);
     else if (age >= 65) color = '#' + new THREE.Color(color).lerp(new THREE.Color('#b9a99a'), 0.35).getHexString();
     this.color = color;
     const look = this.look = { ...DEFAULT_LOOK, ...(o.look || {}) };

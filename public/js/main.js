@@ -705,6 +705,8 @@ window.addEventListener('keydown', (e) => {
   // 휴대폰: K 또는 Tab (열려 있으면 닫기)
   if (e.code === 'Tab' || (e.code === 'KeyK' && !e.repeat)) { e.preventDefault(); ui.togglePhone(); return; }
   if (e.code === 'KeyI') { ui.toggleInventory(); return; }
+  // 지도: M으로 열고, 열려 있으면 M으로 닫기
+  if (e.code === 'KeyM' && !e.repeat && ui.modalKind === 'map' && !document.getElementById('modal').classList.contains('hidden')) { ui.closeModal(); return; }
   // 조작법: H로 열고, 열려 있으면 H로 닫기
   if (e.code === 'KeyH' && !e.repeat && (ui.modalKind === 'keys' && !document.getElementById('modal').classList.contains('hidden') || !ui.anyPanelOpen())) { ui.toggleHelp(); return; }
   if (ui.anyPanelOpen() || game.busy || game.dead) return;
@@ -1270,6 +1272,7 @@ function releaseCapture() {
   cancelCapture(ok ? '🪢 휙! 밧줄을 던졌어요…' : null);
 }
 game.startCapture = startCapture; game.releaseCapture = releaseCapture; game.toggleMount = (k) => toggleMount(k); // 테스트용
+game.test = { enterBuilding: (b) => enterBuilding(b), exitBuilding: () => exitBuilding(), toggleCar: () => toggleCar(), toggleFly: () => toggleFly(), interact: () => interact(), startRide: (r) => startRide(r), endRide: () => endRide(true), eatFood: (id) => eatFood(id, 1.5, false), dismount: () => dismount(true) }; // 점검용
 
 function toggleMount(kind, it) {
   const p = game.player;

@@ -19,7 +19,7 @@ export function roachThumb(pr) {
     const dl = new THREE.DirectionalLight('#ffffff', 1.5); dl.position.set(2, 4, 5); thumbScene.add(dl);
     thumbCam = new THREE.PerspectiveCamera(30, 240 / 320, 0.1, 50); thumbCam.position.set(0, 1.5, 6.2); thumbCam.lookAt(0, 1.15, 0);
   }
-  const r = new Roach({ seed: pr.name, color: pr.color, age: 25, gender: pr.gender, look: pr.look, accessories: pr.accessories || [] });
+  const r = new Roach({ own: true, seed: pr.name, color: pr.color, age: 25, gender: pr.gender, look: pr.look, accessories: pr.accessories || [] });
   r.root.rotation.y = 0.3; r.setEmotion('happy', 99); r.update(0.016, 0);
   thumbScene.add(r.root); thumbR.render(thumbScene, thumbCam); thumbScene.remove(r.root);
   const url = thumbR.domElement.toDataURL('image/png');

@@ -572,3 +572,6 @@ kbd { background: #fff; color: #4a3428; border-radius: 5px; padding: 0 6px; bord
 /* 젤리 모드(기본)는 곰돌이 아이콘, 바퀴 모드는 바퀴벌레 아이콘 */
 body:not(.bug-mode) .cute-roach { display: none !important; }
 body.bug-mode .cute-bear { display: none !important; }
+
+#map-hint { pointer-events: auto; cursor: pointer; background: var(--panel); color: var(--ink); border-radius: 999px; padding: 3px 10px; font-size: 12px; box-shadow: var(--shadow); }
+#map-hint kbd { font-size: 11px; }

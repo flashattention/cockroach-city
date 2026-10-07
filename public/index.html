@@ -43,6 +43,7 @@
   <div id="topbar" class="hidden">
     <button id="tb-mode" title="곰돌이 젤리 ↔ 바퀴벌레 모습 바꾸기">🪳 바퀴 모드로</button>
     <button id="tb-badges" title="이름표 훈장 고르기">🏅 훈장</button>
+    <button id="tb-map" title="지도 (M)">🗺️ 지도 <kbd>M</kbd></button>
     <button id="tb-phone" title="휴대폰 (K 또는 Tab)">📱 휴대폰 <kbd>K</kbd></button>
     <button id="tb-feedback" title="개발자에게 건의하기">💡 건의하기</button>
     <button id="tb-exit" title="저장하고 캐릭터 선택으로">💾 저장하고 나가기</button>
@@ -58,6 +59,7 @@
   <div id="minimap-wrap" class="hidden">
     <canvas id="minimap" width="200" height="200"></canvas>
     <div id="location-label">바퀴시티</div>
+    <div id="map-hint" title="지도 열기"><kbd>M</kbd> 지도</div>
   </div>
 
   <div id="prompt" class="hidden"></div>
@@ -185,7 +187,7 @@
         <div class="create-foot">
           <button class="btn ghost" id="create-back">← 돌아가기</button>
           <button class="btn ghost" id="create-random">🎲 랜덤</button>
-          <button id="create-ok">이 바퀴로 시작 🏠</button>
+          <button id="create-ok">이 캐릭터로 시작 🏠</button>
         </div>
       </div>
       <div id="start-error" class="hidden"></div>

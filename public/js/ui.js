@@ -43,6 +43,7 @@ export class UI {
     this.setupPhone();
     this.setupPlayerChat();
     $('minimap').addEventListener('click', () => this.openWorldMap());
+    $('map-hint').addEventListener('click', () => this.openWorldMap());
     $('confirm-yes').onclick = () => this.confirmResolve?.(true);
     $('confirm-no').onclick = () => this.confirmResolve?.(false);
     $('sleep-wake').onclick = () => game.wakeUp();
@@ -106,6 +107,7 @@ export class UI {
       this.toast(`📍 ${o.name}님 위치를 표시했어요`);
     };
     $('tb-badges').onclick = () => this.openBadges();
+    $('tb-map').onclick = () => this.openWorldMap();
     $('tb-mode').onclick = () => this.setBugMode(!settings.bugMode);
     this.setBugMode(settings.bugMode, true);
     this.renderQuests();
@@ -1102,10 +1104,11 @@ export class UI {
     const N = 1024; // 캔버스 해상도
     const MIN = N / (WORLD_HALF * 2), MAX = 14, CITYS = N / (CITY + 16);
     const pp0 = () => (g.mode === 'interior' ? g.interior.building.door : g.player.pos);
-    const V = (this.mapCam ||= { cx: pp0().x, cz: pp0().z, s: CITYS });
-    if (view === 'world') Object.assign(V, { cx: 0, cz: 0, s: MIN });
-    else if (view === 'city') Object.assign(V, { cx: 0, cz: 0, s: CITYS });
-    this.openModal(`<h3 class="mh">🗺️ 지도 <small>스크롤: 확대·축소 · 드래그: 이동 · 클릭: 목적지</small></h3>
+    // 열 때는 항상 전체 지도부터 (휠로 확대하면 상세 구역)
+    const V = (this.mapCam ||= { cx: 0, cz: 0, s: MIN });
+    if (view === 'city') Object.assign(V, { cx: 0, cz: 0, s: CITYS });
+    else Object.assign(V, { cx: 0, cz: 0, s: MIN });
+    this.openModal(`<h3 class="mh">🗺️ 지도 <kbd>M</kbd> <small>휠: 확대해서 상세 구역 보기 · 드래그: 이동 · 클릭: 목적지 · M/Esc: 닫기</small></h3>
       <div class="tabs-row"><button class="btn mini ghost" id="wm-world">🌍 전체 세계</button><button class="btn mini ghost" id="wm-city">🏙️ 바퀴시티</button><button class="btn mini ghost" id="wm-me">📍 내 위치</button><button class="btn mini ghost" id="wm-in">＋</button><button class="btn mini ghost" id="wm-out">－</button></div>
       <canvas id="worldmap" width="${N}" height="${N}"></canvas>
       <div id="wm-info" class="money-line"></div>
