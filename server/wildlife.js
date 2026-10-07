@@ -129,18 +129,22 @@ export class Wildlife {
     for (const p of flyers) { const dd = eye(p); if (dd < td) { td = dd; tgt = p; } }
     if (a.angry && a.angryT > 0) { const p = this.w.players.get(a.angry); if (p && flyers.includes(p)) { tgt = p; td = eye(p); } }
     let wantY, speed;
+    a.fbT = (a.fbT ?? 3) - dt;
+    if (a.breath > 0) this.breathTick(a, d, dt, flyers, gy);
     if (tired) {
       // 지쳐서 내려앉아 천천히 걷는다
       wantY = 0; speed = d.speed * 0.5;
       if (a.t <= 0) { a.t = this.rng.range(4, 9); a.tx = a.x + this.rng.range(-12, 12); a.tz = a.z + this.rng.range(-12, 12); }
-      if (tgt && td < 9 && a.atkT <= 0) this.breathe(a, d, tgt, d.dmg * 0.6);
+      if (tgt && td < 10 && a.atkT <= 0) this.breathe(a, d, tgt);
+      if (tgt) a.h = Math.atan2(tgt.pos.x - a.x, tgt.pos.z - a.z);
     } else if (tgt && (td < d.aggro || (a.angry && a.angryT > 0)) && td < 90) {
-      // 대상 옆 9m 정도에서 맴돌며 불 뿜기
+      // 대상 옆 9m 정도에서 맴돌며 불 뿜기, 멀면 불덩이를 날린다
       const pg = terrainH(tgt.pos.x, tgt.pos.z);
       wantY = Math.max(6, tgt.pos.y - pg + 4);
       const dx = a.x - tgt.pos.x, dz = a.z - tgt.pos.z, L = Math.hypot(dx, dz) || 1;
-      a.tx = tgt.pos.x + (dx / L) * 9; a.tz = tgt.pos.z + (dz / L) * 9; speed = d.run;
-      if (td < 16 && a.atkT <= 0) this.breathe(a, d, tgt, d.dmg);
+      a.tx = tgt.pos.x + (dx / L) * 9; a.tz = tgt.pos.z + (dz / L) * 9; speed = a.breath > 0 ? d.speed : d.run;
+      if (td < 17 && a.atkT <= 0) this.breathe(a, d, tgt);
+      else if (td > 20 && td < 60 && a.fbT <= 0 && a.breath <= 0) this.fireball(a, d, tgt, gy);
       a.h = Math.atan2(tgt.pos.x - a.x, tgt.pos.z - a.z);
     } else {
       wantY = a.wantY ?? 22; speed = d.speed;
@@ -161,9 +165,39 @@ export class Wildlife {
       a.mv = speed > d.speed + 0.5 ? 2 : 1;
     } else a.mv = 0;
   }
-  breathe(a, d, p, dmg) {
-    a.atkT = 2.6; a.breath = 0.9; a.attacking = 0.9;
-    this.w.combat.damagePlayer(p, dmg, { name: `${d.emoji} ${d.name}의 불길` }, { x: a.x, y: 0, z: a.z });
+  // 불길: 1.6초 동안 뿜으며 0.3초마다 입 앞 원뿔 안을 태운다 (+ 화상)
+  breathe(a, d, p) {
+    a.atkT = 4.4; a.breath = 1.6; a.attacking = 1.6; a.btick = 0.15;
+    a.aimY = p.pos.y;
+  }
+  mouth(a, d, gy) {
+    const s = d.size || 1;
+    return { x: a.x + Math.sin(a.h) * d.r * s, y: gy + a.ay + d.h * 0.85 * s, z: a.z + Math.cos(a.h) * d.r * s };
+  }
+  breathTick(a, d, dt, flyers, gy) {
+    if ((a.btick -= dt) > 0) return;
+    a.btick = 0.3;
+    const m = this.mouth(a, d, gy), len = d.size > 1 ? 17 : 12;
+    // 입에서 대상 쪽(아래로 기울여)으로
+    const dir = { x: Math.sin(a.h), y: ((a.aimY ?? m.y) - m.y) / len, z: Math.cos(a.h) };
+    const dl = Math.hypot(dir.x, dir.y, dir.z); dir.x /= dl; dir.y /= dl; dir.z /= dl;
+    const who = { name: `${d.emoji} ${d.name}의 불길` };
+    for (const p of flyers) {
+      const vx = p.pos.x - m.x, vy = p.pos.y + 1 - m.y, vz = p.pos.z - m.z, L = Math.hypot(vx, vy, vz);
+      if (L > len || L < 0.1 || (vx * dir.x + vy * dir.y + vz * dir.z) / L < 0.7) continue;
+      this.w.combat.damagePlayer(p, d.dmg * 0.22, who, m);
+      this.w.combat.burnPlayer(p, d.size > 1 ? 5 : 2.5, 3, who);
+    }
+  }
+  // 불덩이: 멀리 있는 대상에게 날려 터뜨린다 (날아가는 동안 피할 수 있다)
+  fireball(a, d, p, gy) {
+    a.fbT = this.rng.range(5, 8); a.attacking = 0.6;
+    const m = this.mouth(a, d, gy);
+    const to = { x: p.pos.x, y: p.pos.y + 0.5, z: p.pos.z };
+    const dist = Math.hypot(to.x - m.x, to.y - m.y, to.z - m.z), t = dist / 30;
+    this.w.broadcast({ t: 'fx', k: 'dball', p: [m.x, m.y, m.z], b: [to.x, to.y, to.z], t, loc: -1 });
+    const big = (d.size || 1) > 1;
+    setTimeout(() => this.w.combat.explodeAt({ x: to.x, y: to.y, z: to.z, distanceTo(o) { return Math.hypot(o.x - this.x, o.y - this.y, o.z - this.z); } }, -1, big ? 6 : 4, d.dmg * (big ? 1.5 : 1.2), null, { burn: big ? 6 : 3, kind: 'fire' }), t * 1000);
   }
 
   // 포획: 체력이 절반 이하(가축은 언제나)일 때 타이밍을 맞추면 성공 → 가방에 탈것으로

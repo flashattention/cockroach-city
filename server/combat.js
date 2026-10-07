@@ -7,6 +7,7 @@ import { RNG } from '../public/js/utils.js';
 import { levelStats } from '../public/js/level.js';
 import { AI_CARS } from '../public/js/traffic.js';
 import { terrainH } from '../public/js/terrain.js';
+import { ANIMALS } from '../public/js/fauna.js';
 
 export const UNIT = {
   cop: { name: '경찰', hp: 120, speed: 6.5, range: 22, rate: 1.1, dmg: 22, acc: 0.6, def: 10 },
@@ -83,6 +84,8 @@ export class Combat {
       const a = this.w.wild.list[msg.id];
       if (!a || p.loc !== -1 || Math.hypot(a.x - p.pos.x, a.z - p.pos.z) > maxDist + 3) return;
       this.w.wild.damage(a, dmg, p);
+      // 불에 타는 동물 (드래곤은 불에 강하다)
+      if (stats.element === 'fire' && stats.burn && !ANIMALS[a.kind]?.fly) { let n = 0; const iv = setInterval(() => { if (++n > 6 || a.dead) { clearInterval(iv); return; } this.w.wild.damage(a, stats.burn * 0.5, p); }, 500); }
     } else if (msg.tt === 'car') {
       const car = this.w.traffic.cars[msg.id];
       if (car && p.loc < 0 && car.pos.distanceTo(p.pos) < maxDist + 4) this.damageCar(car, dmg * 0.5, p);
@@ -90,8 +93,35 @@ export class Combat {
   }
 
   // 마법 속성 효과
+  // 화상: 3초 동안 0.5초마다 피해 (다시 맞으면 시간만 늘어난다), 몸에 불꽃 표시
+  burnPlayer(v, dps, secs, attacker) {
+    if (!v || v.dead || !dps) return;
+    const now = Date.now();
+    const was = v.burnUntil > now;
+    v.burnUntil = Math.max(v.burnUntil || 0, now + secs * 1000);
+    this.w.broadcast({ t: 'fx', k: 'burn', pid: v.id, s: secs, loc: v.loc });
+    if (was) return;
+    const iv = setInterval(() => {
+      if (v.dead || !this.w.players.has(v.id) || Date.now() > v.burnUntil) { clearInterval(iv); return; }
+      this.damagePlayer(v, dps * 0.5, attacker, null);
+    }, 500);
+  }
+  burnNpc(c, dps, secs, attacker) {
+    if (!c || c.mode === 'dead' || !dps) return;
+    const now = Date.now();
+    const was = c.burnUntil > now;
+    c.burnUntil = Math.max(c.burnUntil || 0, now + secs * 1000);
+    this.w.broadcast({ t: 'fx', k: 'burn', nid: c.id, s: secs, loc: this.locOf(c) });
+    if (was) return;
+    const iv = setInterval(() => {
+      if (c.mode === 'dead' || Date.now() > c.burnUntil) { clearInterval(iv); return; }
+      this.damageNpc(c, dps * 0.5, attacker);
+    }, 500);
+  }
+
   elementOnNpc(c, stats, p) {
     if (c.mode === 'dead') return;
+    if (stats.element === 'fire' && stats.burn) this.burnNpc(c, stats.burn, 3, p);
     if (stats.element === 'ice') c.slowT = 2.5;
     if (stats.element === 'poison' && stats.poisonDmg) this.poison(c, stats.poisonDmg, p);
     if (stats.element === 'wind') {
@@ -102,6 +132,7 @@ export class Combat {
     }
   }
   elementOnPlayer(v, stats, p) {
+    if (stats.element === 'fire' && stats.burn) this.burnPlayer(v, stats.burn, 3, p);
     if (stats.element === 'ice') this.w.send(v, { t: 'slow', s: 2.5 });
     if (stats.element === 'wind') { const dx = v.pos.x - p.pos.x, dz = v.pos.z - p.pos.z, d = Math.hypot(dx, dz) || 1; this.w.send(v, { t: 'knock', x: (dx / d) * 9, z: (dz / d) * 9, up: 6, wind: true }); }
     if (stats.element === 'poison' && stats.poisonDmg) {
@@ -247,7 +278,7 @@ export class Combat {
     for (const c of this.w.sim.citizens) {
       if (c.mode === 'dead' || this.locOf(c) !== loc) continue;
       const d = this.npcPos(c).distanceTo(center);
-      if (d < R) this.damageNpc(c, base * (0.4 + 0.6 * fall(d)), attacker, false, stats);
+      if (d < R) { this.damageNpc(c, base * (0.4 + 0.6 * fall(d)), attacker, false, stats); if (stats.burn) this.burnNpc(c, stats.burn, 3, attacker); }
     }
     for (const v of this.w.players.values()) {
       if (v.dead || v.loc !== loc || (onlyPlayer && v !== onlyPlayer)) continue;
@@ -255,6 +286,7 @@ export class Combat {
       const d = v.pos.distanceTo(center);
       if (d < R) {
         this.damagePlayer(v, damageTaken(base * (0.4 + 0.6 * fall(d)), v.profile.def || 0, stats.pierce || 0), attacker, center);
+        if (stats.burn) this.burnPlayer(v, stats.burn, 3, attacker);
       }
     }
     for (const u of [...this.units]) {

@@ -36,20 +36,81 @@ export class FX {
     mat.dispose();
   }
 
-  // 드래곤 불길: 입에서 앞으로 퍼져 나가는 불덩이들
-  breath(from, dir, len = 14) {
-    const d = dir.clone().normalize();
-    for (let i = 0; i < 18; i++) {
-      const col = i % 3 === 0 ? '#ffca28' : i % 3 === 1 ? '#ff6d00' : '#e64a19';
-      const m = new THREE.Mesh(G.sphereLow(), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85, depthWrite: false }));
-      const to = from.clone().addScaledVector(d, len * (0.6 + Math.random() * 0.45)).add(new THREE.Vector3((Math.random() - 0.5) * len * 0.25, (Math.random() - 0.5) * len * 0.18, (Math.random() - 0.5) * len * 0.25));
-      m.position.copy(from); m.scale.setScalar(0.25); m.visible = false;
-      this.scene.add(m);
-      const life = 0.55 + Math.random() * 0.2, delay = i * 0.018;
-      this.items.push({ m, t: life + delay, life: life + delay, delay, from: from.clone(), to, kind: 'fire', s0: (0.18 + Math.random() * 0.15) * Math.max(0.6, len / 14) });
-    }
-    this.flash.position.copy(from); this.flashT = 0.35;
+  // ---------------- 불 (드래곤·화상·화염 폭발) ----------------
+  // 불꽃 한 조각: 빛나는 스프라이트가 날아가며 커지고, 노랑→주황→빨강→연기로 식는다
+  flame(p, v, life, s0, s1, smokey = true) {
+    // 대부분은 보통 섞기(주황·빨강이 살아 있게), 일부만 빛나는 심지(더하기 섞기)
+    const glow = Math.random() < 0.22;
+    const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: fireTex(), color: '#ffd27a', transparent: true, depthWrite: false, blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending }));
+    m.position.copy(p); m.scale.setScalar(s0); m.material.rotation = Math.random() * 6.28;
+    this.scene.add(m);
+    this.items.push({ m, t: life, life, kind: 'flame', v: v.clone(), s0, s1, smokey, op: glow ? 0.7 : 1.35 });
   }
+  ember(p, v) {
+    const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: fireTex(), color: '#ffd54f', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    m.position.copy(p); m.scale.setScalar(0.12 + Math.random() * 0.1);
+    this.scene.add(m);
+    this.items.push({ m, t: 0.9, life: 0.9, kind: 'ember', v: v.clone() });
+  }
+  smokePuff(p, v, s) {
+    const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex(), color: '#5d5d5d', transparent: true, opacity: 0.5, depthWrite: false }));
+    m.position.copy(p); m.scale.setScalar(s);
+    this.scene.add(m);
+    this.items.push({ m, t: 1.8, life: 1.8, kind: 'puff', v: v.clone(), s0: s });
+  }
+  // 불 뿜기 이미터: from/dir 을 매 프레임 다시 물어봐서 드래곤이 움직여도 입에서 계속 나온다
+  emitter(o) { const e = { kind: 'emit', t: 1e9, life: 1e9, m: null, acc: 0, scorchT: 0, ...o }; this.items.push(e); return e; }
+  updateEmitter(e, dt) {
+    const from = e.from(), dir0 = from && e.dir();
+    if (!from || !dir0 || performance.now() > e.until) { e.t = 0; return; }
+    const dir = dir0.clone().normalize(), len = e.len, pw = e.power ?? 1;
+    const side = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+    const up = new THREE.Vector3().crossVectors(side, dir).normalize();
+    e.acc += dt * (e.rate ?? 150) * pw;
+    while (e.acc >= 1) {
+      e.acc -= 1;
+      const a = Math.random() * 6.28, r = Math.random() * (e.spread ?? 0.16);
+      const d = dir.clone().addScaledVector(side, Math.cos(a) * r).addScaledVector(up, Math.sin(a) * r).normalize();
+      const life = 0.55 + Math.random() * 0.3;
+      this.flame(from.clone().addScaledVector(d, Math.random() * 0.6), d.multiplyScalar(len / life * (0.3 + Math.random() * 0.85)), life, 0.7 * pw, (3.2 + Math.random() * 2.4) * pw);
+      if (Math.random() < 0.18) this.ember(from.clone(), dir.clone().multiplyScalar(len * 1.4).add(new THREE.Vector3((Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4)));
+    }
+    // 입 앞이 이글이글 빛난다
+    this.flash.position.copy(from).addScaledVector(dir, 3); this.flash.intensity = (28 + Math.random() * 22) * pw; this.flashT = Math.max(this.flashT, 0.08);
+    // 불길이 땅에 닿으면 그을음 + 바닥 불
+    if ((e.scorchT -= dt) <= 0 && this.groundFn) {
+      e.scorchT = 0.22;
+      const end = from.clone().addScaledVector(dir, len * 0.85);
+      const gy = this.groundFn(end.x, end.z, end.y);
+      if (end.y - gy < 3.5) {
+        const gp = new THREE.Vector3(end.x, gy, end.z);
+        this.hole(gp, [0, 1, 0], '__scorch');
+        for (let i = 0; i < 3; i++) this.flame(gp.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2, 0.2, (Math.random() - 0.5) * 2)), new THREE.Vector3(0, 2 + Math.random() * 2, 0), 0.9, 0.5 * pw, 1.6 * pw);
+        if (Math.random() < 0.5) this.smokePuff(gp.clone().setY(gy + 1), new THREE.Vector3(0, 1.4, 0), 1.2 * pw);
+      }
+    }
+  }
+  // 짧은 불길 (다른 플레이어의 드래곤 등)
+  breath(from, dir, len = 14, dur = 0.45) {
+    const f = from.clone(), d = dir.clone();
+    this.emitter({ from: () => f, dir: () => d, len, power: Math.max(0.6, len / 14), until: performance.now() + dur * 1000 });
+  }
+  // 화상: 몸에서 작은 불꽃이 피어오른다
+  burning(getPos, secs) {
+    this.emitter({ from: getPos, dir: () => new THREE.Vector3(0, 1, 0), len: 1.3, power: 0.38, rate: 40, spread: 0.5, until: performance.now() + secs * 1000 });
+  }
+  // 화염 폭발 (불덩이·로켓 등 큰 폭발)
+  fireBlast(p, r = 5) {
+    for (let i = 0; i < 26 + r * 3; i++) {
+      const a = Math.random() * 6.28, el = Math.random() * 1.2;
+      const v = new THREE.Vector3(Math.cos(a) * Math.cos(el), Math.sin(el) + 0.2, Math.sin(a) * Math.cos(el)).multiplyScalar(r * (1.2 + Math.random() * 1.6));
+      this.flame(p.clone(), v, 0.55 + Math.random() * 0.35, 0.6, r * (0.45 + Math.random() * 0.3));
+    }
+    for (let i = 0; i < 14; i++) this.ember(p.clone(), new THREE.Vector3((Math.random() - 0.5) * r * 4, 3 + Math.random() * r * 2, (Math.random() - 0.5) * r * 4));
+    for (let i = 0; i < 6; i++) this.smokePuff(p.clone().add(new THREE.Vector3((Math.random() - 0.5) * r, Math.random() * r * 0.5, (Math.random() - 0.5) * r)), new THREE.Vector3(0, 1.5, 0), r * 0.5);
+    if (this.groundFn) { const gy = this.groundFn(p.x, p.z, p.y); if (p.y - gy < 3) this.hole(new THREE.Vector3(p.x, gy, p.z), [0, 1, 0], '__scorch_big'); }
+  }
+
 
   // 총알 자국: 맞은 면(normal)에 총 종류별 탄흔을 붙인다. 45초 뒤 서서히 사라짐
   hole(point, normal, wid, color) {
@@ -102,6 +163,7 @@ export class FX {
       this.items.push({ m: s, t: 1.6, life: 1.6, kind: 'smoke' });
     }
     if (!small) { this.flash.position.copy(p); this.flash.position.y += 2; this.flash.intensity = 40; this.flashT = 0.25; }
+    if (!small && r >= 4) this.fireBlast(p, r * 0.8); // 큰 폭발은 불길이 치솟는다
   }
 
   // 지그재그 번개
@@ -194,6 +256,18 @@ export class FX {
         const u = Math.min(1, Math.max(0, (it.life - it.t - (it.delay || 0)) / (it.life - (it.delay || 0)) * 1.4));
         it.m.position.copy(it.from).lerp(it.to, u); it.m.position.y += Math.sin(u * Math.PI) * 0.8;
         it.m.material.opacity = Math.min(1, k * 2.5);
+      } else if (it.kind === 'emit') { this.updateEmitter(it, dt); if (it.t > 0) continue; this.items.splice(i, 1); continue;
+      } else if (it.kind === 'flame') {
+        const u = 1 - k;
+        it.v.multiplyScalar(Math.max(0, 1 - dt * 1.6)); it.v.y += 3 * dt; // 앞으로 뻗다가 위로 피어오른다
+        it.m.position.addScaledVector(it.v, dt);
+        it.m.scale.setScalar(it.s0 + (it.s1 - it.s0) * Math.sqrt(u));
+        // 노랑 → 주황 → 짙은 빨강 (겹쳐도 하얗게 날아가지 않게 살짝 어둡게)
+        it.m.material.color.setRGB(Math.max(0.55, 1 - u * 0.5), Math.max(0.08, 0.72 - u * 0.95), Math.max(0, 0.32 - u * 0.9));
+        it.m.material.opacity = Math.min(1, (u < 0.55 ? 0.62 : 0.62 * (1 - u) / 0.45) * (it.op ?? 1));
+        if (it.smokey && it.t - dt <= 0 && Math.random() < 0.2) this.smokePuff(it.m.position.clone(), new THREE.Vector3(0, 1.2, 0), it.s1 * 0.6);
+      } else if (it.kind === 'ember') { it.v.y -= 6 * dt; it.m.position.addScaledVector(it.v, dt); it.m.material.opacity = k;
+      } else if (it.kind === 'puff') { it.m.position.addScaledVector(it.v, dt); it.m.scale.setScalar(it.s0 * (1 + (1 - k) * 1.5)); it.m.material.opacity = 0.45 * k;
       } else if (it.kind === 'jelly') {
         if (!it.landed) {
           it.v.y -= 14 * dt;
@@ -233,7 +307,19 @@ const HOLE_STYLE = {
   blaster: 'energy', blaster_rifle: 'energy', plasma_smg: 'energy',
 };
 const HOLE_SIZE = { pellet: 0.08, small: 0.13, rifle: 0.17, big: 0.24, anti: 0.5, energy: 0.3 };
+HOLE_STYLE.__scorch = 'scorch'; HOLE_STYLE.__scorch_big = 'scorch_big';
+HOLE_SIZE.scorch = 2.4; HOLE_SIZE.scorch_big = 6;
 const holeStyle = (wid) => HOLE_STYLE[wid] || 'small';
+let _fireTex = null, _smokeTex = null;
+function radialTex(stops) {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const x = c.getContext('2d'); const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  for (const [o, col] of stops) gr.addColorStop(o, col);
+  x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function fireTex() { return (_fireTex ||= radialTex([[0, 'rgba(255,255,240,1)'], [0.25, 'rgba(255,230,140,0.95)'], [0.55, 'rgba(255,140,40,0.55)'], [1, 'rgba(255,60,0,0)']])); }
+function smokeTex() { return (_smokeTex ||= radialTex([[0, 'rgba(90,90,90,0.9)'], [0.6, 'rgba(70,70,70,0.4)'], [1, 'rgba(60,60,60,0)']])); }
 const holeGeo = new THREE.PlaneGeometry(1, 1);
 const holeMats = new Map();
 function holeMat(st, color) {
@@ -252,7 +338,13 @@ function holeMat(st, color) {
       x.stroke();
     }
   };
-  if (st === 'energy') {
+  if (st === 'scorch' || st === 'scorch_big') {
+    // 불에 그을린 바닥
+    const gr = x.createRadialGradient(R, R, 4, R, R, R);
+    gr.addColorStop(0, 'rgba(15,10,8,0.85)'); gr.addColorStop(0.5, 'rgba(30,20,15,0.6)'); gr.addColorStop(1, 'rgba(40,30,20,0)');
+    x.fillStyle = gr; x.beginPath(); x.arc(R, R, R, 0, 7); x.fill();
+    for (let i = 0; i < 18; i++) { x.fillStyle = `rgba(255,${80 + Math.random() * 80},0,${0.25 + Math.random() * 0.3})`; x.beginPath(); x.arc(R + (Math.random() - 0.5) * 70, R + (Math.random() - 0.5) * 70, 1 + Math.random() * 3, 0, 7); x.fill(); }
+  } else if (st === 'energy') {
     // 그을린 자국 + 빛나는 중심 (총의 빔 색)
     const gr = x.createRadialGradient(R, R, 2, R, R, R);
     gr.addColorStop(0, color || '#18ffff'); gr.addColorStop(0.18, '#ffffff'); gr.addColorStop(0.3, 'rgba(20,20,20,0.95)'); gr.addColorStop(0.65, 'rgba(30,30,30,0.6)'); gr.addColorStop(1, 'rgba(30,30,30,0)');
@@ -478,6 +570,7 @@ export class Combat {
 
   update(dt) {
     this.cool -= dt;
+    this.fbCool = (this.fbCool || 0) - dt;
     if (this.drawing) {
       this.drawing.t += dt;
       this.g.player.roach.drawK = Math.min(1, this.drawing.t / 1.1);
@@ -487,7 +580,7 @@ export class Combat {
       const w = this.selectedWeapon();
       const car = this.g.player.inCar;
       // 연사 총·근접무기(주먹 포함)는 누르고 있으면 계속
-      if ((w && (itemDef(w.id).auto || itemDef(w.id).kind === 'melee')) || (car && car.kind === 'heli')) this.tryFire();
+      if ((w && (itemDef(w.id).auto || itemDef(w.id).kind === 'melee')) || (car && car.kind === 'heli') || this.g.player.mount?.ride.fly) this.tryFire();
     }
     this.updateProjs(dt);
     this.fx.update(dt);
@@ -656,26 +749,45 @@ export class Combat {
     }
   }
 
+  // 드래곤 타고 왼쪽 클릭(누르고 있으면 계속): 화염방사. 0.3초마다 앞쪽 원뿔 안을 태운다
   dragonBreath(mt) {
     const g = this.g, p = g.player;
     const wid = mt.kind === 'dragon' ? 'dragon_fire' : 'baby_dragon_fire';
     const s = weaponStats(wid, []);
     this.cool = s.rate;
-    const { d } = this.aimRay();
+    const aim = () => this.aimRay().d;
+    const d = aim();
     p.heading = Math.atan2(d.x, d.z);
     const from = mouthPos(mt) || p.pos.clone().setY(p.pos.y + 2);
-    this.fx.breath(from, d, s.range);
-    p.breathT = 0.8;
-    g.net.send({ t: 'fx', k: 'breath', p: [from.x, from.y, from.z], d: [d.x, d.y, d.z], r: s.range });
-    // 불길 원뿔 안의 대상 (최대 6)
+    const until = performance.now() + 380;
+    if (this.riderFlame && this.riderFlame.t > 0) this.riderFlame.until = until;
+    else this.riderFlame = this.fx.emitter({ from: () => (g.player.mount === mt ? mouthPos(mt) : null), dir: aim, len: s.range, power: mt.kind === 'dragon' ? 1.2 : 0.75, until });
+    p.breathT = 0.5;
+    g.shake?.(0.12);
+    g.net.send({ t: 'fx', k: 'breath', p: [from.x, from.y, from.z], d: [d.x, d.y, d.z], r: s.range, dur: 0.4 });
     let n = 0;
     for (const t of this.targets()) {
       const c = new THREE.Vector3(t.base.x, t.base.y + t.h / 2, t.base.z).sub(from);
       const L = c.length();
-      if (L > s.range + t.r || c.normalize().dot(d) < 0.72) continue;
+      if (L > s.range + t.r || c.normalize().dot(d) < 0.8) continue;
       this.sendHit(t, { id: wid, gems: [] });
-      if (++n >= 6) break;
+      if (++n >= 8) break;
     }
+  }
+  // 드래곤 타고 오른쪽 클릭: 불덩이 (터지면 넓게 불바다)
+  dragonFireball(mt) {
+    const g = this.g;
+    if ((this.fbCool || 0) > 0) return;
+    const wid = mt.kind === 'dragon' ? 'dragon_fireball' : 'baby_fireball';
+    this.fbCool = mt.kind === 'dragon' ? 2.2 : 1.6;
+    const d = this.aimRay().d;
+    g.player.heading = Math.atan2(d.x, d.z);
+    const from = (mouthPos(mt) || g.player.pos.clone().setY(g.player.pos.y + 2)).addScaledVector(d, 1.5);
+    const v = d.clone().multiplyScalar(48);
+    this.spawnProj('rocket', from, v, { id: wid, gems: [] }, true);
+    g.net.send({ t: 'fx', k: 'proj', type: 'rocket', p: [from.x, from.y, from.z], v: [v.x, v.y, v.z], w: wid });
+    this.fx.breath(from, d, 4, 0.15);
+    g.shake?.(0.35);
   }
 
   throwGrenade(w, s, d) {
@@ -754,6 +866,10 @@ export class Combat {
       const shaft = new THREE.Mesh(G.cylLow(), new THREE.MeshBasicMaterial({ color: '#8d6e63' })); shaft.scale.set(0.025, 0.9, 0.025); m.add(shaft);
       const tip = new THREE.Mesh(G.cone(), new THREE.MeshBasicMaterial({ color: '#cfd8dc' })); tip.scale.set(0.06, 0.15, 0.06); tip.position.y = 0.5; m.add(tip);
       const fl = new THREE.Mesh(G.box(), new THREE.MeshBasicMaterial({ color: '#ffffff' })); fl.scale.set(0.12, 0.15, 0.01); fl.position.y = -0.4; m.add(fl);
+    } else if (/fireball/.test(w?.id || '')) {
+      // 드래곤 불덩이: 이글거리는 큰 불구슬
+      m = new THREE.Sprite(new THREE.SpriteMaterial({ map: fireTex(), color: '#ffe082', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+      m.scale.setScalar(w.id === 'dragon_fireball' || w.id === 'wild_fireball' ? 3 : 1.8);
     } else {
       m = new THREE.Mesh(G.sphereLow(), new THREE.MeshBasicMaterial({ color }));
       m.scale.setScalar(type === 'grenade' ? 0.15 : 0.22);
@@ -853,8 +969,11 @@ export class Combat {
           const dx = pr.pos.x - t.base.x, dz = pr.pos.z - t.base.z;
           if (Math.hypot(dx, dz) < t.r + 0.4 && pr.pos.y > t.base.y - 0.3 && pr.pos.y < t.base.y + t.h + 0.3) { boom = true; break; }
         }
-        // 연기 꼬리
-        if (Math.random() < 0.5) {
+        // 불덩이는 불꼬리, 로켓은 연기 꼬리
+        if (/fireball/.test(pr.w?.id || '')) {
+          const back = pr.v.clone().normalize().multiplyScalar(-4);
+          for (let n = 0; n < 2; n++) this.fx.flame(pr.pos.clone(), back.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2)), 0.45, 0.8, 1.8, false);
+        } else if (Math.random() < 0.5) {
           const s = new THREE.Mesh(G.sphereLow(), new THREE.MeshBasicMaterial({ color: '#bdbdbd', transparent: true, opacity: 0.5, depthWrite: false }));
           s.position.copy(pr.pos); s.scale.setScalar(0.25);
           g.scene.add(s);
@@ -871,6 +990,17 @@ export class Combat {
     }
   }
 
+  // 화상 입은 대상에 불꽃 (나·다른 플레이어·시민)
+  burnFx(m) {
+    const g = this.g;
+    let r = null;
+    if (m.pid !== undefined) r = m.pid === g.myId ? g.player.roach : g.players.list.get(m.pid)?.roach;
+    else if (m.nid !== undefined) r = g.sim.citizens[m.nid]?.roach;
+    if (!r) return;
+    const until = performance.now() + Math.min(6, +m.s || 3) * 1000;
+    this.fx.burning(() => (performance.now() < until && r.root.visible && r.root.parent ? r.root.getWorldPosition(new THREE.Vector3()).setY(r.root.position.y + r.height * 0.4) : null), Math.min(6, +m.s || 3));
+  }
+
   // 다른 플레이어의 연출
   remoteFx(m) {
     const g = this.g;
@@ -883,7 +1013,13 @@ export class Combat {
     else if (m.k === 'boom') { this.fx.boom(v3(m.p), m.r || 5, m.small); if (!m.small && g.player) g.shake(Math.max(0, 1 - g.player.pos.distanceTo(v3(m.p)) / 40)); }
     else if (m.k === 'proj') { const pr = this.spawnProj(m.type, v3(m.p), v3(m.v), { id: m.w }, false); if (pr && +m.g) pr.grav = +m.g; }
     else if (m.k === 'bolt') this.fx.bolt(v3(m.a), v3(m.b), m.c);
-    else if (m.k === 'breath' && Array.isArray(m.p) && Array.isArray(m.d)) this.fx.breath(v3(m.p), v3(m.d), Math.min(20, +m.r || 14));
+    else if (m.k === 'breath' && Array.isArray(m.p) && Array.isArray(m.d)) this.fx.breath(v3(m.p), v3(m.d), Math.min(20, +m.r || 14), Math.min(1, +m.dur || 0.45));
+    else if (m.k === 'burn') this.burnFx(m);
+    else if (m.k === 'dball' && Array.isArray(m.p) && Array.isArray(m.b)) {
+      // 야생 드래곤 불덩이: 날아가는 모습만 (피해는 서버가)
+      const a = v3(m.p), b = v3(m.b), t = Math.max(0.3, +m.t || 1);
+      this.spawnProj('rocket', a, b.clone().sub(a).divideScalar(t), { id: 'wild_fireball' }, false);
+    }
     else if (m.k === 'sparkle') this.fx.sparkle(v3(m.p), m.c || '#fff59d', 20, 3);
     else if (m.k === 'cloud') this.fx.cloud(v3(m.p), m.c || '#e8f5e9');
     else if (m.k === 'hearts') { const a = v3(m.a), b = m.b ? v3(m.b) : null; this.fx.hearts(a, b, m.e || '💗'); const p = g.players.list.get(m.pid); p?.roach.flirt(); }

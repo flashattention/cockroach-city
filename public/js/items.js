@@ -212,8 +212,11 @@ export const ITEMS = {
   dragon_heart: { name: '드래곤의 심장', emoji: '❤️‍🔥', cat: 'loot', price: 0, sell: 6000, stack: true },
   baby_dragon_scale: { name: '새끼 드래곤 비늘', emoji: '🐲', cat: 'loot', price: 0, sell: 900, stack: true },
   // 드래곤을 타고 있을 때 왼쪽 클릭: 불 뿜기 (상점에서 팔지 않음)
-  dragon_fire: { name: '드래곤 불꽃', emoji: '🔥', cat: 'melee', price: 0, dmg: 46, rate: 1.1, range: 16, kind: 'melee', element: 'fire', hidden: true },
-  baby_dragon_fire: { name: '새끼 드래곤 불꽃', emoji: '🔥', cat: 'melee', price: 0, dmg: 24, rate: 0.9, range: 11, kind: 'melee', element: 'fire', hidden: true },
+  // 화염방사는 0.3초마다 피해 + 화상(burn: 초당 피해, 3초)
+  dragon_fire: { name: '드래곤 불꽃', emoji: '🔥', cat: 'melee', price: 0, dmg: 16, rate: 0.3, range: 18, kind: 'melee', element: 'fire', burn: 8, hidden: true },
+  baby_dragon_fire: { name: '새끼 드래곤 불꽃', emoji: '🔥', cat: 'melee', price: 0, dmg: 9, rate: 0.3, range: 12, kind: 'melee', element: 'fire', burn: 4, hidden: true },
+  dragon_fireball: { name: '드래곤 불덩이', emoji: '☄️', cat: 'launcher', price: 0, dmg: 130, rate: 2.2, range: 160, radius: 7, kind: 'rocket', element: 'fire', burn: 8, hidden: true },
+  baby_fireball: { name: '새끼 드래곤 불덩이', emoji: '☄️', cat: 'launcher', price: 0, dmg: 60, rate: 1.6, range: 110, radius: 4.5, kind: 'rocket', element: 'fire', burn: 4, hidden: true },
   hunting_rifle: { name: '사냥용 엽총', emoji: '🔫', cat: 'gun', shop: 'hunter', price: 1800, dmg: 55, rate: 1.1, range: 110, ammo: 'ammo_762', kind: 'hitscan', held: 'sniper', sockets: 1 },
   hunter_bow: { name: '사냥꾼의 활', emoji: '🏹', cat: 'gun', shop: 'hunter', price: 900, dmg: 34, rate: 0.85, range: 70, kind: 'arrow', ammo: 'arrow', held: 'bow', sockets: 1 },
   hunter_knife: { name: '사냥칼', emoji: '🔪', cat: 'melee', shop: 'hunter', price: 250, dmg: 22, rate: 0.4, range: 2.0, kind: 'melee', held: 'knife', sockets: 1 },

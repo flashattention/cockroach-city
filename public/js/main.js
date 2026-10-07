@@ -21,7 +21,7 @@ import { dailyQuests, questDef } from './quests.js';
 import { SPORT_KINDS, vehicleName, CAR_KINDS, BIKES } from './traffic.js';
 import { DROP_POOL, FISH } from './items.js';
 import { buildWilds, renderWorldImage } from './wilds.js';
-import { AnimalsView, makeMount } from './animals.js';
+import { AnimalsView, makeMount, mouthPos } from './animals.js';
 import { Roach } from './roach.js';
 import { buildPark } from './park.js';
 initBrand(); // 화면의 '바퀴시티' → '젤리시티' (바퀴 모드면 그대로)
@@ -332,12 +332,18 @@ function buildWorld(w) {
   game.worldImage = renderWorldImage(wild.grid);
   game.park = buildPark(scene);
   game.animals = new AnimalsView(scene, w.animals || [], city.groundY);
-  // 야생 드래곤이 불을 뿜으면: 가까운 나를 향해, 아니면 앞쪽 아래로
-  game.animals.onBreath = (from, a) => {
-    const me = game.player?.pos;
-    const dir = me && me.distanceTo(from) < 30 ? me.clone().setY(me.y + 1).sub(from) : new THREE.Vector3(Math.sin(a.h), -0.35, Math.cos(a.h));
-    game.combat.fx.breath(from, dir, a.kind === 'dragon' ? 16 : 11);
+  // 야생 드래곤이 불을 뿜으면: 뿜는 동안(1.6초) 입을 따라 불길이 계속 나오고, 가까우면 화면이 흔들린다
+  game.animals.onBreath = (from0, a) => {
+    const big = a.kind === 'dragon';
+    const dirFn = () => {
+      const from = mouthPos(a.mesh), me = game.player?.pos;
+      if (!from) return null;
+      return me && me.distanceTo(from) < 30 ? me.clone().setY(me.y + 1).sub(from) : new THREE.Vector3(Math.sin(a.h), -0.4, Math.cos(a.h));
+    };
+    game.combat.fx.emitter({ from: () => (a.breathing && a.visible ? mouthPos(a.mesh) : null), dir: dirFn, len: big ? 17 : 12, power: big ? 1.3 : 0.8, until: performance.now() + 1800 });
+    if (game.player && game.player.pos.distanceTo(from0) < 22) game.shake?.(big ? 0.45 : 0.25);
   };
+
   for (const key of w.smashed || []) smashProp(key, [1, 0], true);
   sim.city = city;
   game.city = city; game.sim = sim;
@@ -360,8 +366,12 @@ function buildWorld(w) {
   game.combat.fx.groundFn = (x, z, y) => (game.mode === 'interior' ? 0.1 : game.city.groundY(x, z, y));
   Roach.onHurt = (r) => {
     if (!r.gummy || !r.root.visible || !r.root.parent) return;
+    // 불길·화상처럼 연달아 맞을 때 젤리가 너무 많이 튀지 않게
+    const now = performance.now();
+    if (!r.dead && now - (r._jellyT || 0) < 350) return;
+    r._jellyT = now;
     const p = r.root.getWorldPosition(new THREE.Vector3()); p.y += r.height * 0.55;
-    if (p.distanceTo(camera.position) < 90) game.combat.fx.jelly(p, r.jellyColor, r.dead ? 16 : 9, r.dead);
+    if (p.distanceTo(camera.position) < 90) game.combat.fx.jelly(p, r.jellyColor, r.dead ? 16 : 6, r.dead);
   };
   setupNet();
 }
@@ -747,7 +757,11 @@ let dragging = false, lastMX = 0, lastMY = 0;
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('mousedown', (e) => {
   if (!game.started || ui.anyPanelOpen()) return;
-  if (e.button === 2) { game.aimHeld = true; return; }
+  if (e.button === 2) {
+    // 드래곤을 타고 있으면 오른쪽 클릭 = 불덩이
+    if (game.player?.mount?.ride.fly) { game.combat.dragonFireball(game.player.mount); return; }
+    game.aimHeld = true; return;
+  }
   if (document.pointerLockElement === canvas) {
     if (e.button === 0 && !game.busy && !game.dead) useSelected(true);
     return;
