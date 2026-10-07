@@ -6,6 +6,7 @@ import { randomStreetPoint } from '../public/js/citizens.js';
 import { RNG } from '../public/js/utils.js';
 import { levelStats } from '../public/js/level.js';
 import { AI_CARS } from '../public/js/traffic.js';
+import { terrainH } from '../public/js/terrain.js';
 
 export const UNIT = {
   cop: { name: '경찰', hp: 120, speed: 6.5, range: 22, rate: 1.1, dmg: 7, acc: 0.65, def: 10 },
@@ -430,10 +431,20 @@ export class Combat {
     u.h = Math.atan2(dx, dz);
     // 경범죄 (별 1~2개): 경찰은 총을 쏘지 않고 쫓아가서 체포한다
     if (u.kind === 'cop' && (p.stars || 0) <= 2) {
-      if (d > 1.6) this.moveUnit(u, tp, { ...info, speed: info.speed * 1.25 }, dt);
-      if (d < 2.2 && p.car < 0 && !p.dead) this.arrest(p, u);
+      // 하늘을 날거나 옥상에 있는 플레이어는 경찰도 날아올라 쫓는다
+      const pg = terrainH(tp.x, tp.z), above = tp.y - pg;
+      const want = u.loc < 0 && above > 2.5 ? above : 0;
+      u.fy = u.fy || 0;
+      u.fy += Math.max(-7 * dt, Math.min(8 * dt, want - u.fy));
+      u.flying = u.fy > 0.3 ? 1 : 0;
+      const sp = u.flying ? Math.max(15, info.speed * 1.25) : info.speed * 1.25;
+      if (d > 1.6) this.moveUnit(u, tp, { ...info, speed: sp, fly: u.flying ? 1 : info.fly }, dt);
+      u.pos.y = u.flying ? terrainH(u.pos.x, u.pos.z) + u.fy : 0;
+      const uy = u.flying ? u.pos.y : u.loc < 0 ? terrainH(u.pos.x, u.pos.z) : tp.y;
+      if (Math.hypot(d, tp.y - uy) < 2.2 && p.car < 0 && !p.dead) this.arrest(p, u);
       return;
     }
+    if (u.fy) { u.fy = 0; u.flying = 0; u.pos.y = 0; }
     if (d > info.range * 0.6) this.moveUnit(u, tp, info, dt);
     u.fireT -= dt;
     // 건물에 가려 있으면 쏘지 않고 다가간다 (총알이 벽을 뚫지 않게)
@@ -554,7 +565,7 @@ export class Combat {
   }
 
   unitSnap() {
-    return this.units.map((u) => [u.id, UNIT_KINDS.indexOf(u.kind), q(u.pos.x), q(u.pos.y), q(u.pos.z), q(u.h, 100), u.loc, u.moving, Math.round((u.hp / UNIT[u.kind].hp) * 100)]);
+    return this.units.map((u) => [u.id, UNIT_KINDS.indexOf(u.kind), q(u.pos.x), q(u.pos.y), q(u.pos.z), q(u.h, 100), u.loc, u.moving, Math.round((u.hp / UNIT[u.kind].hp) * 100), u.flying ? 1 : 0]);
   }
 }
 

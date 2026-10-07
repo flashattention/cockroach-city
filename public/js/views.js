@@ -290,7 +290,7 @@ export class UnitsView {
   apply(arr) {
     const seen = new Set();
     for (const a of arr) {
-      const [id, ki, x, y, z, h, loc, moving, hpPct] = a;
+      const [id, ki, x, y, z, h, loc, moving, hpPct, flying] = a;
       seen.add(id);
       let u = this.list.get(id);
       if (!u) {
@@ -308,7 +308,7 @@ export class UnitsView {
         u = { id, kind, obj, roach, pos: new THREE.Vector3(x / 10, y / 10, z / 10), target: new THREE.Vector3(), h: 0, loc, moving: 0, hp: 100, visible: false };
         this.list.set(id, u);
       }
-      u.target.set(x / 10, y / 10, z / 10); u.h = h / 100; u.loc = loc; u.moving = moving; u.hp = hpPct;
+      u.target.set(x / 10, y / 10, z / 10); u.h = h / 100; u.loc = loc; u.moving = moving; u.hp = hpPct; u.flying = !!flying;
     }
     for (const [id, u] of this.list) if (!seen.has(id)) { this.scene.remove(u.obj); this.list.delete(id); }
   }
@@ -321,10 +321,11 @@ export class UnitsView {
       u.visible = u.loc === myLoc;
       u.obj.visible = u.visible;
       if (!u.visible) continue;
-      const y = u.kind === 'heli' ? u.pos.y : myLoc < 0 ? groundY(u.pos.x, u.pos.z) : 0.1;
+      // 날아서 쫓는 경찰은 서버가 준 높이 그대로 (날개를 펴고)
+      const y = u.kind === 'heli' || u.flying ? u.pos.y : myLoc < 0 ? groundY(u.pos.x, u.pos.z) : 0.1;
       u.obj.position.set(u.pos.x, y, u.pos.z);
       u.obj.rotation.y = angleLerp(u.obj.rotation.y, u.h, k);
-      if (u.roach) { u.roach.update(dt, u.moving ? 6 : 0, {}); }
+      if (u.roach) { u.roach.flying = !!u.flying; u.roach.update(dt, u.moving ? 6 : 0, { noCrawl: u.flying }); }
       else if (u.kind === 'heli') { const m = u.obj.userData.mesh; m.rotor.rotation.y += dt * 25; m.tail.rotation.x += dt * 35; }
     }
   }
