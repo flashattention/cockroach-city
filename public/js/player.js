@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Roach } from './roach.js';
 import { clamp, angleLerp } from './utils.js';
+import { updateMount } from './animals.js';
 
 export class Player {
   constructor(scene, profile) {
@@ -60,7 +61,7 @@ export class Player {
       this.roach.root.visible = true;
       return;
     }
-    if (this.roach.seated) { this.roach.setSeated(false); this.roach.root.scale.setScalar(this.roach.baseScale); }
+    if (this.roach.seated && !this.mount) { this.roach.setSeated(false); this.roach.riding = false; this.roach.root.scale.setScalar(this.roach.baseScale); }
     this.roach.root.visible = true;
     if (this.climb) { this.updateClimb(dt, input, world); return; }
     const yaw = this.cam.yaw;
@@ -78,7 +79,11 @@ export class Player {
     let speed = 0;
     if (len > 0) {
       mx /= len; mz /= len;
-      speed = this.flying ? (input.run ? 19 : 11) : (input.run || input.moveDir ? 9.5 : 5.2) * (1 + this.speedBonus) * (this.swimming ? 0.55 : 1);
+      const R = this.mount?.ride;
+      if (R) {
+        // 탈것: 동물마다 실제처럼 다른 속도 (물에서는 헤엄 잘 치는 동물만 빠르게)
+        speed = this.flying ? (input.run ? R.flyRun : R.fly) : this.swimming ? (R.swim ? (input.run ? R.swim : R.swim * 0.6) : R.walk * 0.5) : input.run || input.moveDir ? R.run : R.walk;
+      } else speed = this.flying ? (input.run ? 19 : 11) : (input.run || input.moveDir ? 9.5 : 5.2) * (1 + this.speedBonus) * (this.swimming ? 0.55 : 1);
       if (world.tired) speed *= 0.6;
       this.heading = Math.atan2(mx, mz);
     }
@@ -116,8 +121,8 @@ export class Player {
       if (this.pos.y <= gy && this.vy <= 0) { this.pos.y = gy; this.land(); }
       this.onGround = false;
     } else if (input.enabled && input.jumpPressed && !this.flipped) {
-      if (this.onGround) { this.vy = this.jumpV || 7.5; this.onGround = false; this.jumps = 1; this.roach.jumpSquash = 1; }
-      else if (this.jumps < this.maxJumps) { this.vy = (this.jumpV || 7.5) - 0.3; this.jumps++; this.roach.jumpSquash = 1; this.airJump = 0.3; }
+      if (this.onGround) { this.vy = this.mount ? this.mount.ride.jump : this.jumpV || 7.5; this.onGround = false; this.jumps = 1; this.roach.jumpSquash = 1; }
+      else if (this.jumps < (this.mount ? 1 : this.maxJumps)) { this.vy = (this.jumpV || 7.5) - 0.3; this.jumps++; this.roach.jumpSquash = 1; this.airJump = 0.3; }
     }
     if (!this.flying) {
     this.vy -= 22 * dt;
@@ -134,7 +139,7 @@ export class Player {
     this.wallHit = null;
     this.collide(world.colliders);
     // 벽을 향해 계속 걸으면 바퀴벌레답게 벽을 타고 오른다
-    if (this.wallHit && len > 0 && !this.flying && !this.flipped && input.enabled && world.climbable !== false) {
+    if (this.wallHit && len > 0 && !this.flying && !this.flipped && !this.mount && input.enabled && world.climbable !== false) {
       const w = this.wallHit;
       if (mx * w.nx + mz * w.nz < -0.6 && (w.c.top ?? w.c.h ?? 0) > this.pos.y + 1.2) {
         this.wallPush = (this.wallPush || 0) + dt;
@@ -158,8 +163,16 @@ export class Player {
     const root = this.roach.root;
     root.position.copy(this.pos);
     root.rotation.y = angleLerp(root.rotation.y, this.heading, Math.min(1, dt * 14));
-    this.roach.flying = this.flying; this.roach.flipped = this.flipped;
-    this.roach.update(dt, this.dashT > 0 ? 14 : this.speed, { airborne: !this.onGround && (this.airJump > 0 || this.dashT > 0), noCrawl: this.flying });
+    if (this.mount) {
+      // 동물 등에 올라탄 모습 (동물이 걷고 달리고 날개짓)
+      this.roach.flying = false; this.roach.flipped = false;
+      this.mount.mesh.g.visible = true;
+      updateMount(this.mount, this.roach, this.pos, root.rotation.y, dt, { speed: this.dashT > 0 ? 14 : this.speed, flying: this.flying, climb: this.flying && this.vy > 1, breathing: this.breathT > 0, swimY: this.swimming ? world.water - (this.mount.ride.swim ? 0.5 : 0.9) : undefined });
+      this.breathT = Math.max(0, (this.breathT || 0) - dt);
+    } else {
+      this.roach.flying = this.flying; this.roach.flipped = this.flipped;
+      this.roach.update(dt, this.dashT > 0 ? 14 : this.speed, { airborne: !this.onGround && (this.airJump > 0 || this.dashT > 0), noCrawl: this.flying });
+    }
     root.visible = !this.fp && !(this.adsFP && this.aim > 0.75);
   }
 
@@ -226,7 +239,8 @@ export class Player {
 
   updateCamera(camera, dt, world) {
     const c = this.cam;
-    const tgt = this.inCar ? this.inCar.pos.clone().setY((this.inCar.pos.y || 0) + 1.8) : this.pos.clone().setY(this.pos.y + 1.5);
+    const seatH = this.mount ? this.mount.ride.seat * this.mount.scale : 0; // 탈것에 타면 시점도 높아진다
+    const tgt = this.inCar ? this.inCar.pos.clone().setY((this.inCar.pos.y || 0) + 1.8) : this.pos.clone().setY(this.pos.y + 1.5 + seatH * 0.8);
     if (this.inCar) {
       // 차 뒤로 자연스럽게 따라감
       const behind = this.inCar.heading + Math.PI;
@@ -234,7 +248,7 @@ export class Player {
     }
     if (this.snap) c.target.copy(tgt); else c.target.lerp(tgt, Math.min(1, dt * 12));
     // 1인칭 (V): 머리 위치에서 보는 방향 그대로
-    const head = this.pos.clone(); head.y += this.roach.height * 0.85;
+    const head = this.pos.clone(); head.y += this.roach.height * 0.85 + seatH;
     const cp0 = Math.cos(c.pitch);
     const headLook = new THREE.Vector3(head.x - Math.sin(c.yaw) * cp0, head.y - Math.sin(c.pitch), head.z - Math.cos(c.yaw) * cp0);
     if (this.fp && !this.inCar) {
@@ -244,7 +258,7 @@ export class Player {
       this.snap = false;
       return;
     }
-    const dist0 = this.inCar ? Math.max(c.dist, this.inCar.kind === 'heli' || this.inCar.kind === 'tank' ? 16 : this.inCar.kind === 'bus' || this.inCar.kind === 'truck' ? 14 : 11) : c.dist;
+    const dist0 = this.mount ? c.dist + this.mount.scale * this.mount.ride.seat * (this.mount.ride.fly ? 2.2 : 1.4) : this.inCar ? Math.max(c.dist, this.inCar.kind === 'heli' || this.inCar.kind === 'tank' ? 16 : this.inCar.kind === 'bus' || this.inCar.kind === 'truck' ? 14 : 11) : c.dist;
     // 총·활 조준(우클릭)은 1인칭으로 부드럽게 넘어가고, 마법봉 조준은 살짝 가까이
     const dist = this.inCar || this.adsFP ? dist0 : dist0 + (Math.min(dist0, 3.4) - dist0) * this.aim;
     const cp = Math.cos(c.pitch);

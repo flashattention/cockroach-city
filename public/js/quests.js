@@ -16,6 +16,7 @@ export const QUEST_POOL = [
   { id: 'magic5', text: '🪄 마법 5번 쓰기', ev: 'magic', n: 5, xp: 110, money: 30 },
   { id: 'fish3', text: '🎣 물고기 3마리 낚기', ev: 'fish', n: 3, xp: 150, money: 40 },
   { id: 'hunt2', text: '🏹 야생동물 2마리 사냥하기', ev: 'hunt', n: 2, xp: 200, money: 60 },
+  { id: 'capture1', text: '🪢 동물 1마리 포획하기 (체력 절반 아래 → Z)', ev: 'capture', n: 1, xp: 250, money: 80 },
   { id: 'sleep1', text: '😴 푹 자기', ev: 'sleep', n: 1, xp: 60, money: 10 },
 ];
 export const questDef = (id) => QUEST_POOL.find((q) => q.id === id);

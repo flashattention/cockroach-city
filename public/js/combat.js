@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { itemDef, weaponStats, ammoName, ITEMS, SHOPS } from './items.js';
 import { G } from './utils.js';
 import { levelStats } from './level.js';
+import { mouthPos } from './animals.js';
 
 const ELEMENT_COLOR = { fire: '#ff5722', ice: '#4fc3f7', thunder: '#ffee58', wind: '#a5d6a7', poison: '#9ccc65', holy: '#fff59d', dark: '#7e57c2' };
 const BASE_SPREAD = { m4: 0.022, revolver: 0.012, deagle: 0.016, uzi: 0.05, mp5: 0.028, ak47: 0.035, scar: 0.02, m249: 0.045, barrett: 0.003, plasma_smg: 0.025, hunting_rifle: 0.006, pistol: 0.018, blaster: 0.015, rifle: 0.03, blaster_rifle: 0.026, minigun: 0.045, sniper: 0.012 };
@@ -18,6 +19,21 @@ export class FX {
     scene.add(this.flash);
     this.flashT = 0;
     this.holes = [];
+  }
+
+  // 드래곤 불길: 입에서 앞으로 퍼져 나가는 불덩이들
+  breath(from, dir, len = 14) {
+    const d = dir.clone().normalize();
+    for (let i = 0; i < 18; i++) {
+      const col = i % 3 === 0 ? '#ffca28' : i % 3 === 1 ? '#ff6d00' : '#e64a19';
+      const m = new THREE.Mesh(G.sphereLow(), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85, depthWrite: false }));
+      const to = from.clone().addScaledVector(d, len * (0.6 + Math.random() * 0.45)).add(new THREE.Vector3((Math.random() - 0.5) * len * 0.25, (Math.random() - 0.5) * len * 0.18, (Math.random() - 0.5) * len * 0.25));
+      m.position.copy(from); m.scale.setScalar(0.25); m.visible = false;
+      this.scene.add(m);
+      const life = 0.55 + Math.random() * 0.2, delay = i * 0.018;
+      this.items.push({ m, t: life + delay, life: life + delay, delay, from: from.clone(), to, kind: 'fire', s0: (0.18 + Math.random() * 0.15) * Math.max(0.6, len / 14) });
+    }
+    this.flash.position.copy(from); this.flashT = 0.35;
   }
 
   // 총알 자국: 맞은 면(normal)에 총 종류별 탄흔을 붙인다. 45초 뒤 서서히 사라짐
@@ -128,6 +144,14 @@ export class FX {
         const u = Math.min(1, Math.max(0, (it.life - it.t - (it.delay || 0)) / (it.life - (it.delay || 0)) * 1.4));
         it.m.position.copy(it.from).lerp(it.to, u); it.m.position.y += Math.sin(u * Math.PI) * 0.8;
         it.m.material.opacity = Math.min(1, k * 2.5);
+      } else if (it.kind === 'fire') {
+        const el = it.life - it.t;
+        if (el < it.delay) continue;
+        const u = Math.min(1, (el - it.delay) / (it.life - it.delay));
+        it.m.visible = true;
+        it.m.position.copy(it.from).lerp(it.to, u); it.m.position.y += u * u * 0.8;
+        it.m.scale.setScalar(it.s0 * (1 + u * 3));
+        it.m.material.opacity = 0.85 * (1 - u) * (1 - u * 0.3);
       } else if (it.kind === 'smoke') { it.m.position.y += dt * 1.5; it.m.scale.multiplyScalar(1 + dt * 0.6); it.m.material.opacity = 0.7 * k; }
       else it.m.material.opacity = k;
       if (it.t <= 0) { this.scene.remove(it.m); it.m.material.dispose(); this.items.splice(i, 1); }
@@ -285,8 +309,8 @@ export class Combat {
       out.push({ tt: 'unit', id: u.id, base: u.obj.position, r: big ? 2.4 : 0.55, h: big ? 3 : 2 });
     }
     if (g.mode === 'city') for (const a of g.animals?.list || []) {
-      if (!a.visible || !a.alive || a.def.livestock) continue;
-      out.push({ tt: 'animal', id: a.id, base: a.pos, r: a.def.r, h: a.def.h });
+      if (!a.visible || !a.alive || a.gone || a.def.livestock) continue;
+      out.push({ tt: 'animal', id: a.id, base: a.pos, r: a.def.r * (a.mesh?.size || 1), h: a.def.h * (a.mesh?.size || 1) });
     }
     if (g.mode === 'interior') for (const t of g.interior.targets || []) if (t.up) out.push({ tt: 'rtarget', id: t.id, base: t.obj.getWorldPosition(new THREE.Vector3()).setY(t.y0 - t.r), r: t.r, h: t.r * 2, rt: t });
     if (g.mode === 'city') for (const car of g.traffic.cars) {
@@ -407,6 +431,8 @@ export class Combat {
       if (car.kind === 'tank' || car.kind === 'heli') this.vehicleFire(car);
       return;
     }
+    // 드래곤을 타고 있으면 왼쪽 클릭 = 불 뿜기
+    if (g.player.mount?.ride.fly) return this.dragonBreath(g.player.mount);
     const w = this.selectedWeapon();
     if (!w) return;
     const s = weaponStats(w.id, w.gems);
@@ -555,6 +581,28 @@ export class Combat {
       if (r.target) { const k = r.target.tt + r.target.id; hits.set(k, { ...r.target, n: (hits.get(k)?.n || 0) + 1, point: r.point }); }
     }
     for (const h of hits.values()) this.sendHit(h, w, h.tt === 'rtarget' ? { point: h.point } : { n: h.n });
+  }
+
+  dragonBreath(mt) {
+    const g = this.g, p = g.player;
+    const wid = mt.kind === 'dragon' ? 'dragon_fire' : 'baby_dragon_fire';
+    const s = weaponStats(wid, []);
+    this.cool = s.rate;
+    const { d } = this.aimRay();
+    p.heading = Math.atan2(d.x, d.z);
+    const from = mouthPos(mt) || p.pos.clone().setY(p.pos.y + 2);
+    this.fx.breath(from, d, s.range);
+    p.breathT = 0.8;
+    g.net.send({ t: 'fx', k: 'breath', p: [from.x, from.y, from.z], d: [d.x, d.y, d.z], r: s.range });
+    // 불길 원뿔 안의 대상 (최대 6)
+    let n = 0;
+    for (const t of this.targets()) {
+      const c = new THREE.Vector3(t.base.x, t.base.y + t.h / 2, t.base.z).sub(from);
+      const L = c.length();
+      if (L > s.range + t.r || c.normalize().dot(d) < 0.72) continue;
+      this.sendHit(t, { id: wid, gems: [] });
+      if (++n >= 6) break;
+    }
   }
 
   throwGrenade(w, s, d) {
@@ -752,6 +800,7 @@ export class Combat {
     else if (m.k === 'boom') { this.fx.boom(v3(m.p), m.r || 5, m.small); if (!m.small && g.player) g.shake(Math.max(0, 1 - g.player.pos.distanceTo(v3(m.p)) / 40)); }
     else if (m.k === 'proj') this.spawnProj(m.type, v3(m.p), v3(m.v), { id: m.w }, false);
     else if (m.k === 'bolt') this.fx.bolt(v3(m.a), v3(m.b), m.c);
+    else if (m.k === 'breath' && Array.isArray(m.p) && Array.isArray(m.d)) this.fx.breath(v3(m.p), v3(m.d), Math.min(20, +m.r || 14));
     else if (m.k === 'sparkle') this.fx.sparkle(v3(m.p), m.c || '#fff59d', 20, 3);
     else if (m.k === 'cloud') this.fx.cloud(v3(m.p), m.c || '#e8f5e9');
     else if (m.k === 'hearts') { const a = v3(m.a), b = m.b ? v3(m.b) : null; this.fx.hearts(a, b, m.e || '💗'); const p = g.players.list.get(m.pid); p?.roach.flirt(); }

@@ -12,7 +12,7 @@ export class Wildlife {
     this.rng = new RNG(31337);
     this.list = [];
     for (const kind of ANIMAL_KINDS) for (let i = 0; i < ANIMALS[kind].n; i++) {
-      const a = { id: this.list.length, kind, x: 0, z: 0, h: 0, hp: ANIMALS[kind].hp, mv: 0, dead: false, deadT: 0, atkT: 0, t: 0, tx: 0, tz: 0, angry: null, angryT: 0 };
+      const a = { id: this.list.length, kind, x: 0, z: 0, h: 0, ay: 0, hp: ANIMALS[kind].hp, mv: 0, dead: false, deadT: 0, atkT: 0, t: 0, tx: 0, tz: 0, angry: null, angryT: 0, gone: false, breath: 0 };
       this.place(a);
       this.list.push(a);
     }
@@ -42,7 +42,8 @@ export class Wildlife {
   }
   place(a) {
     [a.x, a.z] = this.randomPoint(a.kind);
-    a.tx = a.x; a.tz = a.z; a.hp = ANIMALS[a.kind].hp; a.dead = false; a.angry = null;
+    a.tx = a.x; a.tz = a.z; a.hp = ANIMALS[a.kind].hp; a.dead = false; a.angry = null; a.gone = false;
+    a.ay = ANIMALS[a.kind].fly ? this.rng.range(14, 30) : 0;
   }
 
   inRange(a) {
@@ -50,12 +51,14 @@ export class Wildlife {
   }
 
   tick(dt) {
-    // 차 안이나 하늘에 있는 플레이어는 공격하지 않는다
+    // 땅 동물: 차 안이나 하늘(날기·높은 곳)에 있는 플레이어는 공격하지 않는다. 드래곤은 하늘도 공격
     const outside = [...this.w.players.values()].filter((p) => !p.dead && p.loc < 0 && !p.jailed);
     const players = outside.filter((p) => p.car < 0 && !(p.air & 2) && p.pos.y - terrainH(p.pos.x, p.pos.z) < 3);
+    const flyers = outside.filter((p) => p.car < 0);
     for (const a of this.list) {
       const d = ANIMALS[a.kind];
       if (a.dead) { a.deadT -= dt; if (a.deadT <= 0) this.place(a); continue; }
+      if (d.fly) { this.tickDragon(a, d, dt, outside, flyers); continue; }
       // 가장 가까운 플레이어 (아무도 근처에 없으면 쉬고 있는다 → 서버 부담 ↓)
       let tgt = null, td = 1e9;
       let near = 1e9;
@@ -72,7 +75,8 @@ export class Wildlife {
       } else if (d.hostile && tgt && (td < d.aggro || (a.angry && a.angryT > 0)) && td < 60) {
         // 맹수: 쫓아가서 공격
         a.tx = tgt.pos.x; a.tz = tgt.pos.z; speed = d.run;
-        if (td < d.r + 1.4) {
+        // 같은 높이에 있을 때만 문다 (위에 있으면 못 닿는다)
+        if (td < d.r + 1.4 && Math.abs(tgt.pos.y - terrainH(a.x, a.z)) < 2.5) {
           speed = 0;
           if (a.atkT <= 0) {
             a.atkT = 1.4;
@@ -93,6 +97,8 @@ export class Wildlife {
         if (!this.inRange(a)) [a.tx, a.tz] = this.randomPoint(a.kind);
       }
       a.attacking = Math.max(0, (a.attacking || 0) - dt);
+      // 체력이 절반 아래면 지쳐서 느릿느릿 → 포획 기회
+      if (!d.livestock && a.hp <= d.hp * 0.5) speed = Math.min(speed, d.speed * 0.6);
       const dx = a.tx - a.x, dz = a.tz - a.z, L = Math.hypot(dx, dz);
       if (L > 0.5 && speed > 0) {
         mx = dx / L; mz = dz / L;
@@ -107,15 +113,87 @@ export class Wildlife {
     }
   }
 
+  // 드래곤: 협곡 하늘을 돌다가 플레이어(날고 있어도)를 보면 다가가 불을 뿜는다.
+  // 체력이 절반 아래로 떨어지면 지쳐서 땅에 내려앉는다 → 포획 기회
+  tickDragon(a, d, dt, outside, flyers) {
+    let near = 1e9;
+    for (const p of outside) near = Math.min(near, Math.hypot(p.pos.x - a.x, p.pos.z - a.z));
+    if (near > 320) { a.mv = 0; return; }
+    a.atkT -= dt; a.angryT -= dt; a.t -= dt; a.breath = Math.max(0, a.breath - dt);
+    const tired = a.hp <= d.hp * 0.5;
+    const gy = Math.max(terrainH(a.x, a.z), WATER_Y);
+    const eye = (p) => Math.hypot(p.pos.x - a.x, p.pos.z - a.z, p.pos.y - (gy + a.ay + d.h * 0.5));
+    let tgt = null, td = 1e9;
+    for (const p of flyers) { const dd = eye(p); if (dd < td) { td = dd; tgt = p; } }
+    if (a.angry && a.angryT > 0) { const p = this.w.players.get(a.angry); if (p && flyers.includes(p)) { tgt = p; td = eye(p); } }
+    let wantY, speed;
+    if (tired) {
+      // 지쳐서 내려앉아 천천히 걷는다
+      wantY = 0; speed = d.speed * 0.5;
+      if (a.t <= 0) { a.t = this.rng.range(4, 9); a.tx = a.x + this.rng.range(-12, 12); a.tz = a.z + this.rng.range(-12, 12); }
+      if (tgt && td < 9 && a.atkT <= 0) this.breathe(a, d, tgt, d.dmg * 0.6);
+    } else if (tgt && (td < d.aggro || (a.angry && a.angryT > 0)) && td < 90) {
+      // 대상 옆 9m 정도에서 맴돌며 불 뿜기
+      const pg = terrainH(tgt.pos.x, tgt.pos.z);
+      wantY = Math.max(6, tgt.pos.y - pg + 4);
+      const dx = a.x - tgt.pos.x, dz = a.z - tgt.pos.z, L = Math.hypot(dx, dz) || 1;
+      a.tx = tgt.pos.x + (dx / L) * 9; a.tz = tgt.pos.z + (dz / L) * 9; speed = d.run;
+      if (td < 16 && a.atkT <= 0) this.breathe(a, d, tgt, d.dmg);
+      a.h = Math.atan2(tgt.pos.x - a.x, tgt.pos.z - a.z);
+    } else {
+      wantY = a.wantY ?? 22; speed = d.speed;
+      if (a.t <= 0 || Math.hypot(a.tx - a.x, a.tz - a.z) < 3) {
+        a.t = this.rng.range(6, 14); a.wantY = this.rng.chance(0.2) ? 0 : this.rng.range(14, 34);
+        [a.tx, a.tz] = this.rng.chance(0.5) ? this.randomPoint(a.kind) : [a.x + this.rng.range(-60, 60), a.z + this.rng.range(-60, 60)];
+      }
+      if (!this.inRange(a)) [a.tx, a.tz] = this.randomPoint(a.kind);
+    }
+    a.ay += Math.max(-6 * dt, Math.min(7 * dt, wantY - a.ay));
+    a.ay = Math.max(0, a.ay);
+    const dx = a.tx - a.x, dz = a.tz - a.z, L = Math.hypot(dx, dz);
+    if (L > 0.8) {
+      const st = Math.min(L, speed * dt);
+      const nx = a.x + (dx / L) * st, nz = a.z + (dz / L) * st;
+      if (Math.abs(nx) < HALF + 25 && Math.abs(nz) < HALF + 25) { a.t = 0; a.tx = a.x - dx; a.tz = a.z - dz; }
+      else { a.x = nx; a.z = nz; if (!tgt || td >= 16) a.h = Math.atan2(dx, dz); }
+      a.mv = speed > d.speed + 0.5 ? 2 : 1;
+    } else a.mv = 0;
+  }
+  breathe(a, d, p, dmg) {
+    a.atkT = 2.6; a.breath = 0.9; a.attacking = 0.9;
+    this.w.combat.damagePlayer(p, dmg, { name: `${d.emoji} ${d.name}의 불길` }, { x: a.x, y: 0, z: a.z });
+  }
+
+  // 포획: 체력이 절반 이하(가축은 언제나)일 때 타이밍을 맞추면 성공 → 가방에 탈것으로
+  capture(p, id, ok) {
+    const a = this.list[id];
+    if (!a || a.dead || p.dead || p.loc >= 0 || p.car >= 0) return;
+    const d = ANIMALS[a.kind];
+    if (Date.now() - (p.lastCapture || 0) < 1200) return;
+    p.lastCapture = Date.now();
+    const ay = terrainH(a.x, a.z) + a.ay;
+    if (Math.hypot(a.x - p.pos.x, a.z - p.pos.z, (p.pos.y - ay) * 0.5) > d.r * (d.size || 1) + 13) { this.w.send(p, { t: 'captureFail', reason: '너무 멀어요! 더 가까이 가세요' }); return; }
+    if (!d.livestock && a.hp > d.hp * 0.5) { this.w.send(p, { t: 'captureFail', reason: '아직 너무 쌩쌩해요. 체력을 절반 아래로 깎아요' }); return; }
+    if (!ok) {
+      a.angry = p.id; a.angryT = 20;
+      this.w.send(p, { t: 'captureFail', reason: `${d.emoji} 타이밍이 빗나갔어요! ${d.name}이(가) 화났어요` });
+      return;
+    }
+    a.dead = true; a.gone = true; a.deadT = 120; a.mv = 0;
+    this.w.send(p, { t: 'captured', kind: a.kind });
+    if (d.xp) this.w.send(p, { t: 'xp', v: Math.round(d.xp * 1.2), reason: `${d.emoji} ${d.name} 포획` });
+    if (d.fly || ['tiger', 'bear', 'jaguar', 'croc', 'anaconda'].includes(a.kind)) this.w.broadcast({ t: 'sys', text: `🪢 ${p.name}님이 ${d.emoji} ${d.name}을(를) 포획했어요!` });
+  }
+
   // 사냥 (플레이어가 때림)
   damage(a, dmg, p) {
     const d = ANIMALS[a.kind];
     if (a.dead || d.livestock) return false;
     a.hp -= dmg;
     a.angry = p.id; a.angryT = 25;
-    this.w.broadcast({ t: 'fx', k: 'dmgnum', p: [a.x, terrainH(a.x, a.z) + d.h + 0.8, a.z], v: Math.round(dmg), loc: -1 });
+    this.w.broadcast({ t: 'fx', k: 'dmgnum', p: [a.x, terrainH(a.x, a.z) + a.ay + d.h * (d.size || 1) + 0.8, a.z], v: Math.round(dmg), loc: -1 });
     if (a.hp > 0) return true;
-    a.dead = true; a.deadT = 90; a.mv = 0;
+    a.dead = true; a.deadT = d.fly ? 240 : 90; a.mv = 0; a.ay = 0;
     const y = Math.max(terrainH(a.x, a.z), WATER_Y) + 0.1;
     for (const [id, n, chance] of d.loot) if (this.rng.chance(chance)) this.w.combat.dropItem({ id, n, gems: [] }, a.x + this.rng.range(-1, 1), y, a.z + this.rng.range(-1, 1), -1, 180);
     this.w.send(p, { t: 'xp', v: d.xp, reason: `${d.emoji} ${d.name} 사냥` });
@@ -123,14 +201,15 @@ export class Wildlife {
     return true;
   }
 
-  // 플레이어 근처의 동물만 보낸다 [id, x, z, 방향, 움직임, 체력%, 상태]
+  // 플레이어 근처의 동물만 보낸다 [id, x, z, 방향, 움직임, 체력%, 상태, 공중 높이]
+  // 상태: 1 쓰러짐, 2 공격 중, 4 불 뿜는 중, 8 포획돼 사라짐
   snap() {
     const players = [...this.w.players.values()].filter((p) => p.loc < 0 && (Math.abs(p.pos.x) > HALF - 80 || Math.abs(p.pos.z) > HALF - 80));
     if (!players.length) return [];
     const out = [];
     for (const a of this.list) {
-      if (!players.some((p) => Math.abs(p.pos.x - a.x) < 260 && Math.abs(p.pos.z - a.z) < 260)) continue;
-      out.push(a.id, q(a.x), q(a.z), q(a.h, 100), a.mv, Math.round((a.hp / ANIMALS[a.kind].hp) * 100), (a.dead ? 1 : 0) | (a.attacking > 0 ? 2 : 0));
+      if (!players.some((p) => Math.abs(p.pos.x - a.x) < 300 && Math.abs(p.pos.z - a.z) < 300)) continue;
+      out.push(a.id, q(a.x), q(a.z), q(a.h, 100), a.mv, Math.round((a.hp / ANIMALS[a.kind].hp) * 100), (a.dead ? 1 : 0) | (a.attacking > 0 ? 2 : 0) | (a.breath > 0 ? 4 : 0) | (a.gone ? 8 : 0), q(a.ay));
     }
     return out;
   }

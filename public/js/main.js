@@ -21,7 +21,8 @@ import { dailyQuests, questDef } from './quests.js';
 import { SPORT_KINDS, vehicleName, CAR_KINDS, BIKES } from './traffic.js';
 import { DROP_POOL, FISH } from './items.js';
 import { buildWilds, renderWorldImage } from './wilds.js';
-import { AnimalsView } from './animals.js';
+import { AnimalsView, makeMount } from './animals.js';
+import { ANIMALS, ANIMAL_KINDS } from './fauna.js';
 import { TVScreen, CHANNELS } from './tv.js';
 import { WORLD_HALF, WATER_Y, regionAt } from './terrain.js';
 
@@ -327,6 +328,12 @@ function buildWorld(w) {
   city.groundY = (x, z, y) => (Math.abs(x) <= HALF && Math.abs(z) <= HALF ? cityGround(x, z) : wild.groundY(x, z, y));
   game.worldImage = renderWorldImage(wild.grid);
   game.animals = new AnimalsView(scene, w.animals || [], city.groundY);
+  // 야생 드래곤이 불을 뿜으면: 가까운 나를 향해, 아니면 앞쪽 아래로
+  game.animals.onBreath = (from, a) => {
+    const me = game.player?.pos;
+    const dir = me && me.distanceTo(from) < 30 ? me.clone().setY(me.y + 1).sub(from) : new THREE.Vector3(Math.sin(a.h), -0.35, Math.cos(a.h));
+    game.combat.fx.breath(from, dir, a.kind === 'dragon' ? 16 : 11);
+  };
   for (const key of w.smashed || []) smashProp(key, [1, 0], true);
   sim.city = city;
   game.city = city; game.sim = sim;
@@ -523,6 +530,16 @@ function setupNet() {
     game.stars = m.stars;
   });
   net.on('arrested', (m) => goToJail(m));
+  net.on('captured', (m) => {
+    const d = ANIMALS[m.kind];
+    if (!d) return;
+    game.inv.add('mount_' + m.kind, 1);
+    game.stats.captured = (game.stats.captured || 0) + 1;
+    game.questEvent('capture');
+    ui.lootBanner(`🪢 ${d.emoji} ${d.name} 포획 성공!`, '가방(I)의 탈것을 핫바에 놓고 쓰면 올라타요 · F로 내리기', '#8d6e63', '');
+    game.sendProfile();
+  });
+  net.on('captureFail', (m) => ui.toast('🪢 ' + (m.reason || '포획 실패')));
   net.on('released', () => releaseFromJail());
   // 바닥 아이템
   net.on('gdrop', (m) => game.ground.add(m.g));
@@ -623,7 +640,7 @@ function sendState() {
   const car = p.inCar;
   game.net.send({
     t: 'st', x: +p.pos.x.toFixed(2), y: +p.pos.y.toFixed(2), z: +p.pos.z.toFixed(2), h: +p.heading.toFixed(2), s: +p.speed.toFixed(1),
-    a: (p.onGround ? 0 : 1) | (p.flying ? 2 : 0) | (p.flipped ? 4 : 0), loc: game.loc(),
+    a: (p.onGround ? 0 : 1) | (p.flying ? 2 : 0) | (p.flipped ? 4 : 0), loc: game.loc(), mt: p.mount ? ANIMAL_KINDS.indexOf(p.mount.kind) : -1,
     car: car ? [+car.pos.x.toFixed(2), +car.pos.z.toFixed(2), +car.heading.toFixed(2), +car.speed.toFixed(1), +(car.pos.y || 0).toFixed(2), +(car.turret || 0).toFixed(2)] : null,
   });
 }
@@ -674,7 +691,8 @@ window.addEventListener('keydown', (e) => {
   }
   if (/^Digit[0-9]$/.test(e.code)) { const n = +e.code.slice(5); game.inv.select(n === 0 ? 9 : n - 1); }
   if (e.code === 'KeyE' && !e.repeat) interact();
-  if (e.code === 'KeyF' && !e.repeat) toggleCar();
+  if (e.code === 'KeyF' && !e.repeat) { if (game.player.mount) dismount(true); else toggleCar(); }
+  if (e.code === 'KeyZ' && !e.repeat) startCapture();
   if (e.code === 'KeyQ' && !e.repeat) dropSelected();
   if (e.code === 'KeyC' && !e.repeat) game.input.dashPressed = true;
   if (e.code === 'KeyR' && !e.repeat) toggleAutoWalk();
@@ -684,7 +702,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyB' && !e.repeat) flirt();
   if (e.code === 'KeyP' && !e.repeat) game.takePhoto?.();
 });
-window.addEventListener('keyup', (e) => { const k = KEYMAP[e.code]; if (k) game.input[k] = false; });
+window.addEventListener('keyup', (e) => { const k = KEYMAP[e.code]; if (k) game.input[k] = false; if (e.code === 'KeyZ') releaseCapture(); });
 function clearKeys() { for (const k of Object.values(KEYMAP)) game.input[k] = false; game.combat?.trigger(false); }
 window.addEventListener('blur', clearKeys);
 
@@ -725,6 +743,9 @@ game.releaseMouse = () => { if (document.pointerLockElement) document.exitPointe
 function useSelected(down) {
   const it = game.inv.selected();
   const d = it ? itemDef(it.id) : null;
+  // 드래곤을 타고 있으면 클릭 = 불 뿜기 (탈것 아이템으로 올라타기만)
+  const mt = game.player.mount;
+  if (mt?.ride.fly && !(d?.cat === 'mount' && d.mount !== mt.kind)) { game.combat.trigger(down); return; }
   if (game.player.inCar || !d || ['melee', 'gun', 'throw', 'launcher', 'wand'].includes(d.cat)) { game.combat.trigger(down); return; }
   if (!down) return;
   if (d.cat === 'food') {
@@ -733,6 +754,8 @@ function useSelected(down) {
     eatFood(it.id, 2.6, false);
   } else if (d.cat === 'rod') {
     fishAction(d);
+  } else if (d.cat === 'mount') {
+    toggleMount(d.mount, it);
   } else if (d.cat === 'carkey') {
     summonCar(it);
   } else if (d.cat === 'key') {
@@ -1113,6 +1136,77 @@ function summonCar(it) {
 }
 
 // ------------------------------------------------------------------
+// 동물 포획 (Z 꾹 → 타이밍 맞춰 떼기) · 탈것
+// ------------------------------------------------------------------
+function startCapture() {
+  if (!game.started || game.mode !== 'city' || game.catching || game.player.inCar || game.dead) return;
+  const p = game.player;
+  const a = game.animals.nearestCapturable(p.pos, 10);
+  if (!a) {
+    const any = game.animals.nearest(p.pos, 12);
+    ui.toast(any && any.alive ? `${any.def.emoji} ${any.def.name}은(는) 아직 쌩쌩해요. 체력을 절반 아래로 깎으면 포획할 수 있어요` : '🪢 근처에 포획할 동물이 없어요 (10m 안)');
+    return;
+  }
+  // 강한 동물일수록 바늘이 빠르고 초록칸이 좁다
+  const hp = a.def.hp;
+  game.catching = { a, t: 0, speed: 0.55 + hp / 900, zone: 0.25 + Math.random() * 0.5, width: Math.max(0.08, Math.min(0.3, 0.34 - hp / 4500)), needle: 0 };
+  if (!game.rope) {
+    game.rope = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: '#d7a86e' }));
+    game.rope.frustumCulled = false; scene.add(game.rope);
+  }
+  game.rope.visible = true;
+}
+function updateCapture(dt) {
+  const C = game.catching;
+  if (!C) return;
+  const p = game.player, a = C.a;
+  if (!a.alive || a.gone || !a.visible || Math.hypot(a.pos.x - p.pos.x, a.pos.z - p.pos.z) > 16) { cancelCapture('🪢 동물이 너무 멀어졌어요'); return; }
+  C.t += dt;
+  C.needle = 0.5 - 0.5 * Math.cos(C.t * C.speed * Math.PI * 2);
+  ui.captureMeter(C);
+  const pa = game.rope.geometry.attributes.position;
+  pa.setXYZ(0, p.pos.x, p.pos.y + 1.2 + (p.mount ? p.mount.ride.seat * p.mount.scale : 0), p.pos.z);
+  pa.setXYZ(1, a.pos.x, a.pos.y + a.def.h * (a.mesh?.size || 1) * 0.7, a.pos.z);
+  pa.needsUpdate = true;
+}
+function cancelCapture(msg) {
+  game.catching = null; ui.captureMeter(null);
+  if (game.rope) game.rope.visible = false;
+  if (msg) ui.toast(msg);
+}
+function releaseCapture() {
+  const C = game.catching;
+  if (!C) return;
+  const ok = Math.abs(C.needle - C.zone) <= C.width / 2;
+  game.net.send({ t: 'capture', id: C.a.id, ok });
+  cancelCapture(ok ? '🪢 휙! 밧줄을 던졌어요…' : null);
+}
+game.startCapture = startCapture; game.releaseCapture = releaseCapture; game.toggleMount = (k) => toggleMount(k); // 테스트용
+
+function toggleMount(kind, it) {
+  const p = game.player;
+  if (p.mount?.kind === kind) { if (!p.mount.ride.fly) dismount(true); return; }
+  if (game.mode !== 'city' || p.inCar) { ui.toast('🐾 탈것은 바깥에서만 탈 수 있어요'); return; }
+  if (p.mount) dismount(false);
+  const variant = it?.uid ? [...it.uid].reduce((s, ch) => s + ch.charCodeAt(0), 0) : 0;
+  p.mount = makeMount(kind, variant);
+  scene.add(p.mount.mesh.g);
+  const d = ANIMALS[kind];
+  ui.toast(p.mount.ride.fly ? `${d.emoji} ${d.name}에 올라탔어요! Space 두 번 = 날기 · 클릭 = 불 뿜기 · F = 내리기` : `${d.emoji} ${d.name}에 올라탔어요! Shift로 달리기 · F = 내리기`);
+  sendState();
+}
+function dismount(say) {
+  const p = game.player;
+  if (!p.mount) return;
+  scene.remove(p.mount.mesh.g);
+  if (say) ui.toast(`${p.mount.def.emoji} ${p.mount.def.name}에서 내렸어요`);
+  p.mount = null;
+  p.roach.setSeated(false); p.roach.riding = false;
+  p.roach.root.scale.setScalar(p.roach.baseScale);
+  sendState();
+}
+
+// ------------------------------------------------------------------
 // 체포 → 경찰차 이송 → 교도소
 // ------------------------------------------------------------------
 async function goToJail(m) {
@@ -1278,6 +1372,8 @@ function allBadges() {
   if (game.myHomes.length > 1) out.push({ key: 'homes', text: `🏘️집 ${game.myHomes.length}채` });
   if (S.skills.includes('jump3')) out.push({ key: 'dojang', text: '🥋무릉고수' });
   if ((S.rangeBest || 0) >= 800) out.push({ key: 'sniper', text: '🎯명사수' });
+  if (S.captured) out.push({ key: 'captured', text: `🪢포획 ${S.captured}마리` });
+  if (S.items.some((it) => it.id === 'mount_dragon')) out.push({ key: 'dragon', text: '🐉드래곤 라이더' });
   if (S.items.some((it) => it.id === 'deer_trophy')) out.push({ key: 'trophy', text: '🦌사슴 트로피' });
   return out;
 }
@@ -1295,6 +1391,7 @@ function computeBadges() {
 function toggleFly() {
   const p = game.player;
   if (p.inCar) return;
+  if (p.mount && !p.mount.ride.fly) { ui.toast(`${p.mount.def.emoji} ${p.mount.def.name}은(는) 날 수 없어요. F로 내려서 날아요`); return; }
   if (p.flying) { p.flying = false; p.vy = 0; p.onGround = false; p.jumps = p.maxJumps; ui.toast('🪽 날개를 접었어요 — 떨어진다!'); return; }
   if (p.takeOff()) ui.toast('🪽 날기! Space 꾹 위로 · X 아래로 · Shift 빠르게 · Space 두 번 = 날개 접기');
 }
@@ -1814,7 +1911,11 @@ function frame() {
   game.animals.viewDist = far ? 220 * Math.min(3, game.zoomNow / 2) : 220;
   if (p.inCar) { seatRoach(p.roach, p.inCar); p.roach.update(dt, 0, {}); }
   game.citizens.update(dt, camera.position, game.loc());
-  game.animals.update(dt, camera.position, !indoor);
+  game.animals.camQuat = camera.quaternion;
+  game.animals.update(dt, camera.position, !indoor, p.pos);
+  // 탈것: 건물·차·감옥·죽음이면 내린다
+  if (p.mount && (indoor || p.inCar || game.dead || game.jail)) dismount(false);
+  updateCapture(dt);
   if (!indoor) game.wild.update(camera.position);
   // 지역에 들어서면 알려준다
   if ((game.regionT = (game.regionT || 0) - dt) <= 0) {
@@ -1822,7 +1923,7 @@ function frame() {
     const r = indoor ? null : regionAt(p.pos.x, p.pos.z);
     if ((r?.id || null) !== (game.region || null)) {
       game.region = r?.id || null;
-      if (r) ui.lootBanner(`${r.emoji} ${r.name}`, { forest: '곰·늑대·사슴이 사는 숲 — 조심하세요!', swamp: '악어가 숨어 있어요 🐊', jungle: '호랑이 출몰 지역 🐯', amazon: '아나콘다와 재규어의 땅 🐍🐆', island: '대교 건너 평화로운 목장 마을', mountain: '바퀴산 — 정상은 눈으로 덮여 있어요', valley: '맑은 강이 흐르는 계곡', meadow: '사슴과 토끼가 뛰노는 들판', sea: '' }[r.id] || '', '#43a047', '');
+      if (r) ui.lootBanner(`${r.emoji} ${r.name}`, { forest: '곰·늑대·사슴이 사는 숲 — 조심하세요!', swamp: '악어가 숨어 있어요 🐊', jungle: '호랑이 출몰 지역 🐯', amazon: '아나콘다와 재규어의 땅 🐍🐆', island: '대교 건너 평화로운 목장 마을', dragon: '🔥 불 뿜는 드래곤이 하늘을 지배하는 협곡! 체력을 절반 깎고 Z로 포획해 타 보세요', mountain: '바퀴산 — 정상은 눈으로 덮여 있어요', valley: '맑은 강이 흐르는 계곡', meadow: '사슴과 토끼가 뛰노는 들판', sea: '' }[r.id] || '', '#43a047', '');
     }
   }
   game.players.update(dt, game.loc(), game.traffic);

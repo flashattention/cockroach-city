@@ -554,3 +554,12 @@ kbd { background: #fff; color: #4a3428; border-radius: 5px; padding: 0 6px; bord
 #online-bar .oc.me { background: #fff3c4; color: #4e342e; cursor: default; }
 #online-bar .oc.cnt { background: #5c6bc0; color: #fff; cursor: default; }
 @media (max-width: 900px) { #online-bar { top: 14px; left: 14px; right: 150px; } }
+
+/* 동물 포획 타이밍 막대 */
+#cap-meter { position: fixed; left: 50%; bottom: 150px; transform: translateX(-50%); width: min(420px, 90vw); background: rgba(38,50,56,.92); color: #fff; border-radius: 16px; padding: 10px 16px 12px; z-index: 31; font-family: 'Jua'; text-align: center; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+#cap-meter .cm-t { font-size: 18px; margin-bottom: 8px; }
+#cap-meter .cm-bar { position: relative; height: 22px; background: #546e7a; border-radius: 11px; overflow: hidden; }
+#cap-meter .cm-zone { position: absolute; top: 0; bottom: 0; background: #66bb6a; box-shadow: 0 0 12px #a5d6a7 inset; }
+#cap-meter .cm-needle { position: absolute; top: -2px; bottom: -2px; width: 6px; margin-left: -3px; background: #ffd54f; border-radius: 3px; box-shadow: 0 0 8px #ffd54f; }
+#cap-meter .cm-needle.in { background: #ffffff; box-shadow: 0 0 12px #fff; }
+#cap-meter .cm-s { font-size: 13px; opacity: .85; margin-top: 6px; }

@@ -1,5 +1,6 @@
 // 아이템 데이터베이스 (서버와 브라우저 공용)
 import { BASIC_ITEMS } from './look.js';
+import { ANIMALS, RIDE } from './fauna.js';
 // cat: melee | gun | throw | launcher | vehicle | head | face | body | acc | food | doll | gift | gem
 // slot: 장착 부위 (head/face/body/acc), vis: 캐릭터에 그려질 모습, held: 손에 드는 모습
 // 무기: dmg 피해, rate 공격 간격(초), range 사거리, kind 공격 방식, sockets 보석 칸
@@ -207,6 +208,12 @@ export const ITEMS = {
   tiger_meat: { name: '호랑이고기', emoji: '🥩', cat: 'food', price: 0, sell: 120, stack: true, food: { hunger: 65, fun: 15 }, heal: 30, eat: ['drumstick', 'drumstick:#b7472a'] },
   snake_skin: { name: '아나콘다 가죽', emoji: '🐍', cat: 'loot', price: 0, sell: 1000, stack: true },
   jaguar_pelt: { name: '재규어 가죽', emoji: '🐆', cat: 'loot', price: 0, sell: 1100, stack: true },
+  dragon_scale: { name: '드래곤 비늘', emoji: '🐉', cat: 'loot', price: 0, sell: 2500, stack: true },
+  dragon_heart: { name: '드래곤의 심장', emoji: '❤️‍🔥', cat: 'loot', price: 0, sell: 6000, stack: true },
+  baby_dragon_scale: { name: '새끼 드래곤 비늘', emoji: '🐲', cat: 'loot', price: 0, sell: 900, stack: true },
+  // 드래곤을 타고 있을 때 왼쪽 클릭: 불 뿜기 (상점에서 팔지 않음)
+  dragon_fire: { name: '드래곤 불꽃', emoji: '🔥', cat: 'melee', price: 0, dmg: 46, rate: 1.1, range: 16, kind: 'melee', element: 'fire', hidden: true },
+  baby_dragon_fire: { name: '새끼 드래곤 불꽃', emoji: '🔥', cat: 'melee', price: 0, dmg: 24, rate: 0.9, range: 11, kind: 'melee', element: 'fire', hidden: true },
   hunting_rifle: { name: '사냥용 엽총', emoji: '🔫', cat: 'gun', shop: 'hunter', price: 1800, dmg: 55, rate: 1.1, range: 110, ammo: 'ammo_762', kind: 'hitscan', held: 'sniper', sockets: 1 },
   hunter_bow: { name: '사냥꾼의 활', emoji: '🏹', cat: 'gun', shop: 'hunter', price: 900, dmg: 34, rate: 0.85, range: 70, kind: 'arrow', ammo: 'arrow', held: 'bow', sockets: 1 },
   hunter_knife: { name: '사냥칼', emoji: '🔪', cat: 'melee', shop: 'hunter', price: 250, dmg: 22, rate: 0.4, range: 2.0, kind: 'melee', held: 'knife', sockets: 1 },
@@ -267,6 +274,11 @@ export const DEALER_CARS = [
   // 이륜차
   ['sportbike', '🏍️', 18000], ['chopper', '🏍️', 12000], ['motorcycle', '🏍️', 7000], ['scooter', '🛵', 2500], ['bicycle', '🚲', 400],
 ];
+// 포획한 동물: 가방에 '탈것'으로 들고 다니다가 핫바에서 쓰면 올라탄다
+for (const [k, a] of Object.entries(ANIMALS)) {
+  if (!RIDE[k]) continue;
+  ITEMS['mount_' + k] = { name: `${a.name} (탈것)`, emoji: a.emoji, cat: 'mount', mount: k, price: 0, sell: Math.round((a.xp || 30) * 12), desc: RIDE[k].fly ? '하늘을 날고 불을 뿜어요' : '타고 달릴 수 있어요' };
+}
 // 총알·화살 없이 쏜다: 무기의 탄약 표시를 지우고, 탄약 상품은 팔지 않는다 (낚시 미끼만 남김)
 export const NO_AMMO = new Set(Object.keys(ITEMS).filter((id) => ITEMS[id].cat === 'ammo' && id !== 'bait'));
 for (const d of Object.values(ITEMS)) delete d.ammo;

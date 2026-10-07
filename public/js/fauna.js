@@ -13,5 +13,27 @@ export const ANIMALS = {
   cow: { name: '젖소', emoji: '🐄', hp: 150, speed: 1.2, livestock: true, pen: [882, -358, 978, -62], n: 10, r: 1.2, h: 1.6 },
   sheep: { name: '양', emoji: '🐑', hp: 80, speed: 1.3, livestock: true, pen: [1022, -358, 1118, -102], n: 12, r: 0.8, h: 1.1 },
   horse: { name: '말', emoji: '🐎', hp: 160, speed: 2.2, livestock: true, pen: [882, -358, 978, -62], n: 6, r: 1.1, h: 2.0 },
+  // 드래곤 협곡: 하늘을 날며 불을 뿜는다 (fly: 날기, fire: 불 뿜기). 체력이 절반 아래로 떨어지면 지쳐서 땅에 내려앉는다
+  dragon: { name: '드래곤', emoji: '🐉', hp: 1200, speed: 6, run: 16, dmg: 30, aggro: 34, hostile: true, fly: true, fire: true, region: ['dragon'], loot: [['dragon_scale', 2, 1], ['dragon_heart', 1, 0.5]], n: 5, xp: 500, r: 2.6, h: 3.6, size: 1.6 },
+  baby_dragon: { name: '새끼 드래곤', emoji: '🐲', hp: 380, speed: 5, run: 13, dmg: 13, aggro: 24, hostile: true, fly: true, fire: true, region: ['dragon'], loot: [['baby_dragon_scale', 1, 1]], n: 7, xp: 160, r: 1.3, h: 1.8, size: 0.75 },
+};
+
+// 포획해서 타고 다닐 때: walk/run 땅 속도(m/s), jump 점프력, swim 헤엄 속도, fly/flyRun 날기 속도, seat 등 높이(크기 1 기준), scale 탈 때 크기
+// 실제 동물처럼: 말·재규어·사슴이 가장 빠르고, 곰·멧돼지는 묵직하게, 악어·아나콘다는 물에서 빠르다
+export const RIDE = {
+  bear: { walk: 4.5, run: 11, jump: 7, seat: 1.7 },
+  deer: { walk: 5.5, run: 15, jump: 12, seat: 1.68 },
+  wolf: { walk: 5.5, run: 13.5, jump: 9.5, seat: 1.12, scale: 1.2 },
+  boar: { walk: 4.5, run: 11, jump: 6.5, seat: 1.08, scale: 1.2 },
+  rabbit: { walk: 4.5, run: 12, jump: 13, seat: 0.5, scale: 1.9, hop: true },
+  croc: { walk: 3, run: 6, jump: 4, swim: 9, seat: 0.56 },
+  tiger: { walk: 5.5, run: 15, jump: 10, seat: 1.24 },
+  anaconda: { walk: 3, run: 6.5, jump: 3, swim: 8, seat: 0.48, slither: true },
+  jaguar: { walk: 5.5, run: 16, jump: 11, seat: 1.22 },
+  cow: { walk: 3.5, run: 8.5, jump: 5.5, seat: 1.7 },
+  sheep: { walk: 3.5, run: 8, jump: 6.5, seat: 1.42 },
+  horse: { walk: 6, run: 18, jump: 10, seat: 1.9 },
+  dragon: { walk: 4.5, run: 9, jump: 9, fly: 17, flyRun: 30, seat: 1.95 },
+  baby_dragon: { walk: 4, run: 8, jump: 8, fly: 12, flyRun: 20, seat: 1.95 },
 };
 export const ANIMAL_KINDS = Object.keys(ANIMALS);

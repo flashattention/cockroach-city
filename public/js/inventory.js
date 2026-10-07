@@ -59,7 +59,7 @@ export class Inventory {
       this.S.items.push(it);
       if (!d.stack) for (let i = 1; i < n; i++) this.S.items.push({ uid: uid(), id, n: 1, gems: [] });
       // 쓸 수 있는 물건은 빈 핫바 칸에 자동 등록
-      if (isWeapon(d) || ['food', 'doll', 'rod', 'carkey'].includes(d.cat)) {
+      if (isWeapon(d) || ['food', 'doll', 'rod', 'carkey', 'mount'].includes(d.cat)) {
         const empty = this.S.hotbar.indexOf(null);
         if (empty >= 0) this.S.hotbar[empty] = it.uid;
       }

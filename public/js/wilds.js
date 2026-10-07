@@ -6,9 +6,10 @@ import { WORLD_HALF, WATER_Y, BRIDGE, REGIONS, ROADS, regionAt, buildHeightGrid,
 import { Props, defineCommonProps } from './props.js';
 import { toon, signMesh, RNG } from './utils.js';
 
+const CANYON = ['#b5603a', '#d08850', '#9c4a2e', '#c4733f', '#8a3f28'];
 const BIOME_COL = {
   mountain: ['#7c8a5e', '#8d8d7d', '#f5f7fa'], valley: ['#6fae5e'], forest: ['#3f7d36'], meadow: ['#9ccc65'],
-  swamp: ['#5b6e3f'], jungle: ['#2f7a32'], amazon: ['#235f27'], island: ['#a5d36f'], sea: ['#d9c58f'], none: ['#93c96f'],
+  swamp: ['#5b6e3f'], jungle: ['#2f7a32'], amazon: ['#235f27'], island: ['#a5d36f'], dragon: ['#c98a5a'], sea: ['#d9c58f'], none: ['#93c96f'],
 };
 
 export function buildWilds(scene, city) {
@@ -37,6 +38,7 @@ export function buildWilds(scene, city) {
     c.offsetHSL(0, 0, (fbm(x * 0.03, z * 0.03) - 0.5) * 0.12);
     if (h < WATER_Y + 0.6) c.lerp(r?.id === 'swamp' ? mud : sand, 0.85);
     if (r?.id === 'mountain' || r?.id === 'valley') { if (h > 45) c.lerp(rock, Math.min(1, (h - 45) / 30)); if (h > 95) c.lerp(snow, Math.min(1, (h - 95) / 15)); }
+    if (r?.id === 'dragon' && h > 6) c.set(CANYON[Math.floor(h / 6) % CANYON.length]).offsetHSL(0, 0, (fbm(x * 0.05, z * 0.05) - 0.5) * 0.08); // 붉은 바위 지층
     colors[k * 3] = c.r; colors[k * 3 + 1] = c.g; colors[k * 3 + 2] = c.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
@@ -116,7 +118,7 @@ export function buildWilds(scene, city) {
   }
 
   // ---------- 지역 입구 아치 ----------
-  const archs = [[0, -270, 'valley'], [-300, 0, 'meadow'], [0, 300, 'jungle'], [0, 690, 'amazon'], [-560, 255, 'swamp'], [870, 0, 'island']];
+  const archs = [[0, -270, 'valley'], [-300, 0, 'meadow'], [0, 300, 'jungle'], [0, 690, 'amazon'], [-560, 255, 'swamp'], [870, 0, 'island'], [1000, -470, 'dragon']];
   for (const [x, z, id] of archs) {
     const r = REGIONS.find((q) => q.id === id);
     const gy = roadGround(x, z);
@@ -124,6 +126,32 @@ export function buildWilds(scene, city) {
     for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.8, 7, 0.8), toon('#6d4c41')); p.position.set(s * 7, 3.5, 0); g.add(p); }
     const top = new THREE.Mesh(new THREE.BoxGeometry(15.5, 1.6, 0.6), toon('#6d4c41')); top.position.set(0, 7.2, 0); g.add(top);
     for (const ry of [0, Math.PI]) { const sm = signMesh(r.name, r.emoji, 10, '#fff8e1', '#4e342e'); sm.position.set(0, 7.2, ry ? -0.35 : 0.35); sm.rotation.y = ry; g.add(sm); }
+  }
+
+  // ---------- 드래곤 협곡: 용암 웅덩이 + 거대한 용 뼈 ----------
+  {
+    const lrng = new RNG(4242); // 다른 소품 배치가 바뀌지 않게 따로
+    const lavaMat = new THREE.MeshBasicMaterial({ color: '#ff6d00' });
+    const crust = toon('#4e342e');
+    let n = 0;
+    for (let i = 0; i < 400 && n < 14; i++) {
+      const x = 830 + lrng.next() * 300, z = -1100 + lrng.next() * 600;
+      const h = sampleGrid(grid, x, z);
+      if (h > 6 || h < 1 || Math.min(...ROADS.map((rd) => distToPolyline(x, z, rd.pts))) < 14) continue;
+      const r = 3 + lrng.next() * 5;
+      const rim = new THREE.Mesh(new THREE.CircleGeometry(r + 1.2, 18), crust); rim.rotation.x = -Math.PI / 2; rim.position.set(x, h + 0.08, z); root.add(rim);
+      const lava = new THREE.Mesh(new THREE.CircleGeometry(r, 18), lavaMat); lava.rotation.x = -Math.PI / 2; lava.position.set(x, h + 0.12, z); root.add(lava);
+      n++;
+    }
+    // 입구의 거대한 용 갈비뼈
+    const bone = toon('#efe6d2');
+    const bx = 1030, bz = -520, by = sampleGrid(grid, bx, bz);
+    for (let i = 0; i < 7; i++) {
+      const rib = new THREE.Mesh(new THREE.TorusGeometry(4.5 - Math.abs(i - 3) * 0.5, 0.35, 6, 14, Math.PI), bone);
+      rib.position.set(bx, by, bz - 6 + i * 2); root.add(rib);
+    }
+    const spine = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 16, 6), bone); spine.rotation.x = Math.PI / 2; spine.position.set(bx, by + 4.4, bz); root.add(spine);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(2.2, 10, 8), bone); skull.scale.set(1, 0.8, 1.5); skull.position.set(bx, by + 1.6, bz + 11); root.add(skull);
   }
 
   // ---------- 낚시터 잔교 ----------
@@ -184,7 +212,7 @@ export function buildWilds(scene, city) {
       if (Math.hypot(px - 950, pz + 420) < 30) continue; // 헛간
       const wet = h < WATER_Y + 0.3;
       const roll = rng.next();
-      const dens = { forest: 0.5, jungle: 0.55, amazon: 0.62, mountain: h > 90 ? 0.03 : 0.22, valley: 0.18, swamp: 0.3, meadow: 0.06, island: 0.04, none: 0.05, sea: 0 }[id] ?? 0.05;
+      const dens = { dragon: 0.05, forest: 0.5, jungle: 0.55, amazon: 0.62, mountain: h > 90 ? 0.03 : 0.22, valley: 0.18, swamp: 0.3, meadow: 0.06, island: 0.04, none: 0.05, sea: 0 }[id] ?? 0.05;
       if (roll > dens + 0.12) continue;
       const s = 0.8 + rng.next() * 0.7, ry = rng.next() * 6.28;
       if (wet) {
@@ -199,6 +227,7 @@ export function buildWilds(scene, city) {
       else if (id === 'amazon') type = pick(['jungle', 'jungle', 'jungle', 'palm', 'fern']);
       else if (id === 'swamp') type = pick(['dead', 'dead', 'reed', 'broad']);
       else if (id === 'island') type = h < 2 ? 'palm' : pick(['broad', 'bush']);
+      else if (id === 'dragon') type = pick(['dead', 'rock', 'rock']);
       else type = pick(['broad', 'pine', 'bush']);
       const tint = { broad: pick(['#43a047', '#66bb6a', '#7cb342', '#9ccc65']), pine: pick(['#2e7d32', '#1b5e20', '#33691e']), rock: pick(['#9e9e9e', '#8d8d8d', '#a1887f']), bush: pick(['#558b2f', '#689f38']), flower: pick(['#ff80ab', '#ffeb3b', '#ffffff', '#ce93d8', '#ff7043']), jungle: pick(['#1b5e20', '#2e7d32', '#33691e']) }[type] || null;
       const pid = props.add(type, px, h - 0.1, pz, type === 'rock' ? s * 1.4 : s, ry, tint);

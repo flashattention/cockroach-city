@@ -9,6 +9,7 @@ import { sanitizeLook, BASIC_ACC } from '../public/js/look.js';
 import { levelStats } from '../public/js/level.js';
 import { Combat } from './combat.js';
 import { Wildlife } from './wildlife.js';
+import { ANIMAL_KINDS } from '../public/js/fauna.js';
 import { itemDef } from '../public/js/items.js';
 import { MODES, PLAN_KINDS } from '../public/js/citizens.js';
 import { Traffic, AI_CARS, CAR_KINDS, BIKE_KINDS } from '../public/js/traffic.js';
@@ -283,6 +284,7 @@ export class World {
         const loc = Number.isInteger(msg.loc) && this.buildings[msg.loc] ? msg.loc : -1;
         p.pos.set(+msg.x || 0, +msg.y || 0, +msg.z || 0);
         p.heading = +msg.h || 0; p.speed = +msg.s || 0; p.air = Math.max(0, Math.min(7, msg.a | 0));
+        p.mount = Number.isInteger(msg.mt) && msg.mt >= 0 && msg.mt < ANIMAL_KINDS.length ? msg.mt : -1; // 타고 있는 동물
         if (loc !== p.loc) { p.loc = loc; this.updateActiveBuildings(); }
         if (p.car >= 0 && msg.car) {
           const car = this.traffic.cars[p.car];
@@ -341,7 +343,7 @@ export class World {
       case 'fx': {
         // 다른 플레이어에게 보여줄 연출 (총알 궤적, 투사체, 휘두르기)
         const k = String(msg.k || '');
-        if (['tracer', 'proj', 'swing', 'muzzle', 'eat', 'bolt', 'sparkle', 'cloud'].includes(k)) this.broadcast({ ...msg, t: 'fx', pid: p.id, loc: p.loc }, p.id);
+        if (['tracer', 'proj', 'swing', 'muzzle', 'eat', 'bolt', 'sparkle', 'cloud', 'breath'].includes(k)) this.broadcast({ ...msg, t: 'fx', pid: p.id, loc: p.loc }, p.id);
         break;
       }
       case 'drop': {
@@ -390,6 +392,7 @@ export class World {
       }
       case 'flirt': this.flirt(p, msg); break;
       case 'report112': this.combat.report112(p, String(msg.token || '')); break;
+      case 'capture': this.wild.capture(p, msg.id | 0, !!msg.ok); break;
       case 'heal': if (!p.dead) this.combat.healPlayer(p, Math.max(0, Math.min(100, +msg.v || 0))); break;
       case 'buyHouse': {
         const b = this.buildings[msg.id];
@@ -845,7 +848,7 @@ export class World {
     }
     const cars = [];
     for (const car of this.traffic.cars) cars.push(q(car.pos.x), q(car.pos.z), q(car.heading, 100), q(car.speed), CAR_MODES.indexOf(car.mode), car.owner ?? -1, q(car.pos.y || 0), car.occ || 0, q(car.turret || 0, 100));
-    const players = [...this.players.values()].map((p) => [p.id, q(p.pos.x, 100), q(p.pos.y, 100), q(p.pos.z, 100), q(p.heading, 100), q(p.speed), p.loc, p.car, p.air, p.sleeping ? 1 : 0, Math.round(p.hp), p.dead ? 1 : 0, p.stars || 0]);
+    const players = [...this.players.values()].map((p) => [p.id, q(p.pos.x, 100), q(p.pos.y, 100), q(p.pos.z, 100), q(p.heading, 100), q(p.speed), p.loc, p.car, p.air, p.sleeping ? 1 : 0, Math.round(p.hp), p.dead ? 1 : 0, p.stars || 0, p.mount ?? -1]);
     const snap = { t: 'snap', m: this.minutes, w: this.weather, n: npcs, meta, c: cars, p: players, u: this.combat.unitSnap(), ev: this.sim.drainEvents() };
     if (this.snapN % 3 === 0) snap.a = this.wild.snap();
     if (++this.snapN % 10 === 0) {

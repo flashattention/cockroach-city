@@ -1,6 +1,8 @@
 // 서버 스냅샷을 받아 시민/다른 플레이어를 그리는 브라우저 전용 레이어
 import * as THREE from 'three';
 import { Roach } from './roach.js';
+import { makeMount, updateMount } from './animals.js';
+import { ANIMAL_KINDS } from './fauna.js';
 import { MODES, PLAN_KINDS, NEED_KEYS } from './citizens.js';
 import { angleLerp, G } from './utils.js';
 import { makeCarMesh } from './traffic.js';
@@ -169,6 +171,7 @@ export class PlayersView {
     if (!p) return;
     this.scene.remove(p.roach.root);
     if (p.beacon) this.scene.remove(p.beacon);
+    if (p.mountObj) this.scene.remove(p.mountObj.mesh.g);
     this.list.delete(id);
   }
 
@@ -180,7 +183,7 @@ export class PlayersView {
       if (!p.target || p.target.distanceTo(tgt) > 15) p.pos.copy(tgt);
       p.target = tgt;
       p.heading = a[4] / 100; p.speed = a[5] / 10; p.loc = a[6]; p.car = a[7]; p.air = a[8]; p.sleeping = a[9];
-      p.hp = a[10]; p.dead = a[11]; p.stars = a[12];
+      p.hp = a[10]; p.dead = a[11]; p.stars = a[12]; p.mt = a[13] ?? -1;
     }
   }
 
@@ -211,8 +214,17 @@ export class PlayersView {
         gem.rotation.y = now * 1.6;
         for (const [i, r] of p.beacon.userData.rings.entries()) { const u = (now * 0.25 + i / 4) % 1; r.position.y = 3 + u * 60; r.material.opacity = 0.55 * (1 - u); }
       }
+      // 동물을 타고 있으면 그 동물을 보여준다
+      const mk = p.mt >= 0 && !car ? ANIMAL_KINDS[p.mt] : null;
+      if (p.mountObj && (p.mountObj.kind !== mk || !visible)) { this.scene.remove(p.mountObj.mesh.g); p.mountObj = null; if (p.roach.seated) unseatRoach(p.roach); }
       if (!visible) continue;
       if (car) { seatRoach(p.roach, car); p.roach.update(dt, 0, {}); continue; }
+      if (mk) {
+        if (!p.mountObj) { p.mountObj = makeMount(mk, p.id); this.scene.add(p.mountObj.mesh.g); }
+        p.mountH = angleLerp(p.mountH ?? p.heading, p.heading, Math.min(1, dt * 10));
+        updateMount(p.mountObj, p.roach, p.pos, p.mountH, dt, { speed: p.speed, flying: !!(p.air & 2) });
+        continue;
+      }
       if (p.roach.seated) unseatRoach(p.roach);
       p.roach.root.position.copy(p.pos);
       p.roach.root.rotation.y = angleLerp(p.roach.root.rotation.y, p.heading, Math.min(1, dt * 12));

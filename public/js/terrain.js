@@ -15,6 +15,7 @@ export const REGIONS = [
   { id: 'jungle', name: '호랑이 정글', emoji: '🐯', rect: [-280, 280, 330, 680], color: '#2e7d32' },
   { id: 'amazon', name: '아마존', emoji: '🐍', rect: [-280, 680, 330, 1150], color: '#1b5e20' },
   { id: 'sea', name: '바퀴 해협', emoji: '🌊', rect: [330, -1150, 800, 1150], color: '#4fa3d9' },
+  { id: 'dragon', name: '드래곤 협곡', emoji: '🐉', rect: [800, -1150, 1150, -460], color: '#b5603a' },
   { id: 'island', name: '건너편 섬 · 목장 마을', emoji: '🐄', rect: [800, -1150, 1150, 1150], color: '#aed581' },
 ];
 export function regionAt(x, z) {
@@ -55,6 +56,7 @@ export const ROADS = [
   { id: 'W2', pts: [[-560, 0], [-720, 380], [-950, 820]], name: '늪지대 길' },
   { id: 'E', pts: [[HALF, 0], [BRIDGE.x0 - BRIDGE.ramp, 0], [BRIDGE.x1 + BRIDGE.ramp, 0], [1000, 0], [1000, -400]], name: '바퀴 대교' },
   { id: 'E2', pts: [[1000, 0], [1000, 420]], name: '섬 남쪽길' },
+  { id: 'D', pts: [[1000, -400], [985, -560], [1010, -760], [975, -960]], name: '드래곤 협곡길' },
 ];
 // 강 (지형을 수면 아래로 판다)
 const RIVERS = [
@@ -118,13 +120,19 @@ export function terrainH(x, z) {
   else if (id === 'jungle') h += fbm(x * 0.012 + 5, z * 0.012) * 16;
   else if (id === 'amazon') h = h * 0.5 + fbm(x * 0.015, z * 0.015) * 6 - 1;
   else if (id === 'island') h = Math.abs(h) * 0.6 + 3 + smooth(800, 860, x) * 0;
+  else if (id === 'dragon') {
+    // 붉은 바위 협곡: 층층이 깎인 높은 메사 사이로 깊은 골짜기
+    const n = fbm(x * 0.009 + 11, z * 0.009 - 4, 4);
+    const k = smooth(-460, -540, z);
+    h = 3 + k * (smooth(0.46, 0.52, n) * 26 + smooth(0.58, 0.62, n) * 18 + smooth(0.68, 0.71, n) * 14) + (fbm(x * 0.05, z * 0.05) - 0.5) * 2;
+  }
   if (id === 'sea' || (x > 330 && x < 800)) {
     // 바다: 양쪽 해안에서 깊어진다
     const coast = Math.min(x - 330, 800 - x);
     h = Math.min(h, 2 - smooth(0, 60, coast) * 14);
   }
   // 섬 해안
-  if (x >= 800) h = Math.min(h, -12 + smooth(800, 840, x) * 15 + Math.abs(h) * 0.3);
+  if (x >= 800) h = Math.min(h, -12 + smooth(800, 840, x) * 15 + Math.abs(h) * 0.3 + (id === 'dragon' ? smooth(840, 880, x) * 200 : 0));
   // 세계 끝은 바다
   const edge = Math.max(ax, az);
   h -= smooth(WORLD_HALF - 120, WORLD_HALF, edge) * 25;
@@ -151,6 +159,7 @@ export function terrainH(x, z) {
 
 // 도로 높이: 도시 근처 0, 산길은 완만하게 올라감, 대교 위는 다리 높이
 export function roadHeight(x, z) {
+  if (x > 800 && z < -440) return 3; // 드래곤 협곡 바닥길
   if (Math.abs(z) < BRIDGE.w && x > BRIDGE.x0 - BRIDGE.ramp && x < BRIDGE.x1 + BRIDGE.ramp) return bridgeDeck(x);
   if (z < -560) return Math.max(0, (-560 - z) * 0.05);
   return 0.15;
@@ -198,7 +207,8 @@ export function roadSigns() {
   S.push([-560, 14, -Math.PI / 2, [line('forest', 260), line('swamp', 280) + ' ↙']]);
   S.push([-700, 330, Math.PI, ['🐊 악어 출몰 지역! 조심하세요', line('swamp', 0)]]);
   S.push([BRIDGE.x0 - BRIDGE.ramp - 20, 12, Math.PI / 2, ['🌉 바퀴 대교 · 길이 470m', '🐄 목장 마을까지 ' + (1000 - (BRIDGE.x0 - BRIDGE.ramp)) + 'm']]);
-  S.push([1015, -12, Math.PI / 2, ['🐄 목장 ↑ 북쪽', '🏖️ 남쪽 해변 ↓']]);
+  S.push([1015, -12, Math.PI / 2, ['🐄 목장 ↑ 북쪽', '🐉 드래곤 협곡 ↑ 460m', '🏖️ 남쪽 해변 ↓']]);
+  S.push([1015, -430, 0, ['🐉 드래곤 협곡 ↑', '🔥 불 뿜는 드래곤 주의!', '체력을 절반 깎으면 Z로 포획']]);
   S.push([HALF + 40, 30, Math.PI / 2, ['🎣 바퀴 낚시터 · 매운탕집 →', '🐟 상어·참치·돌돔이 잡혀요!']]);
   S.push([60, -HALF - 40, 0, ['🎣 이슬 호수 낚시터 ↑', '🐟 송어·쏘가리·빙어']]);
   return S;
