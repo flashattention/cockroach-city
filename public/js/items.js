@@ -291,6 +291,21 @@ const REAL_RANGE = {
   rpg: 500, ion_cannon: 600, bow: 150, composite_bow: 200, hunter_bow: 180, zhuge_crossbow: 80, recurve_bow: 220, crossbow: 120,
 };
 for (const [id, r] of Object.entries(REAL_RANGE)) if (ITEMS[id]) ITEMS[id].range = r;
+// 실제 무기 위력과 비슷하게 (사람 체력 100 기준 몸통 한 발 피해). 머리는 총·화살 모두 한 방
+// 9mm 권총 3~4발, 소총 3발, 대구경 저격 거의 한 방, .50 대물저격·로켓은 한 방, 산탄은 가까우면 한 방
+const REAL_DMG = {
+  pistol: 30, revolver: 45, deagle: 60, blaster: 35,
+  uzi: 22, mp5: 25, plasma_smg: 24,
+  rifle: 30, m4: 32, ak47: 38, scar: 42, blaster_rifle: 30, m249: 30, minigun: 32,
+  shotgun: 14, double_barrel: 15,
+  sniper: 95, hunting_rifle: 90, barrett: 250,
+  bow: 50, composite_bow: 60, recurve_bow: 65, hunter_bow: 55, crossbow: 80, zhuge_crossbow: 24,
+  grenade: 120, thermal: 150, rpg: 200, ion_cannon: 220,
+  fist: 8, combat_knife: 35, hunter_knife: 38, wood_sword: 15, iron_sword: 45, twin_swords: 40, qinggang: 55,
+  serpent_spear: 60, halberd: 70, dragon_glaive: 75, yitian: 80, saber_blue: 100, saber_red: 105, saber_green: 100,
+};
+for (const [id, v] of Object.entries(REAL_DMG)) if (ITEMS[id]) ITEMS[id].dmg = v;
+ITEMS.shotgun.pellets = 9; ITEMS.double_barrel.pellets = 9; // 00 벅샷 9알
 // 조준(우클릭) 배율
 const ZOOM = { m4: 2.6, recurve_bow: 2.6, crossbow: 2.4, revolver: 1.6, deagle: 1.7, uzi: 1.3, mp5: 1.8, ak47: 2.2, scar: 3.0, m249: 1.7, double_barrel: 1.2, barrett: 8, plasma_smg: 1.8, hunting_rifle: 4.5, hunter_bow: 2.4, pistol: 1.5, blaster: 1.6, shotgun: 1.3, rifle: 2.4, blaster_rifle: 2.4, minigun: 1.5, sniper: 6, rpg: 1.8, ion_cannon: 2, bow: 2.2, composite_bow: 2.6, zhuge_crossbow: 2 };
 for (const [id, z] of Object.entries(ZOOM)) if (ITEMS[id]) ITEMS[id].zoom = z;

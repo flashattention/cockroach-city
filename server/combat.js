@@ -9,10 +9,10 @@ import { AI_CARS } from '../public/js/traffic.js';
 import { terrainH } from '../public/js/terrain.js';
 
 export const UNIT = {
-  cop: { name: '경찰', hp: 120, speed: 6.5, range: 22, rate: 1.1, dmg: 7, acc: 0.65, def: 10 },
-  soldier: { name: '군인', hp: 200, speed: 6.8, range: 32, rate: 0.55, dmg: 8, acc: 0.6, def: 25 },
-  tank: { name: '전차', hp: 1500, speed: 5, range: 45, rate: 3.2, dmg: 40, radius: 5, acc: 0.8, def: 60 },
-  heli: { name: '군용 헬기', hp: 800, speed: 14, range: 55, rate: 2.4, dmg: 30, radius: 4.5, acc: 0.75, def: 40, fly: 22 },
+  cop: { name: '경찰', hp: 120, speed: 6.5, range: 22, rate: 1.1, dmg: 22, acc: 0.6, def: 10 },
+  soldier: { name: '군인', hp: 200, speed: 6.8, range: 32, rate: 0.55, dmg: 28, acc: 0.55, def: 25 },
+  tank: { name: '전차', hp: 1500, speed: 5, range: 45, rate: 3.2, dmg: 120, radius: 5, acc: 0.8, def: 60 },
+  heli: { name: '군용 헬기', hp: 800, speed: 14, range: 55, rate: 2.4, dmg: 70, radius: 4.5, acc: 0.75, def: 40, fly: 22 },
 };
 export const UNIT_KINDS = Object.keys(UNIT);
 const STAR_UNITS = [
@@ -57,6 +57,9 @@ export class Combat {
     const crit = this.rng.chance(stats.crit + lv.crit);
     if (crit) dmg *= 2;
     const maxDist = stats.range * 1.15 + 8; // 하늘에서 내려다보고 쏘는 것도 허용 (3D 거리)
+    // 총·화살로 머리를 맞히면 한 방에 쓰러진다
+    const head = !!msg.hs && (stats.kind === 'hitscan' || stats.kind === 'arrow');
+    if (head) dmg = 100000;
     if (msg.tt === 'npc') {
       const c = this.w.sim.citizens[msg.id];
       if (!c || c.mode === 'dead') return;
@@ -67,13 +70,14 @@ export class Combat {
     } else if (msg.tt === 'player') {
       const v = this.w.players.get(msg.id);
       if (!v || v === p || v.dead || v.loc !== p.loc || v.pos.distanceTo(p.pos) > maxDist) return;
-      this.damagePlayer(v, damageTaken(dmg, v.profile.def || 0, stats.pierce), p, p.pos, crit);
+      this.damagePlayer(v, head ? dmg : damageTaken(dmg, v.profile.def || 0, stats.pierce), p, p.pos, crit);
       this.elementOnPlayer(v, stats, p);
       this.lifesteal(p, dmg, stats);
     } else if (msg.tt === 'unit') {
       const u = this.units.find((x) => x.id === msg.id);
       if (!u || u.loc !== p.loc || u.pos.distanceTo(p.pos) > maxDist + 6) return;
-      this.damageUnit(u, damageTaken(dmg, UNIT[u.kind].def, stats.pierce), p, crit);
+      const big = u.kind === 'tank' || u.kind === 'heli';
+      this.damageUnit(u, head && !big ? dmg : damageTaken(head ? stats.dmg * 3 : dmg, UNIT[u.kind].def, stats.pierce), p, crit);
       this.lifesteal(p, dmg, stats);
     } else if (msg.tt === 'animal') {
       const a = this.w.wild.list[msg.id];
@@ -166,6 +170,7 @@ export class Combat {
 
   damagePlayer(v, dmg, attacker, fromPos, crit = false) {
     if (v.dead || dmg <= 0) return;
+    if (this.w.inSafeZone(v)) return; // 리스폰 존: 무적
     v.hp -= dmg;
     v.lastHurt = Date.now();
     // 플레이어에게 당하면 112 신고할 수 있도록 기록

@@ -17,7 +17,7 @@ export class CitizenView {
     this.sim = sim;
     this.city = city;
     for (const c of sim.citizens) {
-      c.roach = new Roach({ color: c.color, age: c.age, gender: c.gender, accessories: c.accessories, lashes: c.lashes, mustache: c.mustache });
+      c.roach = new Roach({ seed: c.name, color: c.color, age: c.age, gender: c.gender, accessories: c.accessories, lashes: c.lashes, mustache: c.mustache });
       c.roach.root.visible = false;
       scene.add(c.roach.root);
       c.target = { x: c.pos.x, z: c.pos.z, h: 0, ix: 0, iz: 0, moving: 0 };
@@ -141,7 +141,7 @@ export class PlayersView {
     if (meta.id === this.myId) return;
     this.remove(meta.id);
     const pr = meta.profile || {};
-    const roach = new Roach({ color: pr.color, age: pr.age, gender: pr.gender, look: pr.look, accessories: pr.accessories || [], lashes: !pr.look && pr.gender === '여' });
+    const roach = new Roach({ seed: meta.name, color: pr.color, age: pr.age, gender: pr.gender, look: pr.look, accessories: pr.accessories || [], lashes: !pr.look && pr.gender === '여' });
     roach.root.visible = false;
     this.scene.add(roach.root);
     roach.setHeld(pr.held || null);

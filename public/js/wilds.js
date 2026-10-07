@@ -9,7 +9,7 @@ import { toon, signMesh, RNG } from './utils.js';
 const CANYON = ['#b5603a', '#d08850', '#9c4a2e', '#c4733f', '#8a3f28'];
 const BIOME_COL = {
   mountain: ['#7c8a5e', '#8d8d7d', '#f5f7fa'], valley: ['#6fae5e'], forest: ['#3f7d36'], meadow: ['#9ccc65'],
-  swamp: ['#5b6e3f'], jungle: ['#2f7a32'], amazon: ['#235f27'], island: ['#a5d36f'], dragon: ['#c98a5a'], sea: ['#d9c58f'], none: ['#93c96f'],
+  swamp: ['#5b6e3f'], jungle: ['#2f7a32'], amazon: ['#235f27'], island: ['#a5d36f'], park: ['#d9cfc3'], dragon: ['#c98a5a'], sea: ['#d9c58f'], none: ['#93c96f'],
 };
 
 export function buildWilds(scene, city) {
@@ -212,6 +212,7 @@ export function buildWilds(scene, city) {
       if (Math.hypot(px - 950, pz + 420) < 30) continue; // 헛간
       const wet = h < WATER_Y + 0.3;
       const roll = rng.next();
+      if (id === 'park') continue; // 놀이공원 안에는 나무를 심지 않는다
       const dens = { dragon: 0.05, forest: 0.5, jungle: 0.55, amazon: 0.62, mountain: h > 90 ? 0.03 : 0.22, valley: 0.18, swamp: 0.3, meadow: 0.06, island: 0.04, none: 0.05, sea: 0 }[id] ?? 0.05;
       if (roll > dens + 0.12) continue;
       const s = 0.8 + rng.next() * 0.7, ry = rng.next() * 6.28;

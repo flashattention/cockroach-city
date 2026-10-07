@@ -3,6 +3,7 @@
 //   - /ws  WebSocket: 공유 세계 동기화
 //   - /api/*  구글 로그인 · 캐릭터 목록/생성/삭제
 //   - 환경변수: PORT, GAME_PASSWORD, GOOGLE_CLIENT_ID, OPENAI_API_KEY, OPENAI_MODEL, OPENAI_BASE_URL, TIME_SPEED, DATA_DIR
+import crypto from 'node:crypto';
 import './env.js';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -50,6 +51,11 @@ async function api(req, res, url) {
     let info;
     if (body.credential) info = await verifyGoogle(body.credential);
     else if (DEV_LOGIN && typeof body.dev === 'string' && body.dev.trim()) info = { sub: `dev:${body.dev.trim().slice(0, 16)}`, email: '', name: body.dev.trim().slice(0, 16), picture: '' };
+    else if (body.guest === true) {
+      // 체험판: 구글 로그인 없이 바로 (이틀 동안 접속하지 않으면 캐릭터가 사라진다)
+      if (world.guestCount() >= 300) return json(res, 503, { error: '체험판 자리가 꽉 찼어요. 구글로 로그인해 주세요' });
+      info = { sub: `guest:${crypto.randomBytes(9).toString('hex')}`, email: '', name: `체험판 손님 ${Math.floor(1000 + Math.random() * 9000)}`, picture: '', guest: true };
+    }
     else return json(res, 400, { error: '구글 로그인이 필요해요' });
     const session = world.login(info, Array.isArray(body.legacy) ? body.legacy : []);
     return json(res, 200, { session, user: { name: info.name, email: info.email, picture: info.picture }, chars: world.charList(info.sub) });

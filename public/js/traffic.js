@@ -66,8 +66,22 @@ const AI_KINDS = ['scooter', 'scooter', 'motorcycle', 'bicycle', 'bus', 'bus', '
 
 // 차 안에 앉아 있는 작은 바퀴벌레 (창문으로 보임)
 const MINI_H = 1.12; // miniRoach 바닥(-0.28)~더듬이 끝(+0.84)
+const GUMMY_MINI = ['#ff4d5e', '#ff9a2e', '#ffd93b', '#7be04a', '#f3f6ff', '#ff7eb6', '#b57bff', '#4fc3ff'];
+const bugMode = () => { try { return !!JSON.parse(localStorage.getItem('roachcity.settings') || '{}').bugMode; } catch { return false; } };
 function miniRoach(parent, color, x, y, z) {
   const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g);
+  if (!bugMode()) {
+    // 곰돌이 젤리 승객
+    const c = GUMMY_MINI[parseInt(String(color).slice(1, 3), 16) % GUMMY_MINI.length];
+    const jm = new THREE.MeshPhongMaterial({ color: c, transparent: true, opacity: 0.82, shininess: 90, emissive: new THREE.Color(c).multiplyScalar(0.25) });
+    sph(g, 0.24, 0.28, 0.22, jm, 0, 0, 0, { low: true });
+    sph(g, 0.24, 0.22, 0.22, jm, 0, 0.36, 0.02, { low: true });
+    for (const sx of [-1, 1]) {
+      sph(g, 0.08, 0.08, 0.05, jm, sx * 0.16, 0.54, 0, { low: true, cast: false });
+      sph(g, 0.035, 0.04, 0.03, '#1d1410', sx * 0.08, 0.4, 0.21, { low: true, cast: false });
+    }
+    return g;
+  }
   sph(g, 0.22, 0.28, 0.2, color, 0, 0, 0, { low: true });
   sph(g, 0.24, 0.22, 0.22, color, 0, 0.36, 0.02, { low: true });
   for (const sx of [-1, 1]) {

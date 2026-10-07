@@ -22,6 +22,8 @@ import { SPORT_KINDS, vehicleName, CAR_KINDS, BIKES } from './traffic.js';
 import { DROP_POOL, FISH } from './items.js';
 import { buildWilds, renderWorldImage } from './wilds.js';
 import { AnimalsView, makeMount } from './animals.js';
+import { Roach } from './roach.js';
+import { buildPark } from './park.js';
 import { ANIMALS, ANIMAL_KINDS } from './fauna.js';
 import { TVScreen, CHANNELS } from './tv.js';
 import { WORLD_HALF, WATER_Y, regionAt } from './terrain.js';
@@ -327,6 +329,7 @@ function buildWorld(w) {
   const cityGround = city.groundY;
   city.groundY = (x, z, y) => (Math.abs(x) <= HALF && Math.abs(z) <= HALF ? cityGround(x, z) : wild.groundY(x, z, y));
   game.worldImage = renderWorldImage(wild.grid);
+  game.park = buildPark(scene);
   game.animals = new AnimalsView(scene, w.animals || [], city.groundY);
   // 야생 드래곤이 불을 뿜으면: 가까운 나를 향해, 아니면 앞쪽 아래로
   game.animals.onBreath = (from, a) => {
@@ -352,6 +355,13 @@ function buildWorld(w) {
   game.routeView = new RouteView(scene, city.groundY);
   game.minutes = w.minutes; game.timeSpeed = w.timeSpeed; game.weather = w.weather;
   game.combat = new Combat(game);
+  // 곰돌이 젤리 모드: 맞으면 그 색 젤리가 튄다
+  game.combat.fx.groundFn = (x, z, y) => (game.mode === 'interior' ? 0.1 : game.city.groundY(x, z, y));
+  Roach.onHurt = (r) => {
+    if (!r.gummy || !r.root.visible || !r.root.parent) return;
+    const p = r.root.getWorldPosition(new THREE.Vector3()); p.y += r.height * 0.55;
+    if (p.distanceTo(camera.position) < 90) game.combat.fx.jelly(p, r.jellyColor, r.dead ? 16 : 9, r.dead);
+  };
   setupNet();
 }
 
@@ -381,6 +391,8 @@ function enterGame(w) {
   game.stats.homeUnit = w.homeUnit;
   game.myHomes = w.myHomes || [];
   game.owned = w.owned || {};
+  game.safeBids = w.safe || [w.hotelId];
+  refreshSafeZones();
   // 직장 건물 번호가 바뀌었으면 같은 종류의 건물로 옮긴다
   const job = game.stats.jobId ? getJob(game.stats.jobId) : null;
   if (job && game.city.buildings[game.stats.workId]?.type !== job.building) game.stats.workId = game.city.byType[job.building]?.[0]?.id ?? null;
@@ -420,6 +432,27 @@ function applySkills() {
   game.player.dashPower = sk.includes('dashlong') || sk.includes('dash') ? 38 : 24;
   game.player.jumpV = sk.includes('jumpboost') ? 9.2 : 7.5;
 }
+
+// 리스폰 존 (호텔·대표 집 문 앞 10m): 바닥에 초록 원을 그리고, 안에 있으면 무적
+function refreshSafeZones() {
+  if (game.safeGroup) scene.remove(game.safeGroup);
+  const g = game.safeGroup = new THREE.Group();
+  const ringMat = new THREE.MeshBasicMaterial({ color: '#69f0ae', transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
+  const fillMat = new THREE.MeshBasicMaterial({ color: '#69f0ae', transparent: true, opacity: 0.08, depthWrite: false });
+  for (const id of game.safeBids || []) {
+    const b = game.city.buildings[id];
+    if (!b) continue;
+    const y = game.city.groundY(b.door.x, b.door.z) + 0.06;
+    const ring = new THREE.Mesh(new THREE.RingGeometry(9.6, 10, 48), ringMat); ring.rotation.x = -Math.PI / 2; ring.position.set(b.door.x, y, b.door.z); g.add(ring);
+    const fill = new THREE.Mesh(new THREE.CircleGeometry(9.6, 48), fillMat); fill.rotation.x = -Math.PI / 2; fill.position.set(b.door.x, y - 0.01, b.door.z); g.add(fill);
+  }
+  scene.add(g);
+}
+game.inSafeZone = () => {
+  const p = game.player;
+  if (game.mode === 'interior') return (game.safeBids || []).includes(game.interior?.building?.id);
+  return (game.safeBids || []).some((id) => { const d = game.city.buildings[id]?.door; return d && Math.hypot(p.pos.x - d.x, p.pos.z - d.z) < 10 && Math.abs(p.pos.y - (d.y || 0)) < 8; });
+};
 
 function placeAtHome() {
   const home = game.homeBuilding();
@@ -605,6 +638,7 @@ function setupNet() {
   net.on('homes', (m) => {
     game.homes = m.homes;
     game.owned = m.owned || {};
+    if (m.safe) { game.safeBids = m.safe; refreshSafeZones(); }
     for (const [id, name] of Object.entries(m.homes)) {
       const b = game.city.buildings[id];
       if (b && b.name !== name) { b.name = name; retitleSign(b.signMesh, name); }
@@ -682,7 +716,7 @@ window.addEventListener('keydown', (e) => {
     if (k === 'jump' && !game.input.jump) {
       // Space 두 번 연속(0.3초 안) → 날기 / 날고 있으면 날개 접고 떨어지기
       const now = performance.now();
-      if (game.started && now - (game.lastSpace || 0) < 300 && game.mode === 'city' && !game.player?.inCar) { game.lastSpace = 0; toggleFly(); }
+      if (game.started && now - (game.lastSpace || 0) < 300 && !game.player?.inCar) { game.lastSpace = 0; toggleFly(); }
       else { game.input.jumpPressed = true; game.lastSpace = now; }
     }
     game.input[k] = true;
@@ -691,7 +725,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (/^Digit[0-9]$/.test(e.code)) { const n = +e.code.slice(5); game.inv.select(n === 0 ? 9 : n - 1); }
   if (e.code === 'KeyE' && !e.repeat) interact();
-  if (e.code === 'KeyF' && !e.repeat) { if (game.player.mount) dismount(true); else toggleCar(); }
+  if (e.code === 'KeyF' && !e.repeat) { if (game.riding) endRide(true); else if (game.player.mount) dismount(true); else toggleCar(); }
   if (e.code === 'KeyZ' && !e.repeat) startCapture();
   if (e.code === 'KeyQ' && !e.repeat) dropSelected();
   if (e.code === 'KeyC' && !e.repeat) game.input.dashPressed = true;
@@ -777,6 +811,11 @@ function findFocus() {
   const p = game.player;
   const opts = [];
   if (p.inCar) return { kind: 'car-exit', label: '내리기', key: 'F' };
+  if (game.riding) return { kind: 'ride-exit', label: game.riding.state === 'wait' ? `${game.riding.ride.emoji} 탑승 대기 중… (F: 그만두기)` : `${game.riding.ride.emoji} ${game.riding.ride.name} 타는 중!`, key: 'F' };
+  if (game.mode === 'city' && game.park) {
+    const r = game.park.near(p.pos);
+    if (r) { const T = game.park.now(); opts.push({ kind: 'ride', ride: r, d: 0.5, label: `${r.emoji} ${r.name} 타기${r.boardable(T) ? '' : ` (다음 차례까지 ${r.wait(T)}초)`}` }); }
+  }
   const pos = p.pos;
   let npc = null, nd = 2.8;
   for (const c of game.sim.citizens) {
@@ -834,6 +873,7 @@ function interact() {
     ui.openChat(c);
   } else if (focus.kind === 'ground') game.net.send({ t: 'pickup', gid: focus.g.id });
   else if (focus.kind === 'door') enterBuilding(focus.b);
+  else if (focus.kind === 'ride') startRide(focus.ride);
   else if (focus.kind === 'exit') { if (game.jail) ui.toast('🔒 감옥 문이 잠겨 있어요. 석방될 때까지 기다리세요'); else exitBuilding(); }
   else if (focus.kind === 'action') doAction(focus.a.action);
 }
@@ -1136,6 +1176,53 @@ function summonCar(it) {
 }
 
 // ------------------------------------------------------------------
+// 놀이기구 타기 (바퀴랜드)
+// ------------------------------------------------------------------
+function startRide(ride) {
+  const p = game.player;
+  if (p.mount) dismount(false);
+  p.flying = false;
+  game.riding = { ride, state: 'wait', seat: 0, t0: 0 };
+  const T = game.park.now();
+  if (!ride.boardable(T)) ui.toast(`${ride.emoji} 다음 차례를 기다려요… ${ride.wait(T)}초 (F: 그만두기)`);
+}
+function updateRide(dt) {
+  const R = game.riding, p = game.player, ride = R.ride, T = game.park.now();
+  if (game.mode !== 'city' || game.dead) { endRide(false); return; }
+  if (R.state === 'wait') {
+    if (!ride.boardable(T)) { p.roach.update(dt, 0, {}); return; }
+    R.state = 'on'; R.t0 = T;
+    R.seat = ride.pickSeat ? ride.pickSeat(T) : Math.floor(Math.random() * ride.seats);
+    ui.toast(`${ride.emoji} ${ride.name} 출발! 꽉 잡아요~`);
+    p.cam.yaw = 0;
+  }
+  if (ride.done(T, R.t0)) { endRide(true); game.questEvent('ride'); return; }
+  const st = ride.seat(R.seat, T);
+  p.pos.copy(st.pos);
+  p.vy = 0; p.speed = 0; p.onGround = true;
+  const root = p.roach.root;
+  root.position.copy(st.pos);
+  root.quaternion.copy(st.q).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), st.yaw || 0));
+  p.heading = new THREE.Euler().setFromQuaternion(root.quaternion, 'YXZ').y;
+  p.roach.setSeated(true); p.roach.riding = true; p.roach.pedal = 0;
+  p.roach.update(dt, 0, { noCrawl: true });
+  addNeeds({ fun: dt * (ride.fun || 2) });
+  // 신나서 가끔 소리 지르기
+  if ((R.yell = (R.yell || 0) - dt) <= 0) { R.yell = 4 + Math.random() * 5; if (ride.fun >= 4) ui.floatText(st.pos.clone().setY(st.pos.y + 2), ['꺄아아~!', '우와아!!', '살려줘~ 😆', '한 번 더!'][Math.floor(Math.random() * 4)], '#ff4081'); }
+}
+function endRide(say) {
+  const R = game.riding, p = game.player;
+  if (!R) return;
+  game.riding = null;
+  const st = R.ride.station;
+  p.pos.set(st.x, game.city.groundY(st.x, st.z) + 0.05, st.z);
+  p.roach.root.quaternion.identity(); p.roach.root.rotation.set(0, p.heading, 0);
+  p.roach.setSeated(false); p.roach.riding = false;
+  p.snap = true;
+  if (say) ui.toast(R.state === 'on' ? `${R.ride.emoji} 재밌었다! 또 타요~` : `${R.ride.emoji} 줄에서 나왔어요`);
+}
+
+// ------------------------------------------------------------------
 // 동물 포획 (Z 꾹 → 타이밍 맞춰 떼기) · 탈것
 // ------------------------------------------------------------------
 function startCapture() {
@@ -1391,6 +1478,7 @@ function computeBadges() {
 function toggleFly() {
   const p = game.player;
   if (p.inCar) return;
+  if (game.jail && !p.flying) { ui.toast('🔒 감옥 안에서는 날 수 없어요'); return; }
   if (p.mount && !p.mount.ride.fly) { ui.toast(`${p.mount.def.emoji} ${p.mount.def.name}은(는) 날 수 없어요. F로 내려서 날아요`); return; }
   if (p.flying) { p.flying = false; p.vy = 0; p.onGround = false; p.jumps = p.maxJumps; ui.toast('🪽 날개를 접었어요 — 떨어진다!'); return; }
   if (p.takeOff()) ui.toast('🪽 날기! Space 꾹 위로 · X 아래로 · Shift 빠르게 · Space 두 번 = 날개 접기');
@@ -1869,7 +1957,9 @@ function frame() {
   if (game.slowT > 0) { game.slowT -= dt; p.speedBonus = -0.55; } else if (game.slowWas) game.sendProfile();
   game.slowWas = game.slowT > 0;
   const before = p.pos.clone();
-  if (game.cutscene) game.cutscene.update(dt);
+  if (game.park && !indoor) game.park.update();
+  if (game.riding) updateRide(dt);
+  else if (game.cutscene) game.cutscene.update(dt);
   else if (!game.dead) p.update(dt, input, world);
   else p.roach.update(dt, 0, {});
   if (game.jail) {
@@ -1916,6 +2006,7 @@ function frame() {
   // 탈것: 건물·차·감옥·죽음이면 내린다
   if (p.mount && (indoor || p.inCar || game.dead || game.jail)) dismount(false);
   updateCapture(dt);
+  if ((game.safeT = (game.safeT || 0) - dt) <= 0) { game.safeT = 0.4; ui.safeBadge(!game.dead && game.inSafeZone()); }
   if (!indoor) game.wild.update(camera.position);
   // 지역에 들어서면 알려준다
   if ((game.regionT = (game.regionT || 0) - dt) <= 0) {

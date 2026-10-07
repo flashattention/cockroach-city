@@ -97,6 +97,7 @@ export class Lobby {
     this.show('v-login');
     const s = this.status;
     $('pw-row').classList.toggle('hidden', !s?.password);
+    $('guest-btn').onclick = () => this.doLogin({ guest: true });
     try { $('p-password').value = store.get('roachcity.pw') || ''; } catch { /* 무시 */ }
     if (s?.googleClientId) {
       $('dev-login').classList.add('hidden');
@@ -193,7 +194,7 @@ export class Lobby {
       this.thumbCam.position.set(0, 1.5, 5.6); this.thumbCam.lookAt(0, 1.05, 0);
     }
     const pr = c.profile || {};
-    const r = new Roach({ color: pr.color, age: 25, gender: pr.gender, look: pr.look, accessories: pr.accessories?.length ? pr.accessories : starterVis(c.starter) });
+    const r = new Roach({ seed: pr.name, color: pr.color, age: 25, gender: pr.gender, look: pr.look, accessories: pr.accessories?.length ? pr.accessories : starterVis(c.starter) });
     r.root.rotation.y = 0.35;
     r.update(0.016, 0);
     this.thumbScene.add(r.root);
@@ -334,7 +335,7 @@ export class Lobby {
     if (!this.pv) return;
     const d = this.draft;
     if (this.pvRoach) this.pv.scene.remove(this.pvRoach.root);
-    this.pvRoach = new Roach({ color: d.color, age: d.age, gender: d.gender, look: d.look, accessories: starterVis(d.starter) });
+    this.pvRoach = new Roach({ seed: d.name, color: d.color, age: d.age, gender: d.gender, look: d.look, accessories: starterVis(d.starter) });
     this.pvRoach.root.scale.setScalar(1);
     this.pv.scene.add(this.pvRoach.root);
   }

@@ -563,3 +563,8 @@ kbd { background: #fff; color: #4a3428; border-radius: 5px; padding: 0 6px; bord
 #cap-meter .cm-needle { position: absolute; top: -2px; bottom: -2px; width: 6px; margin-left: -3px; background: #ffd54f; border-radius: 3px; box-shadow: 0 0 8px #ffd54f; }
 #cap-meter .cm-needle.in { background: #ffffff; box-shadow: 0 0 12px #fff; }
 #cap-meter .cm-s { font-size: 13px; opacity: .85; margin-top: 6px; }
+
+#safe-badge { position: fixed; left: 50%; bottom: 190px; transform: translateX(-50%); background: rgba(27,94,32,.85); color: #fff; padding: 5px 14px; border-radius: 999px; font-family: 'Jua'; font-size: 14px; z-index: 12; pointer-events: none; box-shadow: 0 0 14px rgba(105,240,174,.6); }
+
+.guest-btn { display: block; margin: 12px auto 0; padding: 10px 18px; font-size: 16px; }
+.guest-btn small { display: block; font-size: 11px; opacity: .75; margin-top: 2px; }

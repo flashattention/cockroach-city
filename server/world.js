@@ -71,6 +71,7 @@ export class World {
     this.dirty = false;
     this.combat = new Combat(this);
     this.wild = new Wildlife(this);
+    setInterval(() => this.purgeGuests(), 10 * 60 * 1000).unref?.();
     this.smashed = new Map(); // 부서진 소품 → 복구 시각
     this.snapN = 0;
     this.hotel = city.byType.hotel[0];
@@ -119,8 +120,9 @@ export class World {
 
   // ---------------- 로그인 & 캐릭터 ----------------
   login(info, legacyTokens = []) {
-    const u = (this.users[info.sub] ||= { email: info.email, name: info.name, picture: info.picture, chars: [], created: Date.now() });
+    const u = (this.users[info.sub] ||= { email: info.email, name: info.name, picture: info.picture, chars: [], created: Date.now(), guest: !!info.guest });
     Object.assign(u, { email: info.email, name: info.name, picture: info.picture, last: Date.now() });
+    if (u.guest) legacyTokens = []; // 체험판은 이 브라우저의 예전 캐릭터를 가져가지 않는다
     // 구글 로그인 전 이 브라우저에서 쓰던 캐릭터를 내 계정으로 가져온다
     for (const t of legacyTokens.slice(0, 5)) {
       const acc = typeof t === 'string' && this.accounts[t];
@@ -130,6 +132,22 @@ export class World {
     this.sessions[sid] = { sub: info.sub, exp: Date.now() + 30 * 864e5 };
     this.dirty = true;
     return sid;
+  }
+  guestCount() { return Object.values(this.users).filter((u) => u.guest).length; }
+  // 이틀 넘게 안 들어온 체험판 계정·캐릭터 정리 (집·차도 함께 풀린다)
+  purgeGuests() {
+    const cutoff = Date.now() - 2 * 864e5;
+    let changed = false;
+    for (const [sub, u] of Object.entries(this.users)) {
+      if (!u.guest) continue;
+      const last = Math.max(u.last || 0, ...u.chars.map((t) => this.accounts[t]?.last || 0));
+      if (last > cutoff || [...this.players.values()].some((p) => u.chars.includes(p.token))) continue;
+      for (const t of u.chars) delete this.accounts[t];
+      delete this.users[sub];
+      for (const [sid, s] of Object.entries(this.sessions)) if (s.sub === sub) delete this.sessions[sid];
+      changed = true;
+    }
+    if (changed) { this.dirty = true; this.broadcast({ t: 'homes', ...this.homesInfo() }); }
   }
   userOf(sid) {
     const s = typeof sid === 'string' && this.sessions[sid];
@@ -176,6 +194,19 @@ export class World {
     for (const a of Object.values(this.accounts)) for (const h of a.homes || []) if (h.bid === bid) out.push(h.unit);
     return out;
   }
+  // 리스폰 존: 호텔 + 누군가의 대표 집. 문 앞 10m 안(과 그 건물 안)에서는 아무도 다치지 않는다
+  safeBids() {
+    const s = new Set([this.hotel.id]);
+    for (const a of Object.values(this.accounts)) if (a.homeId != null && this.buildings[a.homeId]) s.add(a.homeId);
+    return [...s];
+  }
+  inSafeZone(p) {
+    if (!this.safeCache || Date.now() - this.safeCache.t > 5000) this.safeCache = { t: Date.now(), bids: new Set(this.safeBids()) };
+    if (p.loc >= 0) return this.safeCache.bids.has(p.loc);
+    for (const id of this.safeCache.bids) { const d = this.buildings[id].door; if (Math.hypot(p.pos.x - d.x, p.pos.z - d.z) < 10 && Math.abs(p.pos.y - (d.y || 0)) < 8) return true; }
+    return false;
+  }
+
   homesInfo() {
     const names = {}, owned = {};
     for (const a of Object.values(this.accounts)) {
@@ -185,9 +216,11 @@ export class World {
         if (b?.type === 'house') (names[h.bid] ||= []).push(a.name);
       }
     }
+    this.safeCache = null;
     return {
       homes: Object.fromEntries(Object.entries(names).map(([id, n]) => [id, `${n.slice(0, 2).join('·')}${n.length > 2 ? ' 외' : ''}의 집`])),
       owned,
+      safe: this.safeBids(),
     };
   }
 
@@ -224,7 +257,7 @@ export class World {
     }
     const hi = this.homesInfo();
     this.send(p, {
-      t: 'welcome', you: p.id, token, homeId: acc.homeId, homeUnit: acc.homeUnit, myHomes: acc.homes || [], homes: hi.homes, owned: hi.owned,
+      t: 'welcome', you: p.id, token, homeId: acc.homeId, homeUnit: acc.homeUnit, myHomes: acc.homes || [], homes: hi.homes, owned: hi.owned, safe: hi.safe,
       stats: acc.stats, starter: acc.stats ? null : acc.starter, profile: acc.profile, user: { name: who.user.name, email: who.user.email }, admin: isAdmin(who.user),
       phone: acc.phone, contacts: acc.contacts, sms: acc.sms.slice(-100),
       minutes: this.minutes, timeSpeed: this.timeSpeed, weather: this.weather, llm: llmEnabled,
@@ -268,7 +301,7 @@ export class World {
     this.spectators.add(ws);
     const hi = this.homesInfo();
     ws.send(JSON.stringify({
-      t: 'welcome', spectate: true, you: -1, homes: hi.homes, owned: hi.owned,
+      t: 'welcome', spectate: true, you: -1, homes: hi.homes, owned: hi.owned, safe: hi.safe,
       minutes: this.minutes, timeSpeed: this.timeSpeed, weather: this.weather, llm: llmEnabled,
       players: [...this.players.values()].map(playerMeta),
       extraCars: this.traffic.cars.slice(AI_CARS).map((c) => ({ id: c.id, x: c.pos.x, z: c.pos.z, h: c.heading, kind: c.kind, color: c.color })),

@@ -104,6 +104,8 @@ export class UI {
       this.toast(`📍 ${o.name}님 위치를 표시했어요`);
     };
     $('tb-badges').onclick = () => this.openBadges();
+    $('tb-mode').onclick = () => this.setBugMode(!settings.bugMode);
+    this.setBugMode(settings.bugMode, true);
     this.renderQuests();
     let seen = false;
     try { seen = localStorage.getItem('roachcity.keysSeen') === '1'; } catch { /* 무시 */ }
@@ -738,10 +740,12 @@ export class UI {
         <div class="set-row"><b>🤖 서버 LLM</b><span>${g.llm ? `${escapeHtml(st.model || 'gpt-4o-mini')} 사용 중 ✅ (키는 서버에만 있어요)` : '키 없음 — 기본 대사 사용 중 💤'}</span></div>
         <div class="set-row"><b>⏱️ 시간 속도</b><span>현실 1초 = 게임 ${g.timeSpeed}분 (서버 설정, 모든 플레이어 공통)</span></div>
         <div class="set-row"><label><input type="checkbox" id="set-shadow" ${settings.shadows ? 'checked' : ''}/> 그림자 (끄면 더 빨라요)</label></div>
+        <div class="set-row"><label><input type="checkbox" id="set-bug" ${settings.bugMode ? 'checked' : ''}/> 🪳 바퀴 모드 (끄면 모두 🐻 곰돌이 젤리로 보여요)</label></div>
         <button class="btn" id="set-save">저장</button>
         <button class="btn ghost" id="set-reset">👥 캐릭터 선택 화면으로</button>`;
       $('set-save').onclick = () => {
         settings.shadows = $('set-shadow').checked;
+        if (settings.bugMode !== $('set-bug').checked) this.setBugMode($('set-bug').checked);
         saveSettings();
         g.applySettings();
         this.toast('⚙️ 설정을 저장했어요');
@@ -1351,7 +1355,21 @@ export class UI {
     };
   }
 
-    // 포획 타이밍 막대: 바늘이 초록칸에 있을 때 Z를 떼면 성공
+    safeBadge(on) {
+    let el = $('safe-badge');
+    if (!el) { el = document.createElement('div'); el.id = 'safe-badge'; el.textContent = '🛡️ 안전지대 — 여기서는 아무도 다치지 않아요'; document.body.appendChild(el); }
+    el.style.display = on ? '' : 'none';
+  }
+
+  // 곰돌이 젤리 ↔ 바퀴 모드 (내 화면에서만 바뀐다)
+  setBugMode(on, quiet = false) {
+    settings.bugMode = !!on; saveSettings();
+    Roach.setStyle(on ? 'roach' : 'gummy');
+    $('tb-mode').textContent = on ? '🐻 젤리 모드로' : '🪳 바퀴 모드로';
+    if (!quiet) this.toast(on ? '🪳 바퀴 모드! 모두 바퀴벌레로 보여요' : '🐻 곰돌이 젤리 모드! 모두 말랑한 젤리 곰이에요');
+  }
+
+  // 포획 타이밍 막대: 바늘이 초록칸에 있을 때 Z를 떼면 성공
   captureMeter(C) {
     let el = $('cap-meter');
     if (!el) { el = document.createElement('div'); el.id = 'cap-meter'; el.innerHTML = '<div class="cm-t"></div><div class="cm-bar"><div class="cm-zone"></div><div class="cm-needle"></div></div><div class="cm-s">바늘이 초록칸에 왔을 때 <kbd>Z</kbd>를 떼세요!</div>'; document.body.appendChild(el); }

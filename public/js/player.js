@@ -6,7 +6,7 @@ import { updateMount } from './animals.js';
 export class Player {
   constructor(scene, profile) {
     this.profile = profile;
-    this.roach = new Roach({ color: profile.color, age: profile.age, gender: profile.gender, look: profile.look, accessories: profile.accessories || [], lashes: !profile.look && profile.gender === '여' });
+    this.roach = new Roach({ seed: profile.name, color: profile.color, age: profile.age, gender: profile.gender, look: profile.look, accessories: profile.accessories || [], lashes: !profile.look && profile.gender === '여' });
     this.roach.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     scene.add(this.roach.root);
     this.pos = new THREE.Vector3();
@@ -30,7 +30,7 @@ export class Player {
     const old = this.roach;
     const scene = old.root.parent;
     this.profile.color = color;
-    const r = new Roach({ color, age: this.profile.age, gender: this.profile.gender, look: this.profile.look, accessories: this.profile.accessories || [], lashes: !this.profile.look && this.profile.gender === '여' });
+    const r = new Roach({ seed: this.profile.name, color, age: this.profile.age, gender: this.profile.gender, look: this.profile.look, accessories: this.profile.accessories || [], lashes: !this.profile.look && this.profile.gender === '여' });
     r.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     r.root.position.copy(old.root.position);
     r.root.rotation.y = old.root.rotation.y;
@@ -116,7 +116,8 @@ export class Player {
       // 날기: Space 위로, X 아래로. 땅에 닿으면 착지
       const up = (input.jump ? 1 : 0) - (input.down ? 1 : 0);
       this.vy += (up * 9 - this.vy) * Math.min(1, dt * 4);
-      this.pos.y = Math.min(world.ceiling ?? 90, this.pos.y + this.vy * dt);
+      // 건물 안에서는 머리가 천장에 닿을 때까지만
+      this.pos.y = Math.min(world.ceiling ? world.ceiling - this.roach.height * 0.95 : 90, this.pos.y + this.vy * dt);
       this.flyDist = len > 0 ? this.speed * dt : 0;
       if (this.pos.y <= gy && this.vy <= 0) { this.pos.y = gy; this.land(); }
       this.onGround = false;

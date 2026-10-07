@@ -61,26 +61,54 @@ function shade(hex, f) {
   return '#' + c.getHexString();
 }
 
+// ---------------- 곰돌이 젤리 모드 (기본) ----------------
+// 바퀴벌레가 징그럽다는 사람들을 위해: 모든 캐릭터를 말랑한 곰돌이 젤리로 그린다. '바퀴 모드'를 켜면 원래 바퀴벌레
+export const GUMMY_COLORS = ['#ff4d5e', '#ff9a2e', '#ffd93b', '#7be04a', '#f3f6ff', '#ff7eb6', '#b57bff', '#4fc3ff'];
+const jellyMats = new Map();
+function jelly(c, op = 0.8) {
+  const key = c + op;
+  let m = jellyMats.get(key);
+  if (!m) {
+    const col = new THREE.Color(c);
+    m = new THREE.MeshPhongMaterial({ color: col, transparent: true, opacity: op, shininess: 90, specular: new THREE.Color('#ffffff'), emissive: col.clone().multiplyScalar(0.28) });
+    jellyMats.set(key, m);
+  }
+  return m;
+}
+export function gummyColorFor(seed) {
+  let h = 2166136261;
+  for (const ch of String(seed)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return GUMMY_COLORS[(h >>> 0) % GUMMY_COLORS.length];
+}
+
 export class Roach {
+  // 저장된 설정에 '바퀴 모드'가 켜져 있으면 바퀴벌레, 아니면 곰돌이 젤리 (기본)
+  static style = (() => { try { return JSON.parse(localStorage.getItem('roachcity.settings') || '{}').bugMode ? 'roach' : 'gummy'; } catch { return 'gummy'; } })();
+  static all = [];
+  static onHurt = null;
   /**
-   * @param {object} o { color, age, gender, accessories:[], lashes, mustache }
+   * @param {object} o { color, age, gender, accessories:[], lashes, mustache, seed(젤리 색 고정용) }
    */
   constructor(o = {}) {
     this.opts = o;
     const age = o.age ?? 30;
+    const gummy = this.gummy = Roach.style !== 'roach';
     let color = o.color || '#8a5634';
-    if (age >= 65) color = '#' + new THREE.Color(color).lerp(new THREE.Color('#b9a99a'), 0.35).getHexString();
+    if (gummy) color = this.jellyColor = gummyColorFor(`${o.seed ?? ''}|${o.color}|${o.gender}|${age}|${JSON.stringify(o.look || {})}`);
+    else if (age >= 65) color = '#' + new THREE.Color(color).lerp(new THREE.Color('#b9a99a'), 0.35).getHexString();
     this.color = color;
     const look = this.look = { ...DEFAULT_LOOK, ...(o.look || {}) };
+    if (gummy) look.nose = 0; // 곰돌이 주둥이가 따로 있다
+    Roach.all.push(new WeakRef(this));
 
     this.root = new THREE.Group();
     this.inner = new THREE.Group();
     this.root.add(this.inner);
 
-    const bodyM = toon(color);
+    const bodyM = gummy ? jelly(color) : toon(color);
     this.bodyM = bodyM;
-    const darkM = toon(shade(color, 0.72));
-    const bellyM = toon(look.belly && look.belly !== 'auto' ? look.belly : shade(color, 1.45));
+    const darkM = gummy ? jelly(shade(color, 0.86)) : toon(shade(color, 0.72));
+    const bellyM = gummy ? jelly(shade(color, 1.2), 0.7) : toon(look.belly && look.belly !== 'auto' ? look.belly : shade(color, 1.45));
     const wingM = toon(shade(color, 0.85));
     const white = toon('#ffffff');
     const black = toon('#1d1410');
@@ -91,8 +119,8 @@ export class Roach {
       const pivot = new THREE.Group();
       pivot.position.set(s * 0.2, 0.62, 0);
       this.inner.add(pivot);
-      mesh(legGeo(), darkM, pivot, 0, -0.3, 0);
-      mesh(rsph(), darkM, pivot, 0, -0.56, 0.06, 0.14, 0.09, 0.21);
+      if (gummy) { mesh(rsph(), bodyM, pivot, 0, -0.3, 0.02, 0.21, 0.33, 0.21); mesh(rsph(), bellyM, pivot, 0, -0.56, 0.08, 0.2, 0.1, 0.24); }
+      else { mesh(legGeo(), darkM, pivot, 0, -0.3, 0); mesh(rsph(), darkM, pivot, 0, -0.56, 0.06, 0.14, 0.09, 0.21); }
       this.legs.push(pivot);
     }
 
@@ -100,10 +128,17 @@ export class Roach {
     this.torso = new THREE.Group();
     this.torso.position.y = 0;
     this.inner.add(this.torso);
-    this.body = mesh(rsph(), bodyM, this.torso, 0, 1.05, 0, 0.5, 0.62, 0.42);
-    mesh(rsph(), bellyM, this.torso, 0, 1.0, 0.2, 0.36, 0.48, 0.25);
-    // 배 줄무늬
-    for (let i = 0; i < 3; i++) mesh(G.box(), toon(shade(color, 1.2)), this.torso, 0, 0.82 + i * 0.16, 0.43 - Math.abs(i - 1) * 0.02, 0.38 - Math.abs(i - 1) * 0.06, 0.02, 0.03);
+    if (gummy) {
+      // 통통한 젤리 몸 + 볼록한 배 + 반짝이는 하이라이트
+      this.body = mesh(rsph(), bodyM, this.torso, 0, 1.02, 0, 0.56, 0.66, 0.47);
+      mesh(rsph(), bellyM, this.torso, 0, 0.95, 0.24, 0.4, 0.46, 0.27);
+      mesh(rsph(), jelly('#ffffff', 0.55), this.torso, -0.22, 1.32, 0.36, 0.07, 0.15, 0.04);
+    } else {
+      this.body = mesh(rsph(), bodyM, this.torso, 0, 1.05, 0, 0.5, 0.62, 0.42);
+      mesh(rsph(), bellyM, this.torso, 0, 1.0, 0.2, 0.36, 0.48, 0.25);
+      // 배 줄무늬
+      for (let i = 0; i < 3; i++) mesh(G.box(), toon(shade(color, 1.2)), this.torso, 0, 0.82 + i * 0.16, 0.43 - Math.abs(i - 1) * 0.02, 0.38 - Math.abs(i - 1) * 0.06, 0.02, 0.03);
+    }
     // 날개 (등)
     this.wings = [];
     this.buildWings(look.wings | 0, color, wingM);
@@ -118,8 +153,14 @@ export class Roach {
         pivot.rotation.z = s * spread;
         pivot.userData.baseZ = s * spread;
         this.torso.add(pivot);
-        mesh(limbGeo(), darkM, pivot, 0, -0.2, 0);
-        mesh(G.sphereLow(), darkM, pivot, 0, -0.4, 0, 0.085, 0.085, 0.085);
+        if (gummy) {
+          // 곰돌이는 팔이 둘: 윗줄만 통통한 젤리 팔, 아랫줄은 숨긴다
+          if (y > 1.2) mesh(rsph(), bodyM, pivot, 0, -0.2, 0, 0.15, 0.27, 0.15);
+          else pivot.visible = false;
+        } else {
+          mesh(limbGeo(), darkM, pivot, 0, -0.2, 0);
+          mesh(G.sphereLow(), darkM, pivot, 0, -0.4, 0, 0.085, 0.085, 0.085);
+        }
         this.arms.push(pivot);
       }
     }
@@ -138,9 +179,17 @@ export class Roach {
     this.head = new THREE.Group();
     this.head.position.y = 1.95;
     this.torso.add(this.head);
-    this.headMesh = mesh(rsph(), bodyM, this.head, 0, 0, 0, 0.5, 0.46, 0.47);
+    this.headMesh = mesh(rsph(), bodyM, this.head, 0, 0, 0, gummy ? 0.52 : 0.5, 0.46, 0.47);
     this.pupilColor = look.pupil || '#1d1410';
     this.buildFace(look, color, darkM, white, black);
+    if (gummy) {
+      // 둥근 귀 + 주둥이 + 코, 더듬이는 숨긴다
+      for (const s of [-1, 1]) { mesh(rsph(), bodyM, this.head, s * 0.34, 0.34, -0.03, 0.17, 0.17, 0.11); mesh(rsph(), bellyM, this.head, s * 0.34, 0.33, 0.04, 0.09, 0.09, 0.05); }
+      mesh(rsph(), bellyM, this.head, 0, -0.14, 0.38, 0.22, 0.16, 0.13);
+      mesh(rsph(), toon(shade(color, 0.45)), this.head, 0, -0.07, 0.5, 0.065, 0.048, 0.04);
+      mesh(rsph(), jelly('#ffffff', 0.6), this.head, -0.2, 0.22, 0.36, 0.06, 0.1, 0.03);
+      for (const a of this.antennae) a.visible = false;
+    }
 
     if (o.lashes) for (const s of [-1, 1]) {
       const l = mesh(G.box(), black, this.head, s * 0.3, 0.17, 0.36, 0.08, 0.02, 0.02);
@@ -313,6 +362,24 @@ export class Roach {
     }
   }
 
+  // 젤리 ↔ 바퀴 모드 전환: 같은 옵션으로 몸을 새로 만들어 갈아 끼운다 (위치·상태·손에 든 것은 그대로)
+  rebuild() {
+    const keep = new Set(['root', 'opts', 'dead', 'seated', 'riding', 'pedal', 'flying', 'flipped', 'emotion', 'baseEmotion', 'emotionT', 'heldSpec', 'accList', 't', 'phase', 'talking', 'crawlK', 'drawK']);
+    const n = new Roach({ ...this.opts, accessories: this.accList || this.opts.accessories || [] });
+    const held = this.heldSpec;
+    this.root.remove(this.inner);
+    n.root.remove(n.inner);
+    for (const k of Object.keys(n)) if (!keep.has(k)) this[k] = n[k];
+    this.root.add(this.inner);
+    this.heldSpec = null; this.setHeld(held);
+    this.detailsDirty = true;
+  }
+  static setStyle(style) {
+    Roach.style = style;
+    for (const ref of Roach.all) { const r = ref.deref(); if (r && r.gummy !== (style !== 'roach')) r.rebuild(); }
+    Roach.all = Roach.all.filter((ref) => ref.deref());
+  }
+
   // 멀리 있으면 얼굴 디테일과 그림자를 끈다
   setLod(far) {
     if (this.detailsDirty) {
@@ -334,6 +401,7 @@ export class Roach {
   }
 
   setAccessories(list) {
+    this.accList = list;
     this.accGroup.clear();
     this.detailsDirty = true;
     this.hasCane = false;
@@ -999,6 +1067,7 @@ export class Roach {
   attack(kind = 'melee') { this.attackT = kind === 'melee' ? 0.3 : kind === 'throw' ? 0.35 : 0.12; this.attackKind = kind; this.attackDur = this.attackT; }
 
   hurt() {
+    Roach.onHurt?.(this); // 젤리 모드: 맞으면 그 색 젤리가 튄다
     this.hurtT = 0.15;
     const red = toon('#ff5252');
     this.body.material = red; this.headMesh.material = red;
@@ -1013,6 +1082,8 @@ export class Roach {
 
   /** speed: 현재 이동 속도 (m/s) */
   update(dt, speed = 0, opts = {}) {
+    // 곰돌이 젤리는 날 때만 날개가 보인다
+    if (this.gummy) { const w = !!this.flying; if (this.wings[0] && this.wings[0].visible !== w) for (const x of this.wings) x.visible = w; }
     this.t += dt;
     const k = Math.min(1, speed / 3.2);
     this.phase += dt * (3 + speed * 2.6);
@@ -1072,7 +1143,7 @@ export class Roach {
       if (this.emotionT <= 0) this.setEmotion(this.baseEmotion || 'neutral', 0);
     }
     // 달리기: 진짜 바퀴벌레처럼 몸을 바닥에 붙이고 여섯 다리로 기어간다 (삼각 보행)
-    const wantCrawl = speed >= 7 && !this.seated && !this.dead && !this.dancing && this.attackT <= 0 && !opts.noCrawl;
+    const wantCrawl = !this.gummy && speed >= 7 && !this.seated && !this.dead && !this.dancing && this.attackT <= 0 && !opts.noCrawl;
     this.crawlK += ((wantCrawl ? 1 : 0) - this.crawlK) * Math.min(1, dt * 9);
     const ck = this.crawlK;
     if (ck > 0.01) {

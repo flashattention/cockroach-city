@@ -10,6 +10,7 @@ export const REGIONS = [
   { id: 'valley', name: '더듬이 계곡', emoji: '🏞️', rect: [-90, -1150, 110, -260], color: '#7cb87a' },
   { id: 'mountain', name: '바퀴산', emoji: '🏔️', rect: [-330, -1150, 330, -260], color: '#9e9e8e' },
   { id: 'forest', name: '야생의 숲', emoji: '🌲', rect: [-1150, -1150, -280, -150], color: '#3f7f3a' },
+  { id: 'park', name: '바퀴랜드 놀이공원', emoji: '🎢', rect: [-1070, -50, -790, 210], color: '#e0d6cc' },
   { id: 'meadow', name: '사냥꾼 들판', emoji: '🦌', rect: [-1150, -150, -280, 260], color: '#9ccc65' },
   { id: 'swamp', name: '악어 늪지대', emoji: '🐊', rect: [-1150, 260, -280, 1150], color: '#5d7a4a' },
   { id: 'jungle', name: '호랑이 정글', emoji: '🐯', rect: [-280, 280, 330, 680], color: '#2e7d32' },
@@ -43,6 +44,8 @@ export const OUTER_BUILDINGS = [
   { type: 'seafood', x: 252, z: 122, dir: -1, w: 16, d: 12, floors: 1, name: '바다향 매운탕·횟집' },
   { type: 'fishing', x: 80, z: -250, dir: -1, w: 12, d: 10, floors: 1, name: '호숫가 낚시가게' },
 ];
+// 바퀴랜드 놀이공원 (사냥꾼 들판 동쪽): 평평하게 다진 터
+export const PARK = { x0: -1070, z0: -50, x1: -790, z1: 210, y: 0.3 };
 // 바퀴 낚시터: 바다로 뻗은 나무 잔교
 export const PIER = { x0: 300, x1: 380, z0: 88, z1: 95, y: 1.4 };
 export const onPier = (x, z) => x > PIER.x0 && x < PIER.x1 && z > PIER.z0 && z < PIER.z1;
@@ -54,6 +57,7 @@ export const ROADS = [
   { id: 'S', pts: [[0, HALF], [0, 520], [-40, 760], [20, 1120]], name: '남쪽 정글도로' },
   { id: 'W', pts: [[-HALF, 0], [-560, 0], [-700, -260], [-900, -700]], name: '서쪽 숲길' },
   { id: 'W2', pts: [[-560, 0], [-720, 380], [-950, 820]], name: '늪지대 길' },
+  { id: 'P', pts: [[-560, 0], [-680, 40], [-785, 75]], name: '놀이공원길' },
   { id: 'E', pts: [[HALF, 0], [BRIDGE.x0 - BRIDGE.ramp, 0], [BRIDGE.x1 + BRIDGE.ramp, 0], [1000, 0], [1000, -400]], name: '바퀴 대교' },
   { id: 'E2', pts: [[1000, 0], [1000, 420]], name: '섬 남쪽길' },
   { id: 'D', pts: [[1000, -400], [985, -560], [1010, -760], [975, -960]], name: '드래곤 협곡길' },
@@ -146,6 +150,9 @@ export function terrainH(x, z) {
     if (d < lk.r * 1.6) h = Math.min(h, h * smooth(lk.r * 0.7, lk.r * 1.6, d) + (WATER_Y - 3) * (1 - smooth(lk.r * 0.7, lk.r * 1.6, d)));
   }
   h *= cityFade;
+  // 놀이공원 터는 평평하게
+  { const dx = Math.max(PARK.x0 - x, 0, x - PARK.x1), dz = Math.max(PARK.z0 - z, 0, z - PARK.z1), d = Math.hypot(dx, dz);
+    if (d < 40) h = PARK.y + (h - PARK.y) * smooth(0, 40, d); }
   // 건물 터는 평평하게
   for (const p of PADS) { const d = Math.hypot(x - p.x, z - p.z); if (d < p.r + 25) h = 0.15 + (h - 0.15) * smooth(p.r, p.r + 25, d); }
   // 도로는 평평하게 (주변보다 살짝 높게)
@@ -206,6 +213,7 @@ export function roadSigns() {
   S.push([-12, 600, Math.PI, [line('amazon', 100), '🐯 호랑이 주의!']]);
   S.push([-560, 14, -Math.PI / 2, [line('forest', 260), line('swamp', 280) + ' ↙']]);
   S.push([-700, 330, Math.PI, ['🐊 악어 출몰 지역! 조심하세요', line('swamp', 0)]]);
+  S.push([-575, 16, -Math.PI / 2, ['🎢 바퀴랜드 놀이공원 220m ↙', '롤러코스터 · 바이킹 · 관람차 · 회전목마']]);
   S.push([BRIDGE.x0 - BRIDGE.ramp - 20, 12, Math.PI / 2, ['🌉 바퀴 대교 · 길이 470m', '🐄 목장 마을까지 ' + (1000 - (BRIDGE.x0 - BRIDGE.ramp)) + 'm']]);
   S.push([1015, -12, Math.PI / 2, ['🐄 목장 ↑ 북쪽', '🐉 드래곤 협곡 ↑ 460m', '🏖️ 남쪽 해변 ↓']]);
   S.push([1015, -430, 0, ['🐉 드래곤 협곡 ↑', '🔥 불 뿜는 드래곤 주의!', '체력을 절반 깎으면 Z로 포획']]);

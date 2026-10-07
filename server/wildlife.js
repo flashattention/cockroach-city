@@ -1,6 +1,6 @@
 // 야생동물 AI (서버): 돌아다니고, 사냥감은 도망치고, 맹수는 덤빈다. 쓰러지면 전리품을 떨어뜨리고 잠시 뒤 다시 태어난다
 import { ANIMALS, ANIMAL_KINDS } from '../public/js/fauna.js';
-import { REGIONS, terrainH, WATER_Y } from '../public/js/terrain.js';
+import { REGIONS, terrainH, WATER_Y, PARK } from '../public/js/terrain.js';
 import { HALF } from '../public/js/config.js';
 import { RNG } from '../public/js/utils.js';
 
@@ -25,6 +25,7 @@ export class Wildlife {
   }
   okSpot(kind, x, z) {
     if (Math.abs(x) < HALF + 40 && Math.abs(z) < HALF + 40) return false;
+    if (x > PARK.x0 - 20 && x < PARK.x1 + 20 && z > PARK.z0 - 20 && z < PARK.z1 + 20) return false; // 놀이공원엔 안 들어간다
     const h = terrainH(x, z);
     const d = ANIMALS[kind];
     if (d.swim) return h < WATER_Y + 2.5; // 물가 근처
@@ -105,7 +106,8 @@ export class Wildlife {
         const nx = a.x + mx * speed * dt, nz = a.z + mz * speed * dt;
         // 땅 동물은 깊은 물에 안 들어가고, 아무도 도시로는 안 들어온다
         const h = terrainH(nx, nz);
-        const blocked = (Math.abs(nx) < HALF + 25 && Math.abs(nz) < HALF + 25) || (!d.swim && h < WATER_Y + 0.1);
+        const inPark = nx > PARK.x0 - 15 && nx < PARK.x1 + 15 && nz > PARK.z0 - 15 && nz < PARK.z1 + 15;
+        const blocked = (Math.abs(nx) < HALF + 25 && Math.abs(nz) < HALF + 25) || inPark || (!d.swim && h < WATER_Y + 0.1);
         if (blocked) { a.t = 0; a.tx = a.x - mx * 10; a.tz = a.z - mz * 10; }
         else { a.x = nx; a.z = nz; a.h = Math.atan2(mx, mz); }
         a.mv = speed > d.speed + 0.5 ? 2 : 1;
