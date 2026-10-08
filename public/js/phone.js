@@ -98,15 +98,40 @@ export const PHONE_APPS = {
     };
   },
 
+  // ---------------- 인스타그램: 피드 · 팔로잉 · DM · 프로필 · 댓글 ----------------
   async insta(ui, body, g) {
-    body.innerHTML = '<div class="profile-big">피드 불러오는 중...</div>';
-    try {
-      const { feed } = await api(g, `/api/insta?char=${g.char}`);
-      body.innerHTML = `<div class="insta-head">📸 <b>Jellystagram</b> <small>젤리시티 사람들의 사진</small></div>
-        <div class="feed">${feed.map((p) => `<div class="post"><div class="ph-h"><span class="av">${brand.bug ? '🪳' : '🐻'}</span><b>${escapeHtml(p.name)}</b> <small>Lv.${p.level} · ${ago(p.t)}</small></div>
-          <img loading="lazy" src="/photos/${p.id}.jpg"><div class="ph-a"><button class="like ${p.liked ? 'on' : ''}" data-id="${p.id}">${p.liked ? '❤️' : '🤍'} <span>${p.likes}</span></button></div>
-          ${p.caption ? `<div class="ph-c"><b>${escapeHtml(p.name)}</b> ${escapeHtml(p.caption)}</div>` : ''}</div>`).join('') || '<p>아직 게시물이 없어요. 갤러리에서 사진을 올려보세요!</p>'}</div>`;
-      body.querySelectorAll('.like').forEach((b) => {
+    const tab = ui.igTab || 'all';
+    const av = brand.bug ? '🪳' : '🐻';
+    const tabs = `<div class="td-tabs ig-tabs"><button class="${tab === 'all' ? 'on' : ''}" data-ig="all">🏠 피드</button><button class="${tab === 'following' ? 'on' : ''}" data-ig="following">👥 팔로잉</button><button class="${tab === 'dm' ? 'on' : ''}" data-ig="dm">✉️ DM${g.igUnread ? ` (${g.igUnread})` : ''}</button><button class="${tab === 'me' ? 'on' : ''}" data-ig="me">👤 나</button></div>`;
+    const head = `<div class="insta-head">📸 <b>Jellystagram</b> <small>젤리시티 사람들의 사진</small></div>`;
+    const go = (t, extra = {}) => { Object.assign(ui, { igTab: t, igUser: null, igDm: null, igList: null }, extra); PHONE_APPS.insta(ui, body, g); };
+    const bindTabs = () => body.querySelectorAll('[data-ig]').forEach((b) => { b.onclick = () => go(b.dataset.ig); });
+    const noKeys = (el) => el.addEventListener('keydown', (e) => e.stopPropagation());
+    const fail = (e) => { body.innerHTML = head + tabs + `<div class="profile-big">불러오지 못했어요 (${escapeHtml(e.message)})</div>`; bindTabs(); };
+    body.innerHTML = head + tabs + '<div class="profile-big">불러오는 중...</div>';
+    bindTabs();
+    // 안 읽은 DM 수 (탭 배지용)
+    if (tab !== 'dm') api(g, `/api/dm?char=${g.char}`).then(({ threads }) => { const n = threads.reduce((a, x) => a + x.unread, 0); if (n !== (g.igUnread || 0)) { g.igUnread = n; const b = body.querySelector('[data-ig="dm"]'); if (b) b.textContent = `✉️ DM${n ? ` (${n})` : ''}`; } }).catch(() => {});
+
+    const comment = (c, pid) => `<div class="ig-c"><b data-user="${c.by}">${escapeHtml(c.name)}</b> ${escapeHtml(c.text)} <small>${ago(c.t)}</small>${c.canDel ? ` <button class="ig-x" data-cdel="${c.id}" data-pid="${pid}" title="댓글 삭제">✕</button>` : ''}</div>`;
+    const followBtn = (tok, on) => `<button class="ig-follow ${on ? 'on' : ''}" data-follow="${tok}">${on ? '팔로잉' : '팔로우'}</button>`;
+    const post = (p) => `<div class="post"><div class="ph-h"><span class="av">${av}</span><b class="ig-name" data-user="${p.owner}">${escapeHtml(p.name)}</b> <small>Lv.${p.level} · ${ago(p.t)}</small>${p.mine ? '' : followBtn(p.owner, p.following)}</div>
+      <img loading="lazy" src="/photos/${p.id}.jpg">
+      <div class="ph-a"><button class="like ${p.liked ? 'on' : ''}" data-id="${p.id}">${p.liked ? '❤️' : '🤍'} <span>${p.likes}</span></button><button class="like" data-cfocus="${p.id}" title="댓글">💬 <span id="cn-${p.id}">${p.commentCount}</span></button>${p.mine ? '' : `<button class="like" data-dm="${p.owner}" title="DM 보내기">✉️</button>`}</div>
+      ${p.caption ? `<div class="ph-c"><b>${escapeHtml(p.name)}</b> ${escapeHtml(p.caption)}</div>` : ''}
+      <div class="ig-cmts" id="cm-${p.id}">${p.commentCount > p.comments.length ? `<button class="ig-more" data-more="${p.id}">댓글 ${p.commentCount}개 모두 보기</button>` : ''}${p.comments.map((c) => comment(c, p.id)).join('')}</div>
+      <div class="addrow ig-cadd"><input data-cin="${p.id}" maxlength="200" placeholder="댓글 달기..."><button class="btn mini" data-csend="${p.id}">게시</button></div></div>`;
+    const showComments = (pid, list) => {
+      const box = $(`cm-${pid}`); if (box) box.innerHTML = list.map((c) => comment(c, pid)).join('');
+      const n = $(`cn-${pid}`); if (n) n.textContent = list.length;
+      bindPosts(box);
+    };
+    // 게시물 안의 버튼들 (피드·프로필 공용)
+    const bindPosts = (root) => {
+      if (!root) return;
+      root.querySelectorAll('[data-user]').forEach((el) => { el.onclick = () => go(el.dataset.user === g.char ? 'me' : 'profile', { igUser: el.dataset.user, igBack: tab === 'profile' ? ui.igBack : tab }); });
+      root.querySelectorAll('[data-dm]').forEach((el) => { el.onclick = () => go('dm', { igDm: el.dataset.dm }); });
+      root.querySelectorAll('.like[data-id]').forEach((b) => {
         b.onclick = async () => {
           try {
             const r = await api(g, '/api/insta/like', { method: 'POST', body: { char: g.char, id: b.dataset.id } });
@@ -116,7 +141,97 @@ export const PHONE_APPS = {
           } catch (e) { ui.toast(e.message); }
         };
       });
-    } catch (e) { body.innerHTML = `<div class="profile-big">피드를 불러오지 못했어요 (${escapeHtml(e.message)})</div>`; }
+      root.querySelectorAll('[data-follow]').forEach((b) => {
+        b.onclick = async () => {
+          try {
+            const r = await api(g, '/api/insta/follow', { method: 'POST', body: { char: g.char, target: b.dataset.follow } });
+            body.querySelectorAll(`[data-follow="${b.dataset.follow}"]`).forEach((x) => { x.classList.toggle('on', r.following); x.textContent = r.following ? '팔로잉' : '팔로우'; });
+            const fc = $('ig-followers'); if (fc && ui.igUser === b.dataset.follow) fc.textContent = r.followers;
+            ui.toast(r.following ? '👥 팔로우했어요' : '팔로우를 취소했어요');
+          } catch (e) { ui.toast(e.message); }
+        };
+      });
+      root.querySelectorAll('[data-cfocus]').forEach((b) => { b.onclick = () => body.querySelector(`[data-cin="${b.dataset.cfocus}"]`)?.focus(); });
+      root.querySelectorAll('[data-more]').forEach((b) => { b.onclick = async () => { try { showComments(b.dataset.more, (await api(g, `/api/insta/comments?char=${g.char}&id=${b.dataset.more}`)).comments); } catch (e) { ui.toast(e.message); } }; });
+      root.querySelectorAll('[data-cdel]').forEach((b) => {
+        b.onclick = async () => {
+          if (!(await ui.confirm('이 댓글을 지울까요?', '🗑️ 삭제'))) return;
+          try { showComments(b.dataset.pid, (await api(g, '/api/insta/comment/del', { method: 'POST', body: { char: g.char, id: b.dataset.pid, cid: b.dataset.cdel } })).comments); } catch (e) { ui.toast(e.message); }
+        };
+      });
+      root.querySelectorAll('[data-cin]').forEach((inp) => {
+        const pid = inp.dataset.cin;
+        const send = async () => {
+          const text = inp.value.trim(); if (!text) return;
+          try { showComments(pid, (await api(g, '/api/insta/comment', { method: 'POST', body: { char: g.char, id: pid, text } })).comments); inp.value = ''; } catch (e) { ui.toast(e.message); }
+        };
+        inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.isComposing) send(); });
+        root.querySelector(`[data-csend="${pid}"]`).onclick = send;
+      });
+    };
+
+    try {
+      // 피드 (전체 / 팔로잉)
+      if (tab === 'all' || tab === 'following') {
+        const { feed } = await api(g, `/api/insta?char=${g.char}&mode=${tab}`);
+        const empty = tab === 'following' ? '<p>아직 팔로우한 사람의 게시물이 없어요. 🏠 피드에서 마음에 드는 사람을 팔로우해 보세요!</p>' : '<p>아직 게시물이 없어요. 갤러리에서 사진을 올려보세요!</p>';
+        body.innerHTML = head + tabs + `<div class="feed">${feed.map(post).join('') || empty}</div>`;
+        bindTabs(); bindPosts(body);
+        return;
+      }
+      // 프로필 (나 / 다른 사람)
+      if (tab === 'me' || tab === 'profile') {
+        const user = tab === 'me' ? g.char : ui.igUser;
+        if (ui.igList) {
+          const { list } = await api(g, `/api/insta/follows?user=${user}&which=${ui.igList}`);
+          body.innerHTML = head + `<div class="insta-head"><button class="btn mini ghost" id="ig-back">←</button> <b>${ui.igList === 'followers' ? '팔로워' : '팔로잉'}</b> <small>${list.length}명</small></div>
+            <div class="itemlist">${list.map((u) => `<div class="item thread" data-user="${u.token}"><div class="ic">${av}</div><div class="info"><b>${escapeHtml(u.name)}</b><small>Lv.${u.level}</small></div></div>`).join('') || '<div style="padding:12px">아직 아무도 없어요</div>'}</div>`;
+          $('ig-back').onclick = () => { ui.igList = null; PHONE_APPS.insta(ui, body, g); };
+          body.querySelectorAll('[data-user]').forEach((el) => { el.onclick = () => go(el.dataset.user === g.char ? 'me' : 'profile', { igUser: el.dataset.user, igBack: tab === 'profile' ? ui.igBack : tab }); });
+          return;
+        }
+        const pr = await api(g, `/api/insta/profile?char=${g.char}&user=${user}`);
+        body.innerHTML = head + (tab === 'me' ? tabs : `<div class="insta-head"><button class="btn mini ghost" id="ig-back">←</button></div>`) + `<div class="profile-big ig-prof">
+            <div class="ig-ph"><span class="ig-big">${av}</span><div><b>${escapeHtml(pr.name)}</b> ${pr.online ? '<span style="color:#4cd964">● 접속 중</span>' : ''}<br><small>⭐ Lv.${pr.level} · ${escapeHtml(pr.job || '무직')}</small></div></div>
+            <div class="ig-stats"><div><b>${pr.posts.length}</b><small>게시물</small></div><div class="ig-link" data-list="followers"><b id="ig-followers">${pr.followers}</b><small>팔로워</small></div><div class="ig-link" data-list="following"><b>${pr.followingCount}</b><small>팔로잉</small></div></div>
+            ${pr.mine ? '' : `<div class="ig-acts">${followBtn(pr.token, pr.following)}<button class="btn mini" data-dm="${pr.token}">✉️ 메시지</button></div>`}
+          </div>
+          <div class="feed" style="margin-top:10px">${pr.posts.map(post).join('') || `<p>${pr.mine ? '아직 올린 사진이 없어요. 📷 카메라로 찍고 갤러리에서 올려보세요!' : '아직 올린 사진이 없어요.'}</p>`}</div>`;
+        if (tab === 'me') bindTabs();
+        else $('ig-back').onclick = () => go(ui.igBack || 'all');
+        body.querySelectorAll('[data-list]').forEach((el) => { el.onclick = () => { ui.igList = el.dataset.list; PHONE_APPS.insta(ui, body, g); }; });
+        bindPosts(body);
+        return;
+      }
+      // DM 목록
+      if (!ui.igDm) {
+        const { threads } = await api(g, `/api/dm?char=${g.char}`);
+        g.igUnread = threads.reduce((a, x) => a + x.unread, 0);
+        const { list: fol } = await api(g, `/api/insta/follows?user=${g.char}&which=following`);
+        const fresh = fol.filter((u) => !threads.some((t) => t.token === u.token));
+        body.innerHTML = head + tabs + `<div class="itemlist">${threads.map((t) => `<div class="item thread" data-dm="${t.token}"><div class="ic">${av}</div><div class="info"><b>${escapeHtml(t.name)}${t.unread ? ` <span class="badge">${t.unread}</span>` : ''}</b><small>${t.lastMine ? '나: ' : ''}${escapeHtml(t.last.slice(0, 40))} · ${ago(t.t)}</small></div></div>`).join('') || '<div style="padding:12px">아직 주고받은 DM이 없어요. 게시물이나 프로필의 ✉️ 를 눌러 보내보세요</div>'}</div>
+          ${fresh.length ? `<div class="profile-big" style="margin-top:10px"><b>새 메시지</b> <small>팔로우한 사람</small><div style="margin-top:6px">${fresh.map((u) => `<button class="btn mini" data-dm="${u.token}">✉️ ${escapeHtml(u.name)}</button>`).join(' ')}</div></div>` : ''}`;
+        bindTabs();
+        body.querySelectorAll('[data-dm]').forEach((el) => { el.onclick = () => go('dm', { igDm: el.dataset.dm }); });
+        return;
+      }
+      // DM 대화
+      const th = await api(g, `/api/dm/thread?char=${g.char}&with=${ui.igDm}`);
+      body.innerHTML = `<div class="insta-head"><button class="btn mini ghost" id="dm-back">←</button> ${av} <b class="ig-name" data-user="${th.other.token}">${escapeHtml(th.other.name)}</b> <small>Lv.${th.other.level}</small></div>
+        <div class="smslog" id="dmlog">${th.msgs.map((m) => `<div class="sm ${m.mine ? 'me' : ''}">${escapeHtml(m.text)}<small>${ago(m.t)}</small></div>`).join('') || '<small>첫 메시지를 보내보세요 ✉️</small>'}</div>
+        <div class="addrow"><input id="dm-in" maxlength="300" placeholder="메시지 보내기..."><button class="btn" id="dm-send">전송</button></div>`;
+      $('dmlog').scrollTop = 1e9;
+      $('dm-back').onclick = () => go('dm');
+      body.querySelector('[data-user]').onclick = () => go('profile', { igUser: th.other.token, igBack: 'dm' });
+      const send = async () => {
+        const text = $('dm-in').value.trim(); if (!text) return;
+        try { await api(g, '/api/dm', { method: 'POST', body: { char: g.char, to: ui.igDm, text } }); PHONE_APPS.insta(ui, body, g); } catch (e) { ui.toast(e.message); }
+      };
+      noKeys($('dm-in'));
+      $('dm-in').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) send(); });
+      $('dm-send').onclick = send;
+      $('dm-in').focus();
+    } catch (e) { fail(e); }
   },
 
   contacts(ui, body, g) {

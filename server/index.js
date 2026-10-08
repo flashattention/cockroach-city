@@ -82,9 +82,19 @@ async function api(req, res, url) {
       world.deletePhoto(id); return json(res, 200, { ok: true });
     }
     // 인스타그램
-    if (url.pathname === '/api/insta' && req.method === 'GET') return json(res, 200, { feed: world.instaFeed(char) });
+    if (url.pathname === '/api/insta' && req.method === 'GET') return json(res, 200, { feed: world.instaFeed(char, url.searchParams.get('mode') === 'following' ? 'following' : 'all') });
     if (url.pathname === '/api/insta' && req.method === 'POST') { const b = await readJson(req); world.postInsta(who.sub, b.char, b.id, b.caption); return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/insta/like' && req.method === 'POST') { const b = await readJson(req); return json(res, 200, { likes: world.likeInsta(who.sub, b.char, b.id) }); }
+    if (url.pathname === '/api/insta/comments') return json(res, 200, { comments: world.instaComments(char, url.searchParams.get('id')) });
+    if (url.pathname === '/api/insta/comment' && req.method === 'POST') { const b = await readJson(req); return json(res, 200, { comments: world.commentInsta(who.sub, b.char, b.id, b.text) }); }
+    if (url.pathname === '/api/insta/comment/del' && req.method === 'POST') { const b = await readJson(req); return json(res, 200, { comments: world.deleteComment(who.sub, b.char, b.id, b.cid) }); }
+    if (url.pathname === '/api/insta/follow' && req.method === 'POST') { const b = await readJson(req); return json(res, 200, world.follow(who.sub, b.char, b.target)); }
+    if (url.pathname === '/api/insta/profile') return json(res, 200, world.instaProfile(char, url.searchParams.get('user')));
+    if (url.pathname === '/api/insta/follows') return json(res, 200, { list: world.followList(url.searchParams.get('user'), url.searchParams.get('which')) });
+    // 인스타 DM
+    if (url.pathname === '/api/dm' && req.method === 'GET') { if (!world.ownsChar(who.sub, char)) return json(res, 403, { error: '내 캐릭터가 아니에요' }); return json(res, 200, { threads: world.dmThreads(char) }); }
+    if (url.pathname === '/api/dm/thread') return json(res, 200, world.dmThread(who.sub, char, url.searchParams.get('with')));
+    if (url.pathname === '/api/dm' && req.method === 'POST') { const b = await readJson(req); return json(res, 200, world.sendDm(who.sub, b.char, b.to, b.text)); }
     // 건의함
     if (url.pathname === '/api/feedback' && req.method === 'POST') { const b = await readJson(req); world.addFeedback(who, b.char, b.text); return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/feedback' && req.method === 'GET') {

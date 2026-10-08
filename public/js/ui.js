@@ -569,14 +569,25 @@ export class UI {
   }
   setupPlayerChat() {
     const inp = $('pchat-input');
+    // 익명 채팅: 켜면 이름 대신 '🕶️ 익명'으로 보이고 머리 위 말풍선도 안 뜬다
+    const setAnon = (on) => {
+      this.anonChat = on;
+      $('pchat').classList.toggle('anon', on);
+      $('pchat-anon').textContent = on ? '🕶️ 익명 켬' : '🕶️ 익명 끔';
+      inp.placeholder = on ? '익명으로 말하기... (Enter 전송 · Tab 실명으로 · Esc 닫기)' : '모두에게 말하기... (Enter 전송 · Tab 익명으로 · Esc 닫기)';
+    };
+    setAnon(false);
+    $('pchat-anon').addEventListener('mousedown', (e) => e.preventDefault()); // 누를 때 입력창 포커스를 잃지 않게
+    $('pchat-anon').onclick = () => setAnon(!this.anonChat);
     inp.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter' && !e.isComposing) {
         const t = inp.value.trim();
-        if (t) this.game.say(t);
+        if (t) this.game.say(t, !!this.anonChat);
         inp.value = '';
         inp.blur();
-      } else if (e.key === 'Escape') inp.blur();
+      } else if (e.key === 'Tab') { e.preventDefault(); setAnon(!this.anonChat); }
+      else if (e.key === 'Escape') inp.blur();
     });
     inp.addEventListener('blur', () => $('pchat').classList.remove('open'));
   }

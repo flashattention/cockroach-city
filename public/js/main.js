@@ -511,7 +511,8 @@ function setupNet() {
   net.on('pleave', (m) => { const p = game.players.list.get(m.id); if (p && game.started) ui.addChatLine('sys', `${p.name}님이 나갔어요`); game.players.remove(m.id); });
   net.on('pmeta', (m) => { if (m.p.id !== game.myId) game.players.meta(m.p); });
   net.on('psay', (m) => {
-    ui.addChatLine(m.id === game.myId ? 'me' : 'other', m.text, m.name);
+    ui.addChatLine(m.id === game.myId ? 'me' : m.anon ? 'anon' : 'other', m.text, m.name);
+    if (m.anon) return; // 익명 채팅은 머리 위 말풍선을 띄우지 않는다 (누군지 드러나니까)
     if (m.id === game.myId) game.myBubble = { text: m.text, t: 5 };
     else game.players.say(m.id, m.text);
   });
@@ -629,6 +630,13 @@ function setupNet() {
     ui.toast(`💬 ${who}: ${m.m.text.slice(0, 40)}`);
     refreshPhone('sms');
   });
+  // 인스타 DM
+  net.on('dm', (m) => {
+    const open = !document.getElementById('phone').classList.contains('hidden') && ui.phoneTab === 'insta' && ui.igTab === 'dm';
+    if (open && (!ui.igDm || ui.igDm === m.from)) { ui.openPhone('insta'); return; }
+    game.igUnread = (game.igUnread || 0) + 1;
+    ui.toast(`✉️ 인스타 DM · ${m.name}: ${m.text.slice(0, 40)}`);
+  });
   // 튄더
   const refreshTd = () => refreshPhone('tinder');
   net.on('tdCards', (m) => { game.tdCards = m.list; game.tdMe = m.me; refreshTd(); });
@@ -700,7 +708,7 @@ game.sendProfile = () => {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(game.profile));
   game.net.send({ t: 'profile', profile: game.profile });
 };
-game.say = (text) => game.net.send({ t: 'say', text });
+game.say = (text, anon = false) => game.net.send({ t: 'say', text, anon });
 game.resetSave = () => { game.net.send({ t: 'stats', stats: game.stats }); setTimeout(() => location.reload(), 300); };
 
 // ------------------------------------------------------------------

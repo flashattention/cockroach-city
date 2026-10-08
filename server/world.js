@@ -56,6 +56,8 @@ export class World {
     this.sessions = {}; // 세션 → { sub, exp }
     this.photos = {}; // 사진 id → { owner, ownerName, t, posted, caption, likes, postedAt }
     this.feedback = []; // 개발자에게 건의
+    this.lastAct = new Map(); // '캐릭터:종류' → 마지막 시각 (댓글·DM 도배 방지, 저장 안 함)
+    this.dms = {}; // 인스타 DM: 'a|b' (캐릭터 토큰 정렬) → [{ from, t, text, read }]
     this.matches = []; // 튄더 매칭 { id, a, b, t, msgs }
     this.photoDir = path.join(dataDir, 'photos');
     fs.mkdirSync(this.photoDir, { recursive: true });
@@ -85,7 +87,7 @@ export class World {
   load() {
     try {
       const d = JSON.parse(fs.readFileSync(this.dataFile, 'utf8'));
-      Object.assign(this, { minutes: d.minutes ?? this.minutes, weather: d.weather ?? this.weather, accounts: d.accounts || {}, affinity: d.affinity || {}, memories: d.memories || {}, chatLogs: d.chatLogs || {}, users: d.users || {}, sessions: d.sessions || {}, photos: d.photos || {}, feedback: d.feedback || [], matches: d.matches || [] });
+      Object.assign(this, { minutes: d.minutes ?? this.minutes, weather: d.weather ?? this.weather, accounts: d.accounts || {}, affinity: d.affinity || {}, memories: d.memories || {}, chatLogs: d.chatLogs || {}, users: d.users || {}, sessions: d.sessions || {}, photos: d.photos || {}, feedback: d.feedback || [], matches: d.matches || [], dms: d.dms || {} });
       if ((d.version || 1) < WORLD_VERSION) { this.migrate(d.version || 1); d.extraCars = []; }
       for (const c of d.extraCars || []) { const car = this.traffic.spawnParked(new THREE.Vector3(c.x, c.y || 0, c.z), c.h, c.kind || 'sedan', c.color); if (c.gone) car.mode = 'gone'; this.extraCars.push(c); }
       console.log(`📂 저장된 세계를 불러왔어요 (계정 ${Object.keys(this.accounts).length}개)`);
@@ -95,7 +97,7 @@ export class World {
     const extraCars = this.traffic.cars.slice(AI_CARS).map((c) => ({ x: c.pos.x, y: c.pos.y || 0, z: c.pos.z, h: c.heading, kind: c.kind, color: c.color, gone: c.mode === 'gone' || c.mode === 'wreck' }));
     const now = Date.now();
     for (const [k, v] of Object.entries(this.sessions)) if (v.exp < now) delete this.sessions[k];
-    const data = { version: WORLD_VERSION, users: this.users, sessions: this.sessions, photos: this.photos, feedback: this.feedback, matches: this.matches, minutes: this.minutes, weather: this.weather, accounts: this.accounts, affinity: this.affinity, memories: this.memories, chatLogs: this.chatLogs, extraCars };
+    const data = { version: WORLD_VERSION, users: this.users, sessions: this.sessions, photos: this.photos, feedback: this.feedback, matches: this.matches, dms: this.dms, minutes: this.minutes, weather: this.weather, accounts: this.accounts, affinity: this.affinity, memories: this.memories, chatLogs: this.chatLogs, extraCars };
     const tmp = this.dataFile + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(data));
     fs.renameSync(tmp, this.dataFile);
@@ -142,7 +144,7 @@ export class World {
       if (!u.guest) continue;
       const last = Math.max(u.last || 0, ...u.chars.map((t) => this.accounts[t]?.last || 0));
       if (last > cutoff || [...this.players.values()].some((p) => u.chars.includes(p.token))) continue;
-      for (const t of u.chars) delete this.accounts[t];
+      for (const t of u.chars) { delete this.accounts[t]; this.forgetDms(t); }
       delete this.users[sub];
       for (const [sid, s] of Object.entries(this.sessions)) if (s.sub === sub) delete this.sessions[sid];
       changed = true;
@@ -184,6 +186,7 @@ export class World {
     for (const p of this.players.values()) if (p.token === token) { this.send(p, { t: 'sys', text: '이 캐릭터가 삭제됐어요' }); p.ws.close(); }
     u.chars = u.chars.filter((t) => t !== token);
     delete this.accounts[token];
+    this.forgetDms(token);
     this.dirty = true;
     this.broadcast({ t: 'homes', ...this.homesInfo() });
   }
@@ -339,7 +342,16 @@ export class World {
       case 'stats': this.accounts[p.token].stats = msg.stats; this.dirty = true; break;
       case 'say': {
         const text = String(msg.text || '').slice(0, 120).trim();
-        if (text) this.broadcast({ t: 'psay', id: p.id, name: p.name, text });
+        if (!text) break;
+        if (msg.anon) {
+          // 익명 채팅: 다른 사람에게는 누가 보냈는지(id·이름) 보내지 않는다. 도배 방지로 2초에 한 번
+          if (Date.now() - (p.lastAnon || 0) < 2000) { this.send(p, { t: 'sys', text: '🕶️ 익명 채팅은 2초에 한 번만 보낼 수 있어요' }); break; }
+          p.lastAnon = Date.now();
+          console.log(`🕶️ 익명 채팅 [${p.name} ${p.token}]: ${text}`); // 신고 대응용 서버 로그
+          for (const o of this.players.values()) this.send(o, { t: 'psay', anon: true, id: o === p ? p.id : -1, name: '🕶️ 익명', text });
+          break;
+        }
+        this.broadcast({ t: 'psay', id: p.id, name: p.name, text });
         break;
       }
       case 'talk': this.talk(p, msg); break;
@@ -593,10 +605,123 @@ export class World {
     this.dirty = true;
   }
   myPhotos(char) { return Object.entries(this.photos).filter(([, p]) => p.owner === char).sort((a, b) => b[1].t - a[1].t).map(([id, p]) => ({ id, t: p.t, posted: p.posted, caption: p.caption, likes: p.likes.length })); }
-  instaFeed(char) {
-    return Object.entries(this.photos).filter(([, p]) => p.posted).sort((a, b) => b[1].postedAt - a[1].postedAt).slice(0, 60)
-      .map(([id, p]) => ({ id, name: this.accounts[p.owner]?.name || p.ownerName, mine: p.owner === char, caption: p.caption, t: p.postedAt, likes: p.likes.length, liked: p.likes.includes(char), level: this.accounts[p.owner]?.profile?.level || 1 }));
+  instaPost(id, p, char) {
+    const acc = this.accounts[p.owner];
+    return { id, owner: p.owner, name: acc?.name || p.ownerName, mine: p.owner === char, caption: p.caption, t: p.postedAt, likes: p.likes.length, liked: p.likes.includes(char), level: acc?.profile?.level || 1, following: this.isFollowing(char, p.owner), comments: (p.comments || []).slice(-3).map((c) => this.instaComment(c, p, char)), commentCount: (p.comments || []).length };
   }
+  instaComment(c, p, char) { return { id: c.id, by: c.by, name: this.accounts[c.by]?.name || c.name, text: c.text, t: c.t, canDel: c.by === char || p.owner === char }; }
+  // mode: 'all' 전체, 'following' 팔로우한 사람 것만, 캐릭터 토큰이면 그 사람 게시물만
+  instaFeed(char, mode = 'all') {
+    const follows = new Set(this.accounts[char]?.follows || []);
+    return Object.entries(this.photos)
+      .filter(([, p]) => p.posted && (mode === 'all' || (mode === 'following' ? follows.has(p.owner) || p.owner === char : p.owner === mode)))
+      .sort((a, b) => b[1].postedAt - a[1].postedAt).slice(0, 60)
+      .map(([id, p]) => this.instaPost(id, p, char));
+  }
+  instaComments(char, id) {
+    const p = this.photos[id];
+    if (!p?.posted) throw new Error('없는 게시물');
+    return (p.comments || []).map((c) => this.instaComment(c, p, char));
+  }
+  commentInsta(sub, char, id, text) {
+    const p = this.photos[id];
+    const acc = this.ownsChar(sub, char);
+    if (!acc || !p?.posted) throw new Error('없는 게시물');
+    text = String(text || '').trim().slice(0, 200);
+    if (!text) throw new Error('댓글을 적어주세요');
+    if (!this.cooldown(`${char}:comment`, 1500)) throw new Error('잠시 후 다시 써주세요');
+    p.comments ||= [];
+    p.comments.push({ id: crypto.randomBytes(5).toString('hex'), by: char, name: acc.name, text, t: Date.now() });
+    if (p.comments.length > 200) p.comments.shift();
+    if (p.owner !== char) this.notify(p.owner, { t: 'sys', text: `💬 ${acc.name}님이 내 인스타 사진에 댓글을 남겼어요: ${text.slice(0, 30)}` });
+    this.dirty = true;
+    return this.instaComments(char, id);
+  }
+  deleteComment(sub, char, id, cid) {
+    const p = this.photos[id];
+    if (!this.ownsChar(sub, char) || !p?.posted) throw new Error('없는 게시물');
+    const i = (p.comments || []).findIndex((c) => c.id === cid);
+    if (i < 0) throw new Error('없는 댓글');
+    if (p.comments[i].by !== char && p.owner !== char) throw new Error('내 댓글이 아니에요');
+    p.comments.splice(i, 1);
+    this.dirty = true;
+    return this.instaComments(char, id);
+  }
+
+  // ---------------- 팔로우 ----------------
+  isFollowing(char, target) { return !!this.accounts[char]?.follows?.includes(target); }
+  followerCount(target) { let n = 0; for (const a of Object.values(this.accounts)) if (a.follows?.includes(target)) n++; return n; }
+  follow(sub, char, target) {
+    const acc = this.ownsChar(sub, char);
+    if (!acc || !this.accounts[target] || target === char) throw new Error('팔로우할 수 없어요');
+    acc.follows ||= [];
+    const i = acc.follows.indexOf(target);
+    if (i >= 0) acc.follows.splice(i, 1);
+    else {
+      acc.follows.push(target);
+      this.notify(target, { t: 'sys', text: `👥 ${acc.name}님이 나를 팔로우했어요` });
+    }
+    this.dirty = true;
+    return { following: i < 0, followers: this.followerCount(target) };
+  }
+  instaProfile(char, target) {
+    const a = this.accounts[target];
+    if (!a) throw new Error('없는 사람이에요');
+    const posts = this.instaFeed(char, target);
+    return { token: target, name: a.name, level: a.profile?.level || 1, job: a.profile?.jobName || '', mine: target === char, following: this.isFollowing(char, target), followers: this.followerCount(target), followingCount: (a.follows || []).filter((t) => this.accounts[t]).length, posts, online: [...this.players.values()].some((x) => x.token === target) };
+  }
+  followList(target, which) {
+    const a = this.accounts[target];
+    if (!a) throw new Error('없는 사람이에요');
+    const toks = which === 'followers' ? Object.keys(this.accounts).filter((t) => this.accounts[t].follows?.includes(target)) : (a.follows || []).filter((t) => this.accounts[t]);
+    return toks.map((t) => ({ token: t, name: this.accounts[t].name, level: this.accounts[t].profile?.level || 1 }));
+  }
+
+  // ---------------- 인스타 DM ----------------
+  dmKey(a, b) { return a < b ? `${a}|${b}` : `${b}|${a}`; }
+  dmThreads(char) {
+    const out = [];
+    for (const [k, list] of Object.entries(this.dms)) {
+      const [a, b] = k.split('|');
+      if (a !== char && b !== char) continue;
+      const other = a === char ? b : a;
+      if (!this.accounts[other] || !list.length) continue;
+      const last = list.at(-1);
+      out.push({ token: other, name: this.accounts[other].name, last: last.text, lastMine: last.from === char, t: last.t, unread: list.filter((m) => m.from !== char && !m.read).length });
+    }
+    return out.sort((x, y) => y.t - x.t);
+  }
+  dmThread(sub, char, other) {
+    if (!this.ownsChar(sub, char) || !this.accounts[other]) throw new Error('없는 사람이에요');
+    const list = this.dms[this.dmKey(char, other)] || [];
+    let changed = false;
+    for (const m of list) if (m.from !== char && !m.read) { m.read = true; changed = true; }
+    if (changed) this.dirty = true;
+    return { other: { token: other, name: this.accounts[other].name, level: this.accounts[other].profile?.level || 1 }, msgs: list.map((m) => ({ mine: m.from === char, text: m.text, t: m.t })) };
+  }
+  sendDm(sub, char, to, text) {
+    const acc = this.ownsChar(sub, char);
+    if (!acc || !this.accounts[to] || to === char) throw new Error('보낼 수 없어요');
+    text = String(text || '').trim().slice(0, 300);
+    if (!text) throw new Error('메시지를 적어주세요');
+    if (!this.cooldown(`${char}:dm`, 700)) throw new Error('천천히 보내주세요');
+    const k = this.dmKey(char, to);
+    const list = (this.dms[k] ||= []);
+    list.push({ from: char, t: Date.now(), text, read: false });
+    if (list.length > 300) list.shift();
+    this.notify(to, { t: 'dm', from: char, name: acc.name, text });
+    this.dirty = true;
+    return this.dmThread(sub, char, to);
+  }
+  forgetDms(token) { for (const k of Object.keys(this.dms)) if (k.split('|').includes(token)) delete this.dms[k]; }
+  cooldown(key, ms) {
+    const now = Date.now();
+    if (now - (this.lastAct.get(key) || 0) < ms) return false;
+    this.lastAct.set(key, now);
+    return true;
+  }
+  // 접속 중인 캐릭터에게 실시간 알림
+  notify(token, obj) { for (const x of this.players.values()) if (x.token === token) this.send(x, obj); }
   postInsta(sub, char, id, caption) {
     const p = this.photos[id];
     if (!this.ownsChar(sub, char) || !p || p.owner !== char) throw new Error('내 사진이 아니에요');

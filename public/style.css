@@ -575,3 +575,33 @@ body.bug-mode .cute-bear { display: none !important; }
 
 #map-hint { pointer-events: auto; cursor: pointer; background: var(--panel); color: var(--ink); border-radius: 999px; padding: 3px 10px; font-size: 12px; box-shadow: var(--shadow); }
 #map-hint kbd { font-size: 11px; }
+
+/* 전체 채팅: 익명 */
+#pchat-anon { pointer-events: auto; margin-left: 8px; border: 0; border-radius: 10px; padding: 2px 8px; font-family: inherit; font-size: 12px; background: rgba(255,255,255,.25); color: #fff; cursor: pointer; }
+#pchat.anon #pchat-anon { background: #37474f; }
+#pchat.anon #pchat-input { border-color: #37474f; background: #eceff1; }
+.pline.anon { background: rgba(55, 71, 79, .8); }
+.pline.anon b { color: #b0bec5; }
+
+/* 인스타: 팔로우 · 댓글 · 프로필 */
+.ig-tabs button { padding: 7px 4px; font-size: 13px; }
+.ig-tabs button.on { background: linear-gradient(135deg, #f58529, #dd2a7b, #8134af); }
+.ig-name, .ig-c b, .ig-link { cursor: pointer; }
+.ig-follow { margin-left: auto; border: 0; border-radius: 8px; padding: 4px 10px; font-size: 12px; font-weight: 700; background: #0095f6; color: #fff; cursor: pointer; }
+.ig-follow.on { background: #e5e5ea; color: #262626; }
+.ph-a .like + .like { margin-left: 4px; }
+.ig-cmts { padding: 0 10px; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
+.ig-c { word-break: break-all; }
+.ig-c small { color: #8a6f5f; font-size: 11px; }
+.ig-x { border: 0; background: none; color: #8a6f5f; cursor: pointer; font-size: 11px; padding: 0 2px; }
+.ig-more { border: 0; background: none; color: #8a6f5f; cursor: pointer; padding: 0; text-align: left; font-size: 13px; }
+.ig-cadd { padding: 0 10px 10px; }
+.ig-cadd input { padding: 6px 10px; font-size: 13px; }
+.ig-ph { display: flex; align-items: center; gap: 12px; }
+.ig-big { width: 56px; height: 56px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 30px; background: linear-gradient(135deg, #f58529, #dd2a7b, #8134af); }
+.ig-stats { display: flex; justify-content: space-around; text-align: center; margin: 12px 0 4px; }
+.ig-stats b { display: block; font-size: 17px; }
+.ig-stats small { color: #8a6f5f; }
+.ig-acts { display: flex; gap: 6px; margin-top: 8px; }
+.ig-acts .ig-follow { margin-left: 0; flex: 1; padding: 7px; }
+.ig-acts .btn { flex: 1; }
