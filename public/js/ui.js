@@ -4,7 +4,7 @@ import { WORLD_HALF } from './terrain.js';
 import { JOBS, BUILDING_TYPES, EMOTE } from './data.js';
 import { ITEMS, GEMS, SHOPS, ENCHANT_FEE, CLUB_CHARM, RARITY, itemDef, shopItems, weaponStats, isWeapon, ammoName } from './items.js';
 import { SLOTS } from './inventory.js';
-const APP_TITLES = { quests: '퀘스트', camera: '카메라', gallery: '사진', insta: 'Roachstagram', tinder: '튄더', contacts: '연락처', sms: '메시지', police: '112 신고', map: '지도', me: '내 정보', feedback: '건의하기', help: '도움말', settings: '설정', admin: '건의함' };
+const APP_TITLES = { quests: '퀘스트', camera: '카메라', gallery: '사진', insta: 'Jellystagram', tinder: '튄더', contacts: '연락처', sms: '메시지', police: '112 신고', map: '지도', me: '내 정보', feedback: '건의하기', help: '도움말', settings: '설정', admin: '건의함' };
 const SKILL_NAMES = { jump2: '2단 점프', jump3: '3단 점프', dash: '대쉬 거리 강화', jumpboost: '점프력 강화', dashlong: '대쉬 거리 강화' };
 import { LOOK_PARTS, LOOK_COLORS, DEFAULT_LOOK } from './look.js';
 import { PHONE_APPS } from './phone.js';
@@ -71,7 +71,7 @@ export class UI {
     const el = $('llm-status');
     if (!s) { el.innerHTML = '⚠️ 서버에 연결할 수 없어요. 서버가 켜져 있는지 확인하세요.'; return; }
     const who = s.players ? `지금 <b>${s.players}명</b>이 플레이 중이에요!` : '아직 아무도 없어요. 첫 주민이 되어보세요!';
-    const llm = s.llm ? `🤖 LLM(<b>${escapeHtml(s.model)}</b>)으로 바퀴들이 대화해요` : '💤 서버에 LLM 키가 없어 기본 대사로 대화해요';
+    const llm = s.llm ? `🤖 LLM(<b>${escapeHtml(s.model)}</b>)으로 젤리들이 대화해요` : '💤 서버에 LLM 키가 없어 기본 대사로 대화해요';
     el.innerHTML = `👥 ${who}<br>${llm}`;
     $('pw-row').classList.toggle('hidden', !s.password);
   }
@@ -126,7 +126,7 @@ export class UI {
   openKeys() {
     const K = (k) => k.split('+').map((x) => `<kbd>${x}</kbd>`).join('');
     const groups = [
-      ['🚶 이동', [['W A S D', '걷기 (방향키도 OK)'], ['Shift', '달리기 — 여섯 다리로 바퀴처럼 기어 달려요!'], ['Space', '점프 · 공중에서 한 번 더 2단 점프 (3단은 수련*)'], ['C', '대쉬 (거리 강화는 수련*)'], ['Space 두 번', '🪽 날기 — 날면서 Space 꾹 위로 · X 아래로 · Space 두 번 = 날개 접고 떨어지기 (G도 가능)'], ['V', '1인칭 ↔ 3인칭'], ['벽으로 걷기', '🪳 벽에 대고 계속 걸으면 벽을 기어올라요 (W/S 위아래 · A/D 옆 · Space 뛰어내리기) — 옥상도 걸을 수 있어요'], ['마우스', '화면 클릭 후 움직이면 시점 회전 · 휠로 확대/축소'], ['R', '지도에 찍은 목적지까지 자동으로 걷기']]],
+      ['🚶 이동', [['W A S D', '걷기 (방향키도 OK)'], ['Shift', '달리기 (바퀴 모드에선 여섯 다리로 기어 달려요!)'], ['Space', '점프 · 공중에서 한 번 더 2단 점프 (3단은 수련*)'], ['C', '대쉬 (거리 강화는 수련*)'], ['Space 두 번', '🪽 날기 — 날면서 Space 꾹 위로 · X 아래로 · Space 두 번 = 날개 접고 떨어지기 (G도 가능)'], ['V', '1인칭 ↔ 3인칭'], ['벽으로 걷기', '🧗 벽에 대고 계속 걸으면 벽을 기어올라요 (W/S 위아래 · A/D 옆 · Space 뛰어내리기) — 옥상도 걸을 수 있어요'], ['마우스', '화면 클릭 후 움직이면 시점 회전 · 휠로 확대/축소'], ['R', '지도에 찍은 목적지까지 자동으로 걷기']]],
       ['💬 생활', [['E', '대화하기 · 건물 들어가기/나가기 · 행동하기 · 아이템 줍기'], ['B', '💘 플러팅 — 앞에 있는 상대에게 하트 날리기'], ['P', '📷 사진 찍기 (갤러리·인스타는 휴대폰)'], ['Enter', '전체 채팅 (T도 가능)'], ['I', '가방'], ['M', '도시 전체 지도'], ['K / Tab', '📱 휴대폰 열기·닫기 — 퀘스트·카메라·인스타·튄더·연락처·문자·112'], ['Esc', '창 닫기']]],
       ['⚔️ 전투 · 아이템', [['1 ~ 0', '핫바 칸 선택 (무기, 마법봉, 음식, 차 키)'], ['왼쪽 클릭', '공격 / 마법 / 먹기 · 활은 꾹 눌러 당겼다가 놓기!'], ['오른쪽 클릭', '🔭 1인칭 조준 (총·활) · 저격총은 스코프 · 총마다 반동이 달라요'], ['낚싯대 클릭', '🎣 물을 보고 던지기 → "입질!" 뜨면 바로 클릭'], ['Q', '선택한 아이템 바닥에 버리기'], ['Z 꾹 → 떼기', '🪢 동물 포획 — 체력을 절반 아래로 깎고, 바늘이 초록칸일 때 떼기 (가축은 언제나)'], ['F (탈것)', '🐎 포획한 동물에서 내리기 · 드래곤은 클릭으로 불 뿜기'], ['← →', '차에 치여 뒤집히면 번갈아 연타해서 일어나기']]],
       ['🚗 자동차', [['F', '차 타기 · 빼앗기 · 내리기'], ['W / S', '가속 / 후진'], ['A / D', '핸들'], ['Space', '브레이크 (헬기는 상승)'], ['Shift', '부스트 (헬기는 하강)'], ['왼쪽 클릭', '전차 주포 · 헬기 미사일']]],
@@ -757,12 +757,12 @@ export class UI {
       $('set-reset').onclick = () => g.resetSave();
     } else if (tab === 'help') {
       body.innerHTML = `<div class="profile-big">
-        <h3>📘 바퀴시티 생활 가이드</h3>
+        <h3>📘 젤리시티 생활 가이드</h3>
         <b>조작</b>: WASD 이동 · Shift 달리기 · Space 점프(배우면 2·3단) · C 대쉬 · 마우스(클릭 후) 시점 · 클릭 공격/먹기 · 1~0 핫바 · E 대화/입장/줍기 · F 차 타기/빼앗기 · Q 버리기 · I 가방 · M 지도 · R 자동 이동 · Enter 채팅 · Tab 휴대폰 · Esc 닫기<br>
         <b>생활</b>: 포만감·재미·사교·청결과 체력을 관리하세요. NPC들도 똑같은 욕구가 있어서 배고프면 밥을 먹으러 가고, 다치면 병원에 가요.<br>
         <b>직업</b>: 시청 🏛️ 일자리 게시판에서 직업을 골라 직장에서 일하세요.<br>
         <b>집</b>: 처음엔 호텔에서 지내요. 부동산 🏘️ 에서 집을 사면 그 집에서 자고 부활해요.<br>
-        <b>무기 상점</b>: 관우네 병기점(삼국지), 바퀴 택티컬(밀리터리·전차·헬기), 은하 무기상(광선검·블래스터). 보석상 💎 에서 보석을 사서 무기와 방어구에 박을 수 있어요.<br>
+        <b>무기 상점</b>: 관우네 병기점(삼국지), 젤리 택티컬(밀리터리·전차·헬기), 은하 무기상(광선검·블래스터). 보석상 💎 에서 보석을 사서 무기와 방어구에 박을 수 있어요.<br>
         <b>치장</b>: 모자 가게·안경원·옷가게의 아이템을 장착하면 매력이 올라가요. 클럽 🪩 은 누구나 들어갈 수 있어요.<br>
         <b>무릉도장</b> 🥋: 점프맵은 점프력 강화, 고급 점프맵은 3단 점프, 용암 징검다리는 대쉬 거리 강화를 배워요.<br>
         <b>범죄 · 112</b>: 경찰은 누군가 112에 신고해야만 출동해요. 시민은 맞으면 화가 나서 신고하고, 플레이어는 휴대폰 🚨 112에서 나를 공격한 사람을 신고할 수 있어요. 신고가 쌓이면 별 4~5개에 군대가 출동해요.<br>
@@ -1069,7 +1069,7 @@ export class UI {
       ['#8a5634', '초콜릿'], ['#a86b3e', '캐러멜'], ['#6e3f25', '다크 브라운'], ['#b07945', '꿀'], ['#c9a27e', '밀크티'],
       ['#ff9fb2', '딸기 우유'], ['#f48fb1', '핫핑크'], ['#ffab91', '복숭아'], ['#ffd54f', '레몬'], ['#e0b84a', '황금'],
       ['#7ec8a9', '민트'], ['#81c784', '연두'], ['#4db6ac', '청록'], ['#90caf9', '하늘'], ['#9fa8ff', '라벤더'],
-      ['#b39ddb', '보라'], ['#eceff1', '눈사람'], ['#9e9e9e', '회색'], ['#37474f', '밤하늘'], ['#5d4037', '원조 바퀴'],
+      ['#b39ddb', '보라'], ['#eceff1', '눈사람'], ['#9e9e9e', '회색'], ['#37474f', '밤하늘'], ['#5d4037', '초코'],
     ];
     const orig = g.profile.color;
     let pick = orig;
@@ -1109,7 +1109,7 @@ export class UI {
     if (view === 'city') Object.assign(V, { cx: 0, cz: 0, s: CITYS });
     else Object.assign(V, { cx: 0, cz: 0, s: MIN });
     this.openModal(`<h3 class="mh">🗺️ 지도 <kbd>M</kbd> <small>휠: 확대해서 상세 구역 보기 · 드래그: 이동 · 클릭: 목적지 · M/Esc: 닫기</small></h3>
-      <div class="tabs-row"><button class="btn mini ghost" id="wm-world">🌍 전체 세계</button><button class="btn mini ghost" id="wm-city">🏙️ 바퀴시티</button><button class="btn mini ghost" id="wm-me">📍 내 위치</button><button class="btn mini ghost" id="wm-in">＋</button><button class="btn mini ghost" id="wm-out">－</button></div>
+      <div class="tabs-row"><button class="btn mini ghost" id="wm-world">🌍 전체 세계</button><button class="btn mini ghost" id="wm-city">🏙️ 젤리시티</button><button class="btn mini ghost" id="wm-me">📍 내 위치</button><button class="btn mini ghost" id="wm-in">＋</button><button class="btn mini ghost" id="wm-out">－</button></div>
       <canvas id="worldmap" width="${N}" height="${N}"></canvas>
       <div id="wm-info" class="money-line"></div>
       <div><button class="btn" id="wm-walk">🚶 자동으로 걸어가기 (R)</button> <button class="btn ghost" id="wm-clear">목적지 지우기</button> <button class="btn ghost" id="wm-close">닫기 (M)</button></div>`, 'map');
@@ -1301,7 +1301,7 @@ export class UI {
     const fish = g.stats.items.filter((it) => itemDef(it.id).fish);
     const ok = (d) => (kind === 'spicy' ? d.spicy : d.raw);
     this.openModal(`<h3 class="mh">${kind === 'spicy' ? '🌶️ 매운탕 끓이기' : '🔪 회 뜨기'} <small>${kind === 'spicy' ? '매운탕: 참돔·광어·우럭·복어·대구·아귀·잉어·메기·붕어·쏘가리' : '회: 참치·문어·돌돔·참돔·광어·우럭·고등어·오징어·방어·전어·송어·쏘가리·빙어'}</small></h3>
-      <div class="itemlist">${fish.map((it) => { const d = itemDef(it.id); const can = ok(d); return `<div class="item"><div class="ic">${d.emoji}</div><div class="info"><b>${escapeHtml(d.name)} ×${it.n || 1}</b><small>${can ? (kind === 'spicy' ? '매운탕 가능 ✅' : '회 가능 ✅') : it.id === 'fish_shark' ? '🦈 상어는 먹을 수 없어요' : kind === 'spicy' ? '매운탕으로는 안 돼요 ❌' : '회로는 안 돼요 ❌'}</small></div><div class="acts">${can ? `<button class="btn mini" data-eat="${it.uid}">🍽️ 바로 먹기</button><button class="btn mini ghost" data-take="${it.uid}">🥡 포장</button>` : ''}</div></div>`; }).join('') || '<div style="padding:14px">물고기가 없어요. 바퀴 낚시터나 호수에서 낚아 오세요! 🎣</div>'}</div>
+      <div class="itemlist">${fish.map((it) => { const d = itemDef(it.id); const can = ok(d); return `<div class="item"><div class="ic">${d.emoji}</div><div class="info"><b>${escapeHtml(d.name)} ×${it.n || 1}</b><small>${can ? (kind === 'spicy' ? '매운탕 가능 ✅' : '회 가능 ✅') : it.id === 'fish_shark' ? '🦈 상어는 먹을 수 없어요' : kind === 'spicy' ? '매운탕으로는 안 돼요 ❌' : '회로는 안 돼요 ❌'}</small></div><div class="acts">${can ? `<button class="btn mini" data-eat="${it.uid}">🍽️ 바로 먹기</button><button class="btn mini ghost" data-take="${it.uid}">🥡 포장</button>` : ''}</div></div>`; }).join('') || '<div style="padding:14px">물고기가 없어요. 젤리 낚시터나 호수에서 낚아 오세요! 🎣</div>'}</div>
       <div style="margin-top:10px"><button class="btn ghost" id="cf-close">닫기</button></div>`, 'cook');
     $('cf-close').onclick = () => this.closeModal();
     $('modal-inner').querySelectorAll('[data-eat]').forEach((b) => { b.onclick = () => g.cookFish(b.dataset.eat, kind, true); });
@@ -1326,7 +1326,7 @@ export class UI {
   openOnline() {
     const g = this.game;
     const me = g.player.pos;
-    const where = (o) => (o.loc >= 0 ? g.city.buildings[o.loc]?.name : g.regionName?.(o.pos) || '바퀴시티 거리');
+    const where = (o) => (o.loc >= 0 ? g.city.buildings[o.loc]?.name : g.regionName?.(o.pos) || '젤리시티 거리');
     const rows = [...g.players.list.values()].map((o) => {
       const op = o.loc >= 0 ? g.city.buildings[o.loc].door : o.pos;
       const d = Math.round(op.distanceTo(me));
@@ -1407,7 +1407,7 @@ export class UI {
     const g = this.game;
     let pick = {};
     const render = () => {
-      this.openModal(`<h3 class="mh">🏎️ 바퀴 모터스 쇼룸 <small>사면 🔑 차 키를 받아요 · 핫바에서 키를 쓰면 언제든 내 앞으로 호출</small></h3>
+      this.openModal(`<h3 class="mh">🏎️ 젤리 모터스 쇼룸 <small>사면 🔑 차 키를 받아요 · 핫바에서 키를 쓰면 언제든 내 앞으로 호출</small></h3>
         <div class="money-line">💰 소지금 <b>₩${Math.floor(g.stats.money).toLocaleString()}</b></div>
         <div class="itemlist">${DEALER_CARS.map(([kind, emoji, price]) => { const md = MODELS[kind] || BIKES[kind]; const c = pick[kind] || CAR_COLORS[0]; return `<div class="item"><div class="ic">${emoji}</div><div class="info"><b>${escapeHtml(md.name)} <span style="color:var(--accent)">₩${price.toLocaleString()}</span></b><small>최고속도 ${Math.round(md.max * 1.4 * 3.6 * 1.35)}km/h${BIKES[kind] ? ' · 🏍️ 이륜차' : md.sport ? ' · 🏁 스포츠카' : ''}</small><div class="carcols">${CAR_COLORS.map((cc) => `<span class="cc ${cc === c ? 'sel' : ''}" data-k="${kind}" data-c="${cc}" style="background:${cc}"></span>`).join('')}</div></div><div class="acts"><button class="btn mini" data-buy="${kind}" data-p="${price}">구매</button></div></div>`; }).join('')}</div>
         <div style="margin-top:10px"><button class="btn ghost" id="dl-close">닫기</button></div>`, 'dealer');
@@ -1459,7 +1459,7 @@ export class UI {
       if (j.max && g.sim.citizens.some((c) => c.job.id === j.id) && j.id === 'mayor') continue;
       (groups[j.building] ||= []).push(j);
     }
-    const html = `<h3 style="font-family:Jua;margin:0 0 6px">📋 바퀴시티 일자리 게시판</h3>
+    const html = `<h3 style="font-family:Jua;margin:0 0 6px">📋 젤리시티 일자리 게시판</h3>
       <div style="font-size:13px;color:var(--ink-soft)">${cur ? `현재 직업: <b>${escapeHtml(cur.name)}</b> · ` : ''}마음에 드는 일을 골라보세요! 시급은 4시간 근무 단위로 받아요.</div>
       ${Object.entries(groups).map(([t, js]) => `<div style="margin-top:12px;font-family:Jua">${BUILDING_TYPES[t].emoji} ${BUILDING_TYPES[t].name}</div>
         <div class="job-list">${js.map((j) => `<div class="job" data-id="${j.id}"><b>${escapeHtml(j.name)}</b>₩${j.wage}/시간<br><span style="color:var(--ink-soft)">${escapeHtml(j.duty)}</span></div>`).join('')}</div>`).join('')}

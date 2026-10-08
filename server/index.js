@@ -1,4 +1,4 @@
-// 바퀴시티 멀티플레이 서버
+// 젤리시티 멀티플레이 서버
 //   - public/ 정적 파일 서빙
 //   - /ws  WebSocket: 공유 세계 동기화
 //   - /api/*  구글 로그인 · 캐릭터 목록/생성/삭제
@@ -196,7 +196,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 }
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🪳 바퀴시티 서버: http://localhost:${PORT}`);
+  console.log(`🐻 젤리시티 서버: http://localhost:${PORT}`);
   console.log(`   로그인: ${GOOGLE_CLIENT_ID ? '구글 로그인 필수' : '⚠️ GOOGLE_CLIENT_ID 없음 → 개발용 이름 로그인'}`);
   console.log(`   LLM: ${llmEnabled ? `${MODEL} 사용` : '키 없음 (기본 대사)'} · 비밀번호: ${PASSWORD ? '설정됨' : '없음'}`);
 });

@@ -77,7 +77,7 @@ export function buildWilds(scene, city) {
     }
   }
 
-  // ---------- 바퀴 대교 (현수교) ----------
+  // ---------- 젤리 대교 (현수교) ----------
   const red = toon('#e53935'), cable = toon('#b71c1c'), deckMat = toon('#7a7f88');
   {
     const { x0, x1, w, y } = BRIDGE;
@@ -161,7 +161,7 @@ export function buildWilds(scene, city) {
     const deck = new THREE.Mesh(new THREE.BoxGeometry(L, 0.3, W), wood); deck.position.set((PIER.x0 + PIER.x1) / 2, PIER.y - 0.15, (PIER.z0 + PIER.z1) / 2); deck.receiveShadow = true; root.add(deck);
     for (let x = PIER.x0 + 2; x < PIER.x1; x += 6) for (const z of [PIER.z0 + 0.4, PIER.z1 - 0.4]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 9, 6), dark); p.position.set(x, PIER.y - 4.4, z); root.add(p); const r = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1, 0.15), dark); r.position.set(x, PIER.y + 0.5, z); root.add(r); }
     for (const z of [PIER.z0 + 0.4, PIER.z1 - 0.4]) { const rail = new THREE.Mesh(new THREE.BoxGeometry(L, 0.12, 0.12), dark); rail.position.set((PIER.x0 + PIER.x1) / 2, PIER.y + 1, z); root.add(rail); }
-    const sg = signMesh('바퀴 낚시터', '🎣', 5, '#0277bd', '#ffffff'); sg.position.set(PIER.x0 + 1, PIER.y + 2.6, (PIER.z0 + PIER.z1) / 2); sg.rotation.y = -Math.PI / 2; root.add(sg);
+    const sg = signMesh('젤리 낚시터', '🎣', 5, '#0277bd', '#ffffff'); sg.position.set(PIER.x0 + 1, PIER.y + 2.6, (PIER.z0 + PIER.z1) / 2); sg.rotation.y = -Math.PI / 2; root.add(sg);
     for (let i = 0; i < 3; i++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.35, 0.6, 8), toon('#4fc3f7')); b.position.set(PIER.x0 + 15 + i * 20, PIER.y + 0.3, PIER.z1 - 1.2); root.add(b); }
   }
 

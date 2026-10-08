@@ -343,7 +343,7 @@ const LAYOUTS = {
   dental(k, ctx) { LAYOUTS.clinic(k, ctx, '치료실', '🦷', '#80deea'); k.act('scaling', W2(k) - 3, 1.5); },
   vet(k, ctx) {
     LAYOUTS.clinic(k, ctx, '진찰실', '🐾', '#a5d6a7');
-    // 진드기 친구들 (작고 둥근)
+    // 작은 반려동물들 (작고 둥근)
     for (let i = 0; i < 3; i++) {
       const x = -1 + i * 1.2, z = 0;
       sph(k.g, 0.35, 0.28, 0.4, ['#8d6e63', '#ffab91', '#bcaaa4'][i], x, 0.3, z);
@@ -400,7 +400,7 @@ const LAYOUTS = {
   university(k) {
     const { W, D } = k;
     box(k.g, W - 6, 3, 0.15, '#263238', 0, 3, -D / 2 + 0.25);
-    k.label('바퀴 진화론 101', '🎓', 0, 3.2, -D / 2 + 0.36, 6, '#263238', '#ffffff');
+    k.label('젤리 과학 101', '🎓', 0, 3.2, -D / 2 + 0.36, 6, '#263238', '#ffffff');
     box(k.g, 1.6, 1.2, 0.9, '#6d4c41', 0, 0.6, -D / 2 + 2.6);
     k.col(0, -D / 2 + 2.6, 0.8, 0.5);
     k.w(0, -D / 2 + 1.7, 0); k.w(-W / 2 + 2, -D / 2 + 2, 0);
@@ -474,7 +474,7 @@ const LAYOUTS = {
   cityhall(k) {
     const { W, D } = k;
     k.rug(0, 0, 4, D - 2, '#c62828');
-    k.label('바퀴시티 시청 민원실', '🏛️', 0, 3.6, -D / 2 + 0.2, 7, '#2e7d32', '#ffffff');
+    k.label('젤리시티 시청 민원실', '🏛️', 0, 3.6, -D / 2 + 0.2, 7, '#2e7d32', '#ffffff');
     for (let i = 0; i < 3; i++) {
       const x = -W / 2 + 4 + i * 4.5;
       k.counter(x, -D / 2 + 3, 3.2, '#a5d6a7', '#ffffff');
@@ -605,7 +605,7 @@ const LAYOUTS = {
   },
   burger(k) {
     const { W, D } = k;
-    LAYOUTS.diner(k, { counter: '#e53935', counterTop: '#ffffff', table: '#ffd54f', chair: '#e53935', round: false, emoji: '🍔', menuText: '바퀴버거 · 더블치즈 · 감튀 · 쉐이크 · 콜라', board: '#212121', boardInk: '#ffd54f', kitchen: (k2) => {
+    LAYOUTS.diner(k, { counter: '#e53935', counterTop: '#ffffff', table: '#ffd54f', chair: '#e53935', round: false, emoji: '🍔', menuText: '젤리버거 · 더블치즈 · 감튀 · 쉐이크 · 콜라', board: '#212121', boardInk: '#ffd54f', kitchen: (k2) => {
       box(k2.g, 3.0, 1.0, 1.1, '#9e9e9e', -W / 2 + 2.4, 0.5, -D / 2 + 1.2);
       box(k2.g, 2.8, 0.05, 0.9, '#424242', -W / 2 + 2.4, 1.03, -D / 2 + 1.2, { cast: false });
       for (let i = 0; i < 4; i++) cyl(k2.g, 0.22, 0.06, '#6d4c41', -W / 2 + 1.4 + i * 0.65, 1.08, -D / 2 + 1.2);
@@ -739,7 +739,7 @@ const LAYOUTS = {
     // 간수 책상
     k.counter(W / 2 - 4, D / 2 - 5, 3, '#455a64', '#cfd8dc');
     k.w(W / 2 - 4, D / 2 - 6, 0);
-    k.label('바퀴 교도소 · 반성하는 시간', '🔒', 0, 4.6, -D / 2 + 0.2, 7, '#263238', '#ffffff');
+    k.label('젤리 교도소 · 반성하는 시간', '🔒', 0, 4.6, -D / 2 + 0.2, 7, '#263238', '#ffffff');
     k.act('visit', -W / 2 + 3, D / 2 - 3);
   },
   // ---------------- 사냥꾼 오두막 ----------------
@@ -818,7 +818,7 @@ const LAYOUTS = {
     const { W, D } = k;
     k.counter(-1, -D / 2 + 2.4, 5, '#6d4c41', '#d7ccc8');
     box(k.g, 1.2, 0.8, 0.7, '#b0bec5', -2.5, 1.6, -D / 2 + 2.4);
-    k.label('MENU ☕ 아메리카노 · 부스러기 라떼', '', 0, 3.2, -D / 2 + 0.2, 6, '#3e2723', '#ffffff');
+    k.label('MENU ☕ 아메리카노 · 솜사탕 라떼', '', 0, 3.2, -D / 2 + 0.2, 6, '#3e2723', '#ffffff');
     k.w(-1, -D / 2 + 1.3, 0);
     k.act('coffee', -2, -D / 2 + 3.6); k.act('dessert', 0.3, -D / 2 + 3.6); k.act('buy_coffee', 2.2, -D / 2 + 3.2);
     k.table(W / 2 - 2.5, 0, '#efebe9', 2, '#a1887f'); k.v(W / 2 - 3.9, 0, -Math.PI / 2 + Math.PI); k.v(W / 2 - 1.1, 0, -Math.PI / 2);
@@ -857,7 +857,7 @@ const LAYOUTS = {
     k.act('groceries', W / 2 - 4.7, D / 2 - 2.2);
     k.w(-W / 2 + 2, D / 2 - 2, Math.PI / 2);
     k.v(-W / 2 + 3, 3, Math.PI);
-    k.label('신선 부스러기 코너', '🥬', 0, 3.4, -D / 2 + 0.2, 5, '#43a047', '#ffffff');
+    k.label('신선 과일 코너', '🥬', 0, 3.4, -D / 2 + 0.2, 5, '#43a047', '#ffffff');
   },
   convenience(k) {
     const { W, D } = k;
@@ -888,7 +888,7 @@ const LAYOUTS = {
       k.w(x, -D / 2 + 2, 0);
       k.v(x, -D / 2 + 4.3, Math.PI);
     }
-    k.label('바퀴 중앙은행', '🏦', 0, 3.6, -D / 2 + 0.2, 5, '#1a237e', '#ffd54f');
+    k.label('젤리 중앙은행', '🏦', 0, 3.6, -D / 2 + 0.2, 5, '#1a237e', '#ffd54f');
     // 금고
     cyl(k.g, 2.0, 0.5, '#9e9e9e', W / 2 - 3, 2.2, -D / 2 + 0.6, { rx: Math.PI / 2 });
     cyl(k.g, 0.6, 0.6, '#ffd54f', W / 2 - 3, 2.2, -D / 2 + 0.8, { rx: Math.PI / 2 });
@@ -923,7 +923,7 @@ const LAYOUTS = {
     k.col(0, -D / 2 + 3, 3.1, 0.9);
     const bg = new THREE.Mesh(G.plane(), new THREE.MeshBasicMaterial({ color: '#4fc3f7' }));
     bg.scale.set(10, 4, 1); bg.position.set(0, 2.6, -D / 2 + 0.2); k.g.add(bg);
-    k.label('BKB 9시 뉴스', '📺', 0, 2.8, -D / 2 + 0.25, 5, '#311b92', '#ffffff');
+    k.label('JBC 9시 뉴스', '📺', 0, 2.8, -D / 2 + 0.25, 5, '#311b92', '#ffffff');
     k.w(-1.2, -D / 2 + 2, 0); k.w(1.2, -D / 2 + 2, 0);
     for (const s of [-1, 1]) {
       const cam = new THREE.Group(); cam.position.set(s * 3, 0, 2); k.g.add(cam);
@@ -976,14 +976,14 @@ const LAYOUTS = {
   },
   museum(k) {
     const { W, D } = k;
-    // 거대 바퀴 조상 화석
+    // 거대 곰돌이 조상 화석
     box(k.g, 6, 0.6, 5, '#bcaaa4', 0, 0.3, -2);
     const fossil = new Roach({ color: '#f5ecd7', age: 40 });
     fossil.root.scale.setScalar(1.6); fossil.root.position.set(0, 0.6, -2);
     fossil.root.rotation.y = 0.3;
     k.g.add(fossil.root);
     k.col(0, -2, 3, 2.5);
-    k.label('3억 년 전 바퀴 조상 (복원)', '🦕', 0, 4.4, -D / 2 + 0.2, 6, '#3e2723', '#ffe082');
+    k.label('1억 년 전 곰돌이 젤리 조상 (복원)', '🦕', 0, 4.4, -D / 2 + 0.2, 6, '#3e2723', '#ffe082');
     for (const s of [-1, 1]) for (let i = 0; i < 3; i++) {
       const x = s * (W / 2 - 3), z = -D / 2 + 3 + i * 4;
       box(k.g, 1.4, 1.1, 1.4, '#efebe9', x, 0.55, z);
@@ -1059,7 +1059,7 @@ const LAYOUTS = {
     k.v(W / 2 - 3, 2, Math.PI / 2);
     k.counter(W / 2 - 2.5, -D / 2 + 2, 2, '#ffffff', '#f8bbd0');
     k.w(W / 2 - 2.5, -D / 2 + 1, 0);
-    k.label('더듬이 펌 50% 할인', '💇', 0, 4.1, -D / 2 + 0.2, 4.5, '#ffffff', '#ad1457');
+    k.label('몽글 펌 50% 할인', '💇', 0, 4.1, -D / 2 + 0.2, 4.5, '#ffffff', '#ad1457');
   },
   clothing(k) {
     const { W, D } = k;
@@ -1128,7 +1128,7 @@ const LAYOUTS = {
     box(k.g, W - 4, 1.0, 5, '#6d4c41', 0, 0.5, -D / 2 + 2.6);
     k.col(0, -D / 2 + 2.6, (W - 4) / 2, 2.5);
     box(k.g, W - 4, 4, 0.2, '#880e4f', 0, 3, -D / 2 + 0.2);
-    k.label('더듬이 오케스트라 정기공연', '🎵', 0, 4.4, -D / 2 + 0.35, 6, '#880e4f', '#ffffff');
+    k.label('말랑 오케스트라 정기공연', '🎵', 0, 4.4, -D / 2 + 0.35, 6, '#880e4f', '#ffffff');
     // 피아노
     box(k.g, 2, 1, 1.4, '#212121', -4, 1.5, -D / 2 + 2.2);
     k.w(-4, -D / 2 + 3.4, Math.PI);
@@ -1223,7 +1223,7 @@ const LAYOUTS = {
       box(k.g, 1.2, 0.8, 0.05, '#ffffff', x, y, -D / 2 + 0.35, { cast: false });
       box(k.g, 0.5, 0.35, 0.06, k.rng.pick(['#ffcc80', '#a5d6a7', '#90caf9']), x, y - 0.1, -D / 2 + 0.36, { cast: false });
     }
-    k.label('틈새 원룸 · 하수구 뷰 · 습도 최고', '🏘️', 0, 4.1, -D / 2 + 0.3, 6, '#00695c', '#ffffff');
+    k.label('아늑한 원룸 · 호수 뷰 · 햇살 최고', '🏘️', 0, 4.1, -D / 2 + 0.3, 6, '#00695c', '#ffffff');
     k.sofa(0, D / 2 - 2, Math.PI, '#80cbc4');
     k.act('tour', 0, 1.6);
     k.v(0, D / 2 - 3, Math.PI);
@@ -1329,7 +1329,7 @@ const LAYOUTS = {
     for (const sx of [-1, 1]) cyl(k.g, 0.4, 0.1, '#212121', sx * 0.9, 1.25, -D / 2 + 2);
     for (const sx of [-1, 1]) { box(k.g, 1.4, 2.6, 1.2, '#212121', sx * 4, 1.3, -D / 2 + 1.2); cyl(k.g, 0.45, 0.1, '#616161', sx * 4, 1.8, -D / 2 + 1.85, { rx: Math.PI / 2 }); k.col(sx * 4, -D / 2 + 1.2, 0.7, 0.6); }
     k.col(0, -D / 2 + 2, 2, 0.7);
-    k.label('DJ 더듬이', '🪩', 0, 3.6, -D / 2 + 0.2, 4, '#120a24', '#ff4081');
+    k.label('DJ 말랑', '🪩', 0, 3.6, -D / 2 + 0.2, 4, '#120a24', '#ff4081');
     k.w(0, -D / 2 + 1.1, 0);
     // 바
     k.counter(W / 2 - 1.2, 1, 1.2, '#4a148c', '#ffd54f', 6);
@@ -1404,7 +1404,7 @@ const LAYOUTS = {
     ring.position.set(0, 2.2, -D / 2 + 2); ring.rotation.x = Math.PI / 2; k.g.add(ring);
     k.anim.push({ type: 'bob', obj: ring, base: 2.2 });
     k.col(0, -D / 2 + 2, 1.5, 1.5);
-    k.label('살충제 내성 연구실', '🔬', W / 2 - 4, 3.6, -D / 2 + 0.2, 4.5, '#00838f', '#ffffff');
+    k.label('젤리 탄성 연구실', '🔬', W / 2 - 4, 3.6, -D / 2 + 0.2, 4.5, '#00838f', '#ffffff');
     k.act('experiment', 3, 2.5);
     k.v(-3, 2.5, Math.PI); k.v(0, 3, Math.PI);
     k.w(W / 2 - 2, -D / 2 + 2, 0);

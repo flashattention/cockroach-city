@@ -14,7 +14,7 @@ export async function verifyGoogle(credential) {
   if (!ISSUERS.has(t.iss)) throw new Error('발급자 불일치');
   if (Number(t.exp) * 1000 < Date.now()) throw new Error('토큰 만료');
   if (t.email_verified !== 'true' && t.email_verified !== true) throw new Error('이메일 미인증');
-  return { sub: `g:${t.sub}`, email: t.email || '', name: t.name || t.email?.split('@')[0] || '바퀴', picture: t.picture || '' };
+  return { sub: `g:${t.sub}`, email: t.email || '', name: t.name || t.email?.split('@')[0] || '젤리', picture: t.picture || '' };
 }
 
 // JSON 본문 읽기 (작은 요청만)

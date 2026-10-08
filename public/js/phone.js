@@ -1,5 +1,5 @@
 // 휴대폰 앱들: 퀘스트, 카메라, 갤러리, 인스타그램, 연락처, 문자, 112, 건의함
-import { escapeHtml } from './utils.js';
+import { escapeHtml, brand } from './utils.js';
 import { questDef } from './quests.js';
 import { expNeed, levelStats } from './level.js';
 import * as THREE from 'three';
@@ -88,7 +88,7 @@ export const PHONE_APPS = {
   },
   viewPhoto(ui, body, g, p) {
     body.innerHTML = `<div class="photo-view"><img src="/photos/${p.id}.jpg"><div class="pv-meta">${new Date(p.t).toLocaleString('ko-KR')}${p.posted ? ` · 📸 인스타 게시됨 · ❤️ ${p.likes}` : ''}</div>
-      ${p.posted ? '' : '<input id="pv-cap" class="search" maxlength="150" placeholder="인스타그램에 쓸 글 (해시태그도 좋아요 #바퀴시티)">'}
+      ${p.posted ? '' : '<input id="pv-cap" class="search" maxlength="150" placeholder="인스타그램에 쓸 글 (해시태그도 좋아요 #젤리시티)">'}
       <div>${p.posted ? '' : '<button class="btn" id="pv-post">📸 인스타에 올리기</button>'}<a class="btn ghost" href="/photos/${p.id}.jpg" download="roachcity-${p.id}.jpg">⬇️ 저장</a><button class="btn ghost" id="pv-del">🗑️ 삭제</button><button class="btn ghost" id="pv-back">← 갤러리</button></div></div>`;
     $('pv-cap')?.addEventListener('keydown', (e) => e.stopPropagation());
     $('pv-back').onclick = () => PHONE_APPS.gallery(ui, body, g);
@@ -102,8 +102,8 @@ export const PHONE_APPS = {
     body.innerHTML = '<div class="profile-big">피드 불러오는 중...</div>';
     try {
       const { feed } = await api(g, `/api/insta?char=${g.char}`);
-      body.innerHTML = `<div class="insta-head">📸 <b>Roachstagram</b> <small>바퀴시티 사람들의 사진</small></div>
-        <div class="feed">${feed.map((p) => `<div class="post"><div class="ph-h"><span class="av">🪳</span><b>${escapeHtml(p.name)}</b> <small>Lv.${p.level} · ${ago(p.t)}</small></div>
+      body.innerHTML = `<div class="insta-head">📸 <b>Jellystagram</b> <small>젤리시티 사람들의 사진</small></div>
+        <div class="feed">${feed.map((p) => `<div class="post"><div class="ph-h"><span class="av">${brand.bug ? '🪳' : '🐻'}</span><b>${escapeHtml(p.name)}</b> <small>Lv.${p.level} · ${ago(p.t)}</small></div>
           <img loading="lazy" src="/photos/${p.id}.jpg"><div class="ph-a"><button class="like ${p.liked ? 'on' : ''}" data-id="${p.id}">${p.liked ? '❤️' : '🤍'} <span>${p.likes}</span></button></div>
           ${p.caption ? `<div class="ph-c"><b>${escapeHtml(p.name)}</b> ${escapeHtml(p.caption)}</div>` : ''}</div>`).join('') || '<p>아직 게시물이 없어요. 갤러리에서 사진을 올려보세요!</p>'}</div>`;
       body.querySelectorAll('.like').forEach((b) => {
@@ -210,13 +210,13 @@ export const PHONE_APPS = {
     const me = g.tdMe || {};
     body.innerHTML = tabs + `<div class="td-card"><img class="td-img" src="${pic({ ...g.profile, photo: me.photo })}"><div class="td-info"><b>${escapeHtml(g.profile.name)}</b> ${g.profile.age}<small>⭐ Lv.${g.stats.level || 1} · ${escapeHtml(g.profile.jobName || '무직')}</small></div></div>
       <div class="profile-big" style="margin-top:10px"><b>한 줄 소개</b><textarea id="td-bio" maxlength="120" rows="3" placeholder="예) 치킨 좋아하는 무릉도장 고수 🍗">${escapeHtml(me.bio || '')}</textarea>
-      <b>프로필 사진</b><div class="gallery" id="td-photos"><div class="ph" data-ph="">🪳<small>캐릭터</small></div></div>
+      <b>프로필 사진</b><div class="gallery" id="td-photos"><div class="ph" data-ph="">${brand.bug ? '🪳' : '🐻'}<small>캐릭터</small></div></div>
       <button class="btn" id="td-save" style="margin-top:8px">저장</button></div>`;
     bindTabs();
     $('td-bio').addEventListener('keydown', (e) => e.stopPropagation());
     let photo = me.photo || null;
     api(g, `/api/photos?char=${g.char}`).then(({ list }) => {
-      $('td-photos').innerHTML = `<div class="ph ${!photo ? 'on' : ''}" data-ph="" style="display:grid;place-items:center;font-size:34px;background:#ffe0e8">🪳</div>` + list.map((p) => `<div class="ph ${photo === p.id ? 'on' : ''}" data-ph="${p.id}"><img src="/photos/${p.id}.jpg"></div>`).join('');
+      $('td-photos').innerHTML = `<div class="ph ${!photo ? 'on' : ''}" data-ph="" style="display:grid;place-items:center;font-size:34px;background:#ffe0e8">${brand.bug ? '🪳' : '🐻'}</div>` + list.map((p) => `<div class="ph ${photo === p.id ? 'on' : ''}" data-ph="${p.id}"><img src="/photos/${p.id}.jpg"></div>`).join('');
       body.querySelectorAll('[data-ph]').forEach((el) => { el.onclick = () => { photo = el.dataset.ph || null; body.querySelectorAll('[data-ph]').forEach((x) => x.classList.toggle('on', x === el)); }; });
     }).catch(() => {});
     $('td-save').onclick = () => { g.net.send({ t: 'tdProfile', bio: $('td-bio').value, photo }); ui.toast('🔥 튄더 프로필을 저장했어요'); };

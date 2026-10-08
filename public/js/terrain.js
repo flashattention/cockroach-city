@@ -3,11 +3,11 @@ import { HALF } from './config.js';
 
 export const WORLD_HALF = 1150;   // 전체 세계 반지름 (도시는 가운데 ±223)
 export const WATER_Y = -1.2;      // 바다·강·늪 수면 높이
-export const BRIDGE = { x0: 330, x1: 800, z: 0, w: 14, y: 7, ramp: 60 }; // 바퀴 대교 (동쪽 바다 위)
+export const BRIDGE = { x0: 330, x1: 800, z: 0, w: 14, y: 7, ramp: 60 }; // 젤리 대교 (동쪽 바다 위)
 
 // 지역: rect = [x0, z0, x1, z1]
 export const REGIONS = [
-  { id: 'valley', name: '더듬이 계곡', emoji: '🏞️', rect: [-90, -1150, 110, -260], color: '#7cb87a' },
+  { id: 'valley', name: '말랑 계곡', emoji: '🏞️', rect: [-90, -1150, 110, -260], color: '#7cb87a' },
   { id: 'mountain', name: '젤리산', emoji: '🏔️', rect: [-330, -1150, 330, -260], color: '#9e9e8e' },
   { id: 'forest', name: '야생의 숲', emoji: '🌲', rect: [-1150, -1150, -280, -150], color: '#3f7f3a' },
   { id: 'park', name: '젤리랜드 놀이공원', emoji: '🎢', rect: [-1070, -50, -790, 210], color: '#e0d6cc' },
@@ -15,7 +15,7 @@ export const REGIONS = [
   { id: 'swamp', name: '악어 늪지대', emoji: '🐊', rect: [-1150, 260, -280, 1150], color: '#5d7a4a' },
   { id: 'jungle', name: '호랑이 정글', emoji: '🐯', rect: [-280, 280, 330, 680], color: '#2e7d32' },
   { id: 'amazon', name: '아마존', emoji: '🐍', rect: [-280, 680, 330, 1150], color: '#1b5e20' },
-  { id: 'sea', name: '바퀴 해협', emoji: '🌊', rect: [330, -1150, 800, 1150], color: '#4fa3d9' },
+  { id: 'sea', name: '젤리 해협', emoji: '🌊', rect: [330, -1150, 800, 1150], color: '#4fa3d9' },
   { id: 'dragon', name: '드래곤 협곡', emoji: '🐉', rect: [800, -1150, 1150, -460], color: '#b5603a' },
   { id: 'island', name: '건너편 섬 · 목장 마을', emoji: '🐄', rect: [800, -1150, 1150, 1150], color: '#aed581' },
 ];
@@ -31,14 +31,14 @@ export function regionAt(x, z) {
 
 // 도시 밖 건물들 (도시 격자와 따로 배치 → 기존 건물 번호는 그대로)
 export const OUTER_BUILDINGS = [
-  { type: 'prison', x: -400, z: 75, dir: -1, w: 44, d: 32, floors: 2, name: '바퀴 교도소' },
+  { type: 'prison', x: -400, z: 75, dir: -1, w: 44, d: 32, floors: 2, name: '젤리 교도소' },
   { type: 'hunter', x: -520, z: -34, dir: 1, w: 15, d: 11, floors: 1, name: '사냥꾼 오두막' },
   { type: 'convenience', x: -440, z: -30, dir: 1, w: 13, d: 11, floors: 1, name: '서쪽 휴게소 편의점' },
   { type: 'convenience', x: 34, z: -470, dir: 1, w: 13, d: 11, floors: 1, name: '계곡 휴게소 편의점' },
   { type: 'convenience', x: -34, z: 480, dir: -1, w: 13, d: 11, floors: 1, name: '정글 휴게소 편의점' },
   { type: 'convenience', x: 280, z: 30, dir: -1, w: 13, d: 11, floors: 1, name: '대교 휴게소 편의점' },
   { type: 'convenience', x: 1030, z: -70, dir: 1, w: 13, d: 11, floors: 1, name: '섬마을 편의점' },
-  { type: 'ranch', x: 1045, z: 130, dir: -1, w: 22, d: 16, floors: 1, name: '바퀴 목장 직판장' },
+  { type: 'ranch', x: 1045, z: 130, dir: -1, w: 22, d: 16, floors: 1, name: '젤리 목장 직판장' },
   { type: 'hunter', x: -720, z: 300, dir: 1, w: 15, d: 11, floors: 1, name: '늪지대 사냥 캠프' },
   { type: 'fishing', x: 282, z: 122, dir: -1, w: 14, d: 11, floors: 1, name: '대박 낚시용품점' },
   { type: 'seafood', x: 252, z: 122, dir: -1, w: 16, d: 12, floors: 1, name: '바다향 매운탕·횟집' },
@@ -46,7 +46,7 @@ export const OUTER_BUILDINGS = [
 ];
 // 젤리랜드 놀이공원 (사냥꾼 들판 동쪽): 평평하게 다진 터
 export const PARK = { x0: -1070, z0: -50, x1: -790, z1: 210, y: 0.3 };
-// 바퀴 낚시터: 바다로 뻗은 나무 잔교
+// 젤리 낚시터: 바다로 뻗은 나무 잔교
 export const PIER = { x0: 300, x1: 380, z0: 88, z1: 95, y: 1.4 };
 export const onPier = (x, z) => x > PIER.x0 && x < PIER.x1 && z > PIER.z0 && z < PIER.z1;
 const PADS = OUTER_BUILDINGS.map((b) => ({ x: b.x, z: b.z, r: Math.max(b.w, b.d) / 2 + 12 }));
@@ -58,7 +58,7 @@ export const ROADS = [
   { id: 'W', pts: [[-HALF, 0], [-560, 0], [-700, -260], [-900, -700]], name: '서쪽 숲길' },
   { id: 'W2', pts: [[-560, 0], [-720, 380], [-950, 820]], name: '늪지대 길' },
   { id: 'P', pts: [[-560, 0], [-680, 40], [-785, 75]], name: '놀이공원길' },
-  { id: 'E', pts: [[HALF, 0], [BRIDGE.x0 - BRIDGE.ramp, 0], [BRIDGE.x1 + BRIDGE.ramp, 0], [1000, 0], [1000, -400]], name: '바퀴 대교' },
+  { id: 'E', pts: [[HALF, 0], [BRIDGE.x0 - BRIDGE.ramp, 0], [BRIDGE.x1 + BRIDGE.ramp, 0], [1000, 0], [1000, -400]], name: '젤리 대교' },
   { id: 'E2', pts: [[1000, 0], [1000, 420]], name: '섬 남쪽길' },
   { id: 'D', pts: [[1000, -400], [985, -560], [1010, -760], [975, -960]], name: '드래곤 협곡길' },
 ];
@@ -206,18 +206,18 @@ export function roadSigns() {
   // 도시 출구
   S.push([12, -HALF - 25, 0, [line('valley', 60), line('mountain', 260), '🏞️ 이슬 호수 90m']]);
   S.push([-12, HALF + 25, Math.PI, [line('jungle', 80), line('amazon', 470)]]);
-  S.push([-HALF - 25, -12, -Math.PI / 2, [line('meadow', 80), line('forest', 300), line('swamp', 600), '🔒 바퀴 교도소 200m']]);
-  S.push([HALF + 25, 12, Math.PI / 2, ['🌉 바퀴 대교 ' + (BRIDGE.x0 - BRIDGE.ramp - HALF) + 'm', line('island', 600)]]);
+  S.push([-HALF - 25, -12, -Math.PI / 2, [line('meadow', 80), line('forest', 300), line('swamp', 600), '🔒 젤리 교도소 200m']]);
+  S.push([HALF + 25, 12, Math.PI / 2, ['🌉 젤리 대교 ' + (BRIDGE.x0 - BRIDGE.ramp - HALF) + 'm', line('island', 600)]]);
   // 길 중간
   S.push([12, -600, 0, [line('mountain', 0), '🏔️ 정상 방향 ↑']]);
   S.push([-12, 600, Math.PI, [line('amazon', 100), '🐯 호랑이 주의!']]);
   S.push([-560, 14, -Math.PI / 2, [line('forest', 260), line('swamp', 280) + ' ↙']]);
   S.push([-700, 330, Math.PI, ['🐊 악어 출몰 지역! 조심하세요', line('swamp', 0)]]);
   S.push([-575, 16, -Math.PI / 2, ['🎢 젤리랜드 놀이공원 220m ↙', '롤러코스터 · 바이킹 · 관람차 · 회전목마']]);
-  S.push([BRIDGE.x0 - BRIDGE.ramp - 20, 12, Math.PI / 2, ['🌉 바퀴 대교 · 길이 470m', '🐄 목장 마을까지 ' + (1000 - (BRIDGE.x0 - BRIDGE.ramp)) + 'm']]);
+  S.push([BRIDGE.x0 - BRIDGE.ramp - 20, 12, Math.PI / 2, ['🌉 젤리 대교 · 길이 470m', '🐄 목장 마을까지 ' + (1000 - (BRIDGE.x0 - BRIDGE.ramp)) + 'm']]);
   S.push([1015, -12, Math.PI / 2, ['🐄 목장 ↑ 북쪽', '🐉 드래곤 협곡 ↑ 460m', '🏖️ 남쪽 해변 ↓']]);
   S.push([1015, -430, 0, ['🐉 드래곤 협곡 ↑', '🔥 불 뿜는 드래곤 주의!', '체력을 절반 깎으면 Z로 포획']]);
-  S.push([HALF + 40, 30, Math.PI / 2, ['🎣 바퀴 낚시터 · 매운탕집 →', '🐟 상어·참치·돌돔이 잡혀요!']]);
+  S.push([HALF + 40, 30, Math.PI / 2, ['🎣 젤리 낚시터 · 매운탕집 →', '🐟 상어·참치·돌돔이 잡혀요!']]);
   S.push([60, -HALF - 40, 0, ['🎣 이슬 호수 낚시터 ↑', '🐟 송어·쏘가리·빙어']]);
   return S;
 }

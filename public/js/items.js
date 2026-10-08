@@ -31,7 +31,7 @@ export const ITEMS = {
   iron_armor: { name: '철갑옷', emoji: '🛡️', cat: 'body', slot: 'body', shop: 'armory_3k', price: 1000, def: 16, vis: 'armor_iron', sockets: 2 },
   legend_armor: { name: '전설의 갑옷 (황금 용린갑)', emoji: '🌟', cat: 'body', slot: 'body', shop: 'armory_3k', price: 7000, def: 32, charm: 25, vis: 'armor_legend', sockets: 3 },
 
-  // ---------------- 바퀴 택티컬 (현대 밀리터리) ----------------
+  // ---------------- 젤리 택티컬 (현대 밀리터리) ----------------
   combat_knife: { name: '군용 나이프', emoji: '🔪', cat: 'melee', shop: 'armory_mil', price: 90, dmg: 17, rate: 0.35, range: 1.8, kind: 'melee', held: 'knife', sockets: 1 },
   pistol: { name: '권총', emoji: '🔫', cat: 'gun', shop: 'armory_mil', price: 500, dmg: 18, rate: 0.35, range: 45, ammo: 'ammo_9mm', kind: 'hitscan', held: 'pistol', tracer: '#ffe082', sockets: 1 },
   shotgun: { name: '산탄총', emoji: '💥', cat: 'gun', shop: 'armory_mil', price: 1300, dmg: 9, pellets: 7, spread: 0.09, rate: 0.9, range: 22, ammo: 'ammo_shell', kind: 'hitscan', held: 'shotgun', tracer: '#ffcc80', sockets: 2 },
@@ -123,7 +123,7 @@ export const ITEMS = {
   dosirak: { name: '편의점 도시락', emoji: '🍱', cat: 'food', shop: 'convenience', shops: ['supermarket'], price: 7, stack: true, food: { hunger: 45 }, heal: 10, eat: ['spoon', 'bowl:#a1887f'] },
   bread: { name: '빵', emoji: '🥐', cat: 'food', shop: 'bakery', price: 5, stack: true, food: { hunger: 30 }, heal: 8, gift: true, eat: ['bite', 'bread:#e0a050'] },
   coffee: { name: '아메리카노', emoji: '☕', cat: 'food', shop: 'cafe', price: 6, stack: true, food: { energy: 20 }, heal: 2, gift: true, eat: ['drink', 'cup:#6d4c41'] },
-  latte: { name: '부스러기 라떼', emoji: '🥛', cat: 'food', shop: 'cafe', price: 7, stack: true, food: { energy: 18, fun: 5 }, heal: 2, gift: true, eat: ['drink', 'cup:#d7ccc8'] },
+  latte: { name: '솜사탕 라떼', emoji: '🥛', cat: 'food', shop: 'cafe', price: 7, stack: true, food: { energy: 18, fun: 5 }, heal: 2, gift: true, eat: ['drink', 'cup:#d7ccc8'] },
   cake: { name: '딸기 케이크', emoji: '🍰', cat: 'food', shop: 'cafe', shops: ['bakery'], price: 8, stack: true, food: { hunger: 20, fun: 12 }, heal: 4, gift: true, eat: ['bite', 'bread:#f8bbd0'] },
   croissant: { name: '크루아상', emoji: '🥐', cat: 'food', shop: 'bakery', price: 6, stack: true, food: { hunger: 28, fun: 6 }, heal: 6, gift: true, eat: ['bite', 'bread:#e0a050'] },
   cream_bread: { name: '소보로빵', emoji: '🍞', cat: 'food', shop: 'bakery', price: 4, stack: true, food: { hunger: 25 }, heal: 5, eat: ['bite', 'bread:#c68642'] },
@@ -152,7 +152,7 @@ export const ITEMS = {
   kongnamul: { name: '콩나물국밥', emoji: '🥣', cat: 'food', shop: 'gukbap', price: 6, stack: true, food: { hunger: 45, energy: 12 }, heal: 12, eat: ['spoon', 'bowl:#fff9c4'] },
   sikhye: { name: '식혜', emoji: '🍶', cat: 'food', shop: 'gukbap', price: 2, stack: true, food: { energy: 5, fun: 6 }, heal: 2, eat: ['drink', 'cup:#fff8e1'] },
   // 햄버거
-  burger: { name: '바퀴 버거', emoji: '🍔', cat: 'food', shop: 'burger', price: 7, stack: true, food: { hunger: 40, fun: 8 }, heal: 8, eat: ['bite', 'bun:#ffca28'] },
+  burger: { name: '젤리 버거', emoji: '🍔', cat: 'food', shop: 'burger', price: 7, stack: true, food: { hunger: 40, fun: 8 }, heal: 8, eat: ['bite', 'bun:#ffca28'] },
   cheeseburger: { name: '더블 치즈버거', emoji: '🍔', cat: 'food', shop: 'burger', price: 9, stack: true, food: { hunger: 50, fun: 10 }, heal: 10, eat: ['bite', 'bun:#ffb300'] },
   fries: { name: '감자튀김', emoji: '🍟', cat: 'food', shop: 'burger', price: 4, stack: true, food: { hunger: 18, fun: 8 }, heal: 3, eat: ['bite', 'box:#e53935'] },
   milkshake: { name: '딸기 쉐이크', emoji: '🥤', cat: 'food', shop: 'burger', price: 5, stack: true, food: { hunger: 8, fun: 12 }, heal: 2, gift: true, eat: ['drink', 'cup:#f8bbd0'] },
@@ -169,7 +169,7 @@ export const ITEMS = {
   medkit: { name: '구급상자', emoji: '🩹', cat: 'food', shop: 'pharmacy', price: 40, stack: true, food: {}, heal: 50 },
   flowers: { name: '꽃다발', emoji: '💐', cat: 'gift', shop: 'flowershop', price: 8, stack: true, gift: true },
   book: { name: '책', emoji: '📖', cat: 'gift', shop: 'bookstore', price: 10, stack: true, gift: true },
-  doll_roach: { name: '바퀴 인형', emoji: '🧸', cat: 'doll', shop: 'convenience', price: 30, gift: true, held: 'doll:#8a5634', charm: 2 },
+  doll_roach: { name: '곰돌이 인형', emoji: '🧸', cat: 'doll', shop: 'convenience', price: 30, gift: true, held: 'doll:#8a5634', charm: 2 },
   doll_bear: { name: '곰 인형', emoji: '🧸', cat: 'doll', shop: 'flowershop', price: 60, gift: true, held: 'doll:#d7a86e', charm: 3 },
   doll_dino: { name: '공룡 인형', emoji: '🦖', cat: 'doll', shop: 'bookstore', price: 80, gift: true, held: 'doll:#81c784', charm: 3 },
 
@@ -269,7 +269,7 @@ export const FISH = [
 ];
 for (const [id, name, emoji, , sell, raw, spicy] of FISH) ITEMS['fish_' + id] = { name, emoji, cat: 'fish', price: 0, sell, stack: true, raw, spicy, fish: true };
 ITEMS.fish_boot = { name: '낡은 장화', emoji: '🥾', cat: 'loot', price: 0, sell: 5, stack: true };
-// 바퀴 모터스 쇼룸 자동차 (사면 차 키를 받아 언제든 호출)
+// 젤리 모터스 쇼룸 자동차 (사면 차 키를 받아 언제든 호출)
 export const DEALER_CARS = [
   ['sport_b', '🏎️', 90000], ['sport_l', '🐂', 45000], ['sport_f', '🐎', 40000], ['sport_m', '🏁', 38000], ['sport_p', '🏎️', 28000],
   ['limo', '🚘', 25000], ['convertible', '🚙', 16000], ['ev', '⚡', 15000], ['jeep', '🛻', 12000], ['truck', '🚚', 10000],
@@ -346,16 +346,16 @@ export const SHOPS = {
   fishing: { title: '낚시용품점', subtitle: '낚싯대 · 미끼 · 물고기 매입' },
   seafood: { title: '매운탕·횟집', subtitle: '잡아온 물고기로 매운탕·회 · 정식 판매' },
   hunter: { title: '사냥꾼 오두막', subtitle: '사냥 장비 · 전리품 매입' },
-  ranch: { title: '바퀴 목장 직판장', subtitle: '우유 · 치즈 · 스테이크' },
+  ranch: { title: '젤리 목장 직판장', subtitle: '우유 · 치즈 · 스테이크' },
   magicshop: { title: '마법봉 공방', subtitle: '속성 지팡이 · 마나 물약' },
-  dealer: { title: '바퀴 모터스 쇼룸', subtitle: '새 차 구매 · 차 키로 언제든 호출' },
+  dealer: { title: '젤리 모터스 쇼룸', subtitle: '새 차 구매 · 차 키로 언제든 호출' },
   armory_3k: { title: '관우네 병기점', subtitle: '삼국지 영웅들의 무기와 갑옷' },
-  armory_mil: { title: '바퀴 택티컬', subtitle: '현대 밀리터리 장비 · 전차 · 헬기' },
+  armory_mil: { title: '젤리 택티컬', subtitle: '현대 밀리터리 장비 · 전차 · 헬기' },
   armory_sf: { title: '은하 무기상', subtitle: '먼 미래, 아주 먼 은하의 무기' },
   jeweler: { title: '반짝 보석상', subtitle: '보석 판매 · 무기와 방어구 인챈트' },
-  hatshop: { title: '더듬이 캡', subtitle: '모든 머리 크기의 모자' },
+  hatshop: { title: '곰돌이 캡', subtitle: '모든 머리 크기의 모자' },
   eyewear: { title: '눈부심 안경원', subtitle: '선글라스와 안경' },
-  clothing: { title: '여섯다리 패션', subtitle: '옷과 액세서리' },
+  clothing: { title: '말랑 패션', subtitle: '옷과 액세서리' },
   convenience: { title: '편의점', subtitle: '간식 · 도시락 · 인형' },
   pizza: { title: '피자집', subtitle: '갓 구운 피자 (포장 가능)' },
   chicken: { title: '치킨집', subtitle: '바삭바삭 치킨 (포장 가능)' },

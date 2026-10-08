@@ -692,7 +692,7 @@ export class World {
     if (p.loc >= 0) return `${this.buildings[p.loc].name} 안`;
     let best = null, bd = 30;
     for (const b of this.buildings) { const d = Math.hypot(b.door.x - p.pos.x, b.door.z - p.pos.z); if (d < bd) { bd = d; best = b; } }
-    return best ? `${best.name} 근처 거리` : '바퀴시티의 거리';
+    return best ? `${best.name} 근처 거리` : '젤리시티의 거리';
   }
   llmCtx(p, c) {
     const pr = p.profile;
@@ -900,7 +900,7 @@ function playerMeta(p) {
 function sanitizeProfile(pr = {}) {
   const str = (v, n, d) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : d);
   return {
-    name: str(pr.name, 8, '바퀴'),
+    name: str(pr.name, 8, '젤리'),
     gender: ['여', '남'].includes(pr.gender) ? pr.gender : '여',
     age: Math.max(18, Math.min(80, Number(pr.age) || 25)),
     personality: str(pr.personality, 20, '명랑한 수다쟁이'),

@@ -204,13 +204,13 @@ game.placeText = () => {
   if (game.mode === 'interior') return `${game.interior.building.name} 안`;
   const rn = game.regionName(game.player.pos);
   if (rn) return rn;
-  if (Math.abs(game.player.pos.x) > HALF || Math.abs(game.player.pos.z) > HALF) return '바퀴시티 외곽';
+  if (Math.abs(game.player.pos.x) > HALF || Math.abs(game.player.pos.z) > HALF) return '젤리시티 외곽';
   let best = null, bd = 30;
   for (const b of game.city.buildings) {
     const d = Math.hypot(b.door.x - game.player.pos.x, b.door.z - game.player.pos.z);
     if (d < bd) { bd = d; best = b; }
   }
-  return best ? `${best.name} 근처 거리` : '바퀴시티의 거리';
+  return best ? `${best.name} 근처 거리` : '젤리시티의 거리';
 };
 game.playerJob = () => (game.stats.jobId ? getJob(game.stats.jobId) : null);
 game.workBuilding = () => (game.stats.workId != null ? game.city.buildings[game.stats.workId] : null);
@@ -245,7 +245,7 @@ boot();
 async function startGame(session, char) {
   document.getElementById('start').classList.add('hidden');
   ui.disposePreview();
-  ui.showLoading(`바퀴시티에 입장하는 중... ${brand.bug ? '🪳' : '🐻'}`);
+  ui.showLoading(`젤리시티에 입장하는 중... ${brand.bug ? '🪳' : '🐻'}`);
   let welcome;
   try {
     welcome = await game.net.request({ t: 'hello', session, char });
@@ -270,7 +270,7 @@ async function startGame(session, char) {
   game.spectating = false;
   game.started = true;
   const others = game.players.list.size;
-  ui.toast(`바퀴시티에 오신 걸 환영해요, ${game.profile.name}! 🎉`);
+  ui.toast(`젤리시티에 오신 걸 환영해요, ${game.profile.name}! 🎉`);
   if (others) ui.toast(`👥 지금 ${others}명의 플레이어가 함께 있어요`);
   if (welcome.homeId == null) setTimeout(() => ui.toast('🏨 아직 집이 없어서 호텔에서 지내요. 부동산 🏘️ 에서 집을 살 수 있어요!'), 2000);
   if (!welcome.stats) setTimeout(() => ui.toast('시청 🏛️ 에서 일자리를 구해보세요. 숫자키로 핫바, I키로 가방!'), 4500);
@@ -287,12 +287,12 @@ function startTour() {
   pick('park', '🌳 도토리 공원', 38, 18);
   pick('hospital', '🏥 종합병원 앞', 36, 16);
   pick('pizza', '🍕 맛집 거리', 26, 11);
-  pick('club', '🪩 클럽 바퀴락', 30, 13);
+  pick('club', '🪩 클럽 젤리락', 30, 13);
   const sub = game.city.buildings.find((b) => b.suburb && b.type === 'house');
   if (sub) tour.shots.push({ b: sub, label: '🏡 교외 전원주택단지', r: 40, h: 22 });
   pick('apartment', '🏢 아파트 단지', 50, 26);
   pick('dojang', '🥋 무릉도장', 40, 18);
-  pick('hotel', '🏨 그랜드 바퀴 호텔', 40, 22);
+  pick('hotel', '🏨 그랜드 젤리 호텔', 40, 22);
   tour.i = Math.floor(Math.random() * tour.shots.length);
   tour.t = 0;
   document.getElementById('start').classList.add('live');
@@ -507,7 +507,7 @@ function setupNet() {
     if (s.a) game.animals.apply(s.a);
     for (const ev of s.ev) game.citizens.applyEvent(ev);
   });
-  net.on('pjoin', (m) => { game.players.add(m.p); if (!game.started) return; ui.toast(`👋 ${m.p.name}님이 바퀴시티에 왔어요`); ui.addChatLine('sys', `${m.p.name}님이 입장했어요`); });
+  net.on('pjoin', (m) => { game.players.add(m.p); if (!game.started) return; ui.toast(`👋 ${m.p.name}님이 젤리시티에 왔어요`); ui.addChatLine('sys', `${m.p.name}님이 입장했어요`); });
   net.on('pleave', (m) => { const p = game.players.list.get(m.id); if (p && game.started) ui.addChatLine('sys', `${p.name}님이 나갔어요`); game.players.remove(m.id); });
   net.on('pmeta', (m) => { if (m.p.id !== game.myId) game.players.meta(m.p); });
   net.on('psay', (m) => {
@@ -1369,8 +1369,8 @@ async function releaseFromJail() {
 function tvInfo() {
   const h = game.hour();
   return {
-    headline: game.news?.[0] ? `속보: ${game.news[0].slice(0, 34)}` : `${game.players.list.size + 1}명이 바퀴시티에서 생활 중`,
-    ticker: [`오늘 날씨 ${game.weather}`, ...(game.news || []).slice(1, 5), '살충제 회사 주가 폭락 🎉', '무릉도장 신규 수련생 모집 🥋'].join('   ·   '),
+    headline: game.news?.[0] ? `속보: ${game.news[0].slice(0, 34)}` : `${game.players.list.size + 1}명이 젤리시티에서 생활 중`,
+    ticker: [`오늘 날씨 ${game.weather}`, ...(game.news || []).slice(1, 5), '설탕 값 대폭락 🎉', '무릉도장 신규 수련생 모집 🥋'].join('   ·   '),
     weather: game.weather, temp: Math.round(18 + Math.sin(((h - 9) / 24) * Math.PI * 2) * 6), newsEmoji: game.stars ? '🚓' : '🏙️',
   };
 }
@@ -1633,7 +1633,7 @@ function fishAction(rod) {
     } else { endFishing(); ui.toast('🎣 낚싯줄을 감았어요'); }
     return;
   }
-  if (game.mode !== 'city' || p.inCar || p.flying) { ui.toast('🎣 물가에서 써요 (바퀴 낚시터, 호수, 강, 바다)'); return; }
+  if (game.mode !== 'city' || p.inCar || p.flying) { ui.toast('🎣 물가에서 써요 (젤리 낚시터, 호수, 강, 바다)'); return; }
   if (game.inv.count('bait') <= 0) { ui.toast('🪱 미끼가 없어요! 낚시용품점에서 지렁이 미끼를 사세요'); return; }
   // 바라보는 방향의 물 찾기
   let spot = null;
@@ -1739,7 +1739,7 @@ function grabCanvas() {
   x.drawImage(canvas, 0, 0, W, H);
   // 워터마크
   x.font = 'bold 22px sans-serif'; x.fillStyle = 'rgba(255,255,255,.85)'; x.shadowColor = '#000'; x.shadowBlur = 4;
-  x.fillText(cityText(`${brand.bug ? '🪳' : '🐻'} 바퀴시티 · ${game.profile.name} · ${DAYS[game.day() % 7]}요일`), 18, H - 20);
+  x.fillText(cityText(`${brand.bug ? '🪳' : '🐻'} 젤리시티 · ${game.profile.name} · ${DAYS[game.day() % 7]}요일`), 18, H - 20);
   return c.toDataURL('image/jpeg', 0.82);
 }
 

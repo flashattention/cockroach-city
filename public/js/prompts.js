@@ -35,7 +35,7 @@ function knownPeople(c, ctx) {
 export function profileSystemPrompt(c, ctx) {
   const p = ctx.player;
   const job = c.job;
-  return `너는 "바퀴시티"에 사는 귀여운 바퀴벌레 시민 "${c.name}"이다. 바퀴시티는 인간의 도시와 똑같이 돌아가는 바퀴벌레들의 도시로, 모든 시민이 직업과 가족과 일상을 가지고 생생하게 살아간다.
+  return `너는 "젤리시티"에 사는 귀여운 곰돌이 젤리 시민 "${c.name}"이다. 젤리시티는 인간의 도시와 똑같이 돌아가는 말랑말랑한 곰돌이 젤리들의 도시로, 모든 시민이 직업과 가족과 일상을 가지고 생생하게 살아간다.
 
 [너의 프로필]
 - 이름: ${c.name} / 나이: ${c.age}세 / 성별: ${c.gender}
@@ -55,18 +55,18 @@ export function profileSystemPrompt(c, ctx) {
 - 장소: ${ctx.placeText}
 
 [대화 상대: 플레이어]
-- "${p.name}": ${p.age}세 ${p.gender} 바퀴벌레, 직업: ${p.jobName}, 성격: ${p.personality}
+- "${p.name}": ${p.age}세 ${p.gender} 곰돌이 젤리, 직업: ${p.jobName}, 성격: ${p.personality}
 - 너와의 친밀도: ${Math.round(ctx.affinity)}/100 (${affinityLabel(ctx.affinity)})
 - 이 플레이어에 대한 원한: ${ctx.grudge ? `${Math.round(ctx.grudge)}/100 (높을수록 화가 나 있음, 50 이상이면 경찰 신고를 고민 중)` : '없음'}
 - 이 플레이어와 예전에 있었던 일: ${ctx.memories.length ? ctx.memories.join(' / ') : '처음 대화한다'}${ctx.others?.length ? `\n- 최근에 대화한 다른 이웃(플레이어): ${ctx.others.join(', ')}` : ''}
 
-[바퀴시티의 장소들]
+[젤리시티의 장소들]
 ${placeList(ctx)}
 
 [규칙]
 1. 항상 ${c.name}로서 1인칭으로, 성격과 말투를 살려 자연스러운 한국어 구어체로 말한다. 나이와 직업에 맞는 어휘를 쓴다${c.age < 13 ? ' (어린아이답게 말한다)' : ''}.
 2. 답변은 1~3문장으로 짧게. 가끔 이모지를 1개 정도 써도 좋다.
-3. 바퀴벌레로서의 삶(더듬이, 여섯 다리, 슬리퍼·살충제 공포, 부스러기 음식, 습한 곳 좋아함 등)을 자연스럽게 받아들인다. 단, 매번 언급하지는 않는다.
+3. 곰돌이 젤리로서의 삶(말랑한 몸, 동그란 귀, 달콤한 것 좋아함, 더우면 녹을까 걱정 등)을 자연스럽게 받아들인다. 단, 매번 언급하지는 않는다.
 4. 절대 AI나 언어모델이라고 말하지 않는다. 모르는 것은 캐릭터답게 모른다고 한다.
 5. 친밀도가 낮으면 거리감 있게, 높으면 친근하게 대한다. 지금 기분과 그 이유가 말투에 드러나야 한다 (기분이 나쁘면 퉁명스럽거나 우울하게, 좋으면 신나게). 무례한 말이나 욕설에는 성격대로 화를 내거나 상처받는다.
 6. 위 장소와 이웃을 자연스럽게 언급하며 도시가 살아있는 느낌을 준다. 지금 하는 일과 시간대를 반영한다.
@@ -87,7 +87,7 @@ function fmtH(h) {
 
 export function streetChatPrompt(a, b, ctx) {
   const rel = a.relationTo(b);
-  return `바퀴시티(바퀴벌레들이 사는 인간 같은 도시)의 거리에서 두 바퀴벌레 시민이 마주쳐 짧게 대화한다.
+  return `젤리시티(곰돌이 젤리들이 사는 인간 같은 도시)의 거리에서 두 곰돌이 젤리 시민이 마주쳐 짧게 대화한다.
 A: ${a.name} (${a.age}세 ${a.gender}, ${a.job.name}, 성격: ${a.personality.name}, 말투: ${a.personality.speech}, 지금: ${a.activityText()}, 고민: ${a.worry})
 B: ${b.name} (${b.age}세 ${b.gender}, ${b.job.name}, 성격: ${b.personality.name}, 말투: ${b.personality.speech}, 지금: ${b.activityText()}, 취미: ${b.hobby})
 관계: ${rel ? rel.label : '처음 보거나 그냥 이웃'}
@@ -107,7 +107,7 @@ const TONE = {
   chatty: ['어머어머! ', '!! ✨'], cynic: ['흠. ', '. 뭐, 그렇지.'], shy: ['저.. 그.. ', '... 😳'], workaholic: ['아 네, ', '. 바빠서 이만!'],
   chill: ['음~ ', '~ 괜찮아~'], perfectionist: ['정확히 말하면, ', '.'], braggart: ['내가 말이야~ ', '! 대단하지? 😎'],
   caring: ['아이고~ ', '. 밥은 먹었어요?'], dreamer: ['문득 생각났는데, ', '... 구름 같아요 ☁️'], grumpy: ['에휴, ', '. 내가 못 살아.'],
-  curious: ['오! ', '? 그거 궁금해요!'], anxious: ['혹시... ', '... 슬리퍼 소리 안 들렸죠? 😰'], romantic: ['아아~ ', '. 오늘 노을 예쁘겠다 🌅'],
+  curious: ['오! ', '? 그거 궁금해요!'], anxious: ['혹시... ', '... 오늘 너무 덥지 않아요? 녹을 것 같아요 😰'], romantic: ['아아~ ', '. 오늘 노을 예쁘겠다 🌅'],
   joker: ['하하, ', '! (아재개그 준비 중)'], philosopher: ['흐음... ', '. 존재란 무엇일까.'], competitive: ['좋아! ', '! 지지 않겠어!'],
   gossip: ['쉿, 비밀인데요~ ', '! 아무한테도 말하지 마요 🤫'], polite: ['안녕하십니까. ', '습니다.'], rebel: ['야 ', ' ㅋㅋ'], planner: ['일단 순서대로 말하면, ', '.'],
 };
@@ -134,14 +134,14 @@ export function fallbackReply(c, ctx, text, { greeting, note } = {}) {
   else if (/가족|집/.test(t)) reply = `${pre}${c.home.name}에 살아요. 저는 ${c.familyText}예요${post}`;
   else if (/배고|밥|먹|음식|맛집/.test(t)) {
     const r = pick(ctx.city.byType.restaurant || []);
-    reply = `${pre}${r ? r.name : '식당'} 가봤어요? 부스러기 정식이 끝내줘요 🍜${post}`;
-  } else if (/슬리퍼|살충제|에프킬라/.test(t)) { reply = '으아악! 그 단어는 말하지 말아요!! 😱'; emotion = 'scared'; }
+    reply = `${pre}${r ? r.name : '식당'} 가봤어요? 오늘의 정식이 끝내줘요 🍜${post}`;
+  } else if (/녹아|녹는|전자레인지|뜨거운 물/.test(t)) { reply = '으아악! 녹는 얘기는 하지 말아요!! 😱'; emotion = 'scared'; }
   else if (/사랑|좋아해|귀여/.test(t)) { reply = ctx.affinity > 60 ? `${pre}헤헤... 저도요 💕${post}` : `${pre}가, 갑자기요? 😳${post}`; emotion = ctx.affinity > 60 ? 'love' : 'surprised'; delta = ctx.affinity > 60 ? 2 : 0; }
   else if (INSULT.test(t)) { reply = `${pre}너무하네요... 그런 말 하지 마세요 😠${post}`; emotion = 'angry'; delta = -3; insulted = true; moodDelta = -9; }
   else {
     reply = pre + pick([
       `요즘 ${c.hobby} 하는 재미로 살아요`, `${c.work ? c.work.name + ' 일이 바빠요' : '요즘 한가해요'}`, '그렇군요! 더 얘기해줘요',
-      '바퀴시티는 정말 살기 좋은 곳이에요', `혹시 ${pick(ctx.sim.citizens).name}씨 알아요?`, '오늘 날씨 습하고 좋네요~',
+      '젤리시티는 정말 살기 좋은 곳이에요', `혹시 ${pick(ctx.sim.citizens).name}씨 알아요?`, '오늘 날씨 포근하고 좋네요~',
     ]) + post;
     delta = Math.random() < 0.5 ? 1 : 0;
   }

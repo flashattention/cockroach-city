@@ -330,7 +330,7 @@ export class Combat {
     if (p.talking !== null) this.w.endTalk(p, p.talking);
     const secs = 60;
     this.w.send(p, { t: 'arrested', prison: prison.id, secs, reason, cop: cop ? [cop.pos.x, cop.pos.z] : null });
-    this.w.broadcast({ t: 'sys', text: `🚔 ${p.name}님이 체포되어 바퀴 교도소로 이송됩니다! (사유: ${reason})` });
+    this.w.broadcast({ t: 'sys', text: `🚔 ${p.name}님이 체포되어 젤리 교도소로 이송됩니다! (사유: ${reason})` });
     const acc = this.w.accounts[p.token];
     if (acc) { acc.arrests = (acc.arrests || 0) + 1; this.w.dirty = true; }
     clearTimeout(p.jailTimer);

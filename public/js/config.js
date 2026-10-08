@@ -1,4 +1,4 @@
-// 도시 격자 치수 (단위: 바퀴 미터)
+// 도시 격자 치수 (단위: 미터)
 export const BLOCK = 40;          // 블록 한 변
 export const ROAD = 14;           // 도로 폭 (보도 포함)
 export const GRID = 8;            // 8 x 8 블록 (바깥 한 줄은 교외 주택단지)

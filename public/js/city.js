@@ -1218,7 +1218,7 @@ const BUILDERS = {
     pediment(g, 24, h + 0.35, b.d / 2 + 2.2, 4.6, '#fffaf0');
     door(g, b.d, '#6d4c41', { w: 3, h: 3.6 });
     sign(g, b, h - 2.0, 10, '#3e2723', '#ffe082', b.d / 2 + 4.6);
-    // 거대 바퀴 화석 조각상
+    // 거대 곰돌이 화석 조각상
     box(g, 4, 1.2, 4, '#bcaaa4', -9, 0.6, b.d / 2 + 10);
     const statue = new Roach({ color: '#e8dcc0', age: 40 });
     statue.root.scale.setScalar(2.2);
@@ -1475,7 +1475,7 @@ const BUILDERS = {
       cyl(g, 0.06, 1.0, '#ffd54f', sx * 1.6, 0.5, b.d / 2 + 1.2 + i * 1.3, { low: true });
       if (i < 2) box(g, 0.05, 0.05, 1.3, '#c62828', sx * 1.6, 0.85, b.d / 2 + 1.85 + i * 1.3, { cast: false });
     }
-    // 덩치 큰 경호원 바퀴 두 마리 (양복 + 선글라스)
+    // 덩치 큰 경호원 젤리 두 마리 (양복 + 선글라스)
     b.bouncers = [];
     for (const sx of [-1, 1]) {
       const r = new Roach({ color: '#4e342e', age: 40, accessories: ['suit', 'sunglasses'] });

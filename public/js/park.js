@@ -57,7 +57,7 @@ function buildCoaster(root) {
   box(stat, 26, 0.4, 6, '#ffe0b2', 0, 0.2, 0);
   for (const x of [-12, 12]) for (const z of [-2.6, 2.6]) cyl(stat, 0.2, 5, '#6d4c41', x, 2.7, z);
   box(stat, 27, 0.4, 7, '#d32f2f', 0, 5.3, 0);
-  const sg = signMesh('바퀴 익스프레스 롤러코스터', '🎢', 10, '#d32f2f', '#ffffff'); sg.position.set(0, 6.4, 3.6); stat.add(sg);
+  const sg = signMesh('젤리 익스프레스 롤러코스터', '🎢', 10, '#d32f2f', '#ffffff'); sg.position.set(0, 6.4, 3.6); stat.add(sg);
   // 열차: 3칸, 칸마다 2자리
   const cars = [];
   for (let k = 0; k < 3; k++) {

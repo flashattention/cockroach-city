@@ -3,12 +3,12 @@ import * as THREE from 'three';
 import { cityText } from './utils.js';
 
 export const CHANNELS = [
-  { id: 'news', name: 'BKB 9시 뉴스', emoji: '📰' },
+  { id: 'news', name: 'JBC 9시 뉴스', emoji: '📰' },
   { id: 'cartoon', name: '꼬물이 만화동산', emoji: '🎬' },
-  { id: 'sports', name: '바퀴 스포츠 축구 중계', emoji: '⚽' },
-  { id: 'cooking', name: '요리왕 바퀴', emoji: '🍳' },
-  { id: 'music', name: '뮤직뱅크 더듬이', emoji: '🎵' },
-  { id: 'weather', name: '바퀴시티 날씨', emoji: '🌦️' },
+  { id: 'sports', name: '젤리 스포츠 축구 중계', emoji: '⚽' },
+  { id: 'cooking', name: '요리왕 젤리', emoji: '🍳' },
+  { id: 'music', name: '뮤직뱅크 말랑', emoji: '🎵' },
+  { id: 'weather', name: '젤리시티 날씨', emoji: '🌦️' },
   { id: 'animal', name: '동물의 왕국', emoji: '🐾' },
 ];
 
@@ -64,9 +64,9 @@ export class TVScreen {
     roach(x, 110, 70 + Math.sin(t * 2) * 1, 22, '#8a5634', t);
     x.fillStyle = '#fff'; x.fillRect(84, 98, 52, 8);
     // 자막
-    x.fillStyle = '#c62828'; x.fillRect(0, H - 42, 64, 22); x.fillStyle = '#fff'; x.font = 'bold 12px sans-serif'; x.textAlign = 'center'; x.fillText('BKB 뉴스', 32, H - 31);
+    x.fillStyle = '#c62828'; x.fillRect(0, H - 42, 64, 22); x.fillStyle = '#fff'; x.font = 'bold 12px sans-serif'; x.textAlign = 'center'; x.fillText('JBC 뉴스', 32, H - 31);
     x.fillStyle = '#fff'; x.fillRect(64, H - 42, W - 64, 22); x.fillStyle = '#212121'; x.textAlign = 'left'; x.font = 'bold 12px sans-serif';
-    x.fillText(cityText(info.headline || '바퀴시티 오늘도 평화롭습니다'), 70, H - 31);
+    x.fillText(cityText(info.headline || '젤리시티 오늘도 평화롭습니다'), 70, H - 31);
     x.fillStyle = '#263238'; x.fillRect(0, H - 20, W, 20); x.fillStyle = '#ffeb3b'; x.font = '11px sans-serif';
     const ticker = info.ticker || '';
     const tw = x.measureText(ticker).width + W;
@@ -91,7 +91,7 @@ export class TVScreen {
     x.fillStyle = '#fff'; x.beginPath(); x.arc(bx, by, 4, 0, Math.PI * 2); x.fill();
     const sa = Math.floor(t / 23) % 4, sb = Math.floor(t / 31) % 3;
     x.fillStyle = 'rgba(0,0,0,.6)'; x.fillRect(8, 8, 120, 20); x.fillStyle = '#fff'; x.font = 'bold 12px sans-serif'; x.textAlign = 'left';
-    x.fillText(`🔴 바퀴FC ${sa} : ${sb} 더듬이UTD 🔵`, 12, 22);
+    x.fillText(`🔴 젤리FC ${sa} : ${sb} 말랑UTD 🔵`, 12, 22);
   }
   cooking(x, t) {
     x.fillStyle = '#fff3e0'; x.fillRect(0, 0, W, H);
@@ -102,14 +102,14 @@ export class TVScreen {
     for (let i = 0; i < 5; i++) { const k = (t * 0.6 + i * 0.2) % 1; x.fillStyle = `rgba(255,255,255,${0.7 - k * 0.7})`; x.beginPath(); x.arc(150 + i * 12 + Math.sin(t + i) * 6, H - 80 - k * 60, 6 + k * 8, 0, Math.PI * 2); x.fill(); }
     roach(x, 60, 70, 20, '#a86b3e', t);
     x.fillStyle = '#fff'; x.fillRect(42, 38, 36, 14); x.beginPath(); x.ellipse(60, 32, 20, 12, 0, 0, Math.PI * 2); x.fill();
-    x.fillStyle = '#4e342e'; x.font = 'bold 14px sans-serif'; x.textAlign = 'center'; x.fillText('오늘의 요리: 부스러기 볶음밥 🍛', W / 2, 22);
+    x.fillStyle = '#4e342e'; x.font = 'bold 14px sans-serif'; x.textAlign = 'center'; x.fillText('오늘의 요리: 무지개 볶음밥 🍛', W / 2, 22);
   }
   music(x, t) {
     x.fillStyle = '#1a0033'; x.fillRect(0, 0, W, H);
     for (let i = 0; i < 4; i++) { const a = Math.sin(t * 2 + i) * 0.6; x.fillStyle = ['rgba(255,64,129,.25)', 'rgba(0,229,255,.25)', 'rgba(255,235,59,.25)', 'rgba(124,77,255,.25)'][i]; x.beginPath(); x.moveTo(40 + i * 80, 0); x.lineTo(40 + i * 80 + Math.sin(a) * 160 - 40, H); x.lineTo(40 + i * 80 + Math.sin(a) * 160 + 40, H); x.fill(); }
     for (let i = 0; i < 24; i++) { const h = 10 + Math.abs(Math.sin(t * 6 + i * 0.7) * Math.cos(t * 2.3 + i)) * 60; x.fillStyle = `hsl(${(i * 15 + t * 60) % 360},90%,60%)`; x.fillRect(8 + i * 13, H - h - 8, 10, h); }
     for (let i = 0; i < 3; i++) roach(x, 90 + i * 70, 70 + Math.abs(Math.sin(t * 7 + i)) * -12, 15, ['#ff9fb2', '#ffd54f', '#9fa8ff'][i], t * 3);
-    x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.textAlign = 'left'; x.fillText('🎤 걸그룹 "슬리퍼조심" — 6다리 댄스', 10, 18);
+    x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.textAlign = 'left'; x.fillText('🎤 걸그룹 "말랑말랑" — 젤리 댄스', 10, 18);
   }
   weather(x, t, info) {
     x.fillStyle = '#e1f5fe'; x.fillRect(0, 0, W, H);
@@ -129,6 +129,6 @@ export class TVScreen {
     const list = ['🦁', '🐘', '🦒', '🐆', '🦓'];
     list.forEach((e, i) => x.fillText(e, ((t * (20 + i * 6) + i * 80) % (W + 60)) - 30, H - 40 - Math.abs(Math.sin(t * 3 + i)) * 6));
     x.textBaseline = 'alphabetic';
-    x.fillStyle = '#4e342e'; x.font = 'bold 13px sans-serif'; x.fillText('"초원에서 가장 빠른 동물은... 바퀴벌레?!"', W / 2, 22);
+    x.fillStyle = '#4e342e'; x.font = 'bold 13px sans-serif'; x.fillText('"초원에서 가장 빠른 동물은... 곰돌이 젤리?!"', W / 2, 22);
   }
 }
