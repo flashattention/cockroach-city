@@ -179,7 +179,7 @@ button { font-family: 'Jua', sans-serif; cursor: pointer; }
 #hotbar .cnt { position: absolute; bottom: 1px; right: 4px; font-size: 11px; color: #fff; font-weight: bold; }
 #hotbar .gem { position: absolute; top: 1px; right: 4px; font-size: 10px; color: #e040fb; }
 #prompt { bottom: 112px; }
-#crosshair { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 26px; text-shadow: 0 0 3px #000; pointer-events: none; z-index: 11; }
+#crosshair { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--crosshair, #fff); font-size: 26px; text-shadow: 0 0 3px #000; pointer-events: none; z-index: 11; }
 #hurt { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px rgba(255, 0, 0, 0); z-index: 9; }
 #hurt.on { animation: hurt .5s ease-out; }
 @keyframes hurt { from { box-shadow: inset 0 0 140px rgba(255, 0, 0, .75); } to { box-shadow: inset 0 0 140px rgba(255, 0, 0, 0); } }
@@ -605,3 +605,10 @@ body.bug-mode .cute-bear { display: none !important; }
 .ig-acts { display: flex; gap: 6px; margin-top: 8px; }
 .ig-acts .ig-follow { margin-left: 0; flex: 1; padding: 7px; }
 .ig-acts .btn { flex: 1; }
+
+/* 설정: 조준점 색 */
+.xh-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.xh-sw { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(0,0,0,.15); cursor: pointer; padding: 0; }
+.xh-sw.on { outline: 3px solid var(--accent); outline-offset: 1px; }
+.xh-row input[type=color] { width: 34px; height: 30px; border: 0; padding: 0; background: none; cursor: pointer; }
+.xh-prev { width: 44px; height: 44px; border-radius: 10px; background: #6d8a5a; display: grid; place-items: center; font-size: 26px; text-shadow: 0 0 3px #000; margin-left: auto; }

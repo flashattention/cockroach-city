@@ -4,6 +4,8 @@ import { WORLD_HALF } from './terrain.js';
 import { JOBS, BUILDING_TYPES, EMOTE } from './data.js';
 import { ITEMS, GEMS, SHOPS, ENCHANT_FEE, CLUB_CHARM, RARITY, itemDef, shopItems, weaponStats, isWeapon, ammoName } from './items.js';
 import { SLOTS } from './inventory.js';
+// 조준점 색 추천 (설정에서 직접 고를 수도 있다)
+const XH_COLORS = ['#ffffff', '#ff3b30', '#ffcc00', '#4cd964', '#00e5ff', '#ff4fd8', '#000000'];
 const APP_TITLES = { quests: '퀘스트', camera: '카메라', gallery: '사진', insta: 'Jellystagram', tinder: '튄더', contacts: '연락처', sms: '메시지', police: '112 신고', map: '지도', me: '내 정보', feedback: '건의하기', help: '도움말', settings: '설정', admin: '건의함' };
 const SKILL_NAMES = { jump2: '2단 점프', jump3: '3단 점프', dash: '대쉬 거리 강화', jumpboost: '점프력 강화', dashlong: '대쉬 거리 강화' };
 import { LOOK_PARTS, LOOK_COLORS, DEFAULT_LOOK } from './look.js';
@@ -110,6 +112,7 @@ export class UI {
     $('tb-map').onclick = () => this.openWorldMap();
     $('tb-mode').onclick = () => this.setBugMode(!settings.bugMode);
     this.setBugMode(settings.bugMode, true);
+    this.applyCrosshair();
     this.renderQuests();
     let seen = false;
     try { seen = localStorage.getItem('roachcity.keysSeen') === '1'; } catch { /* 무시 */ }
@@ -756,6 +759,7 @@ export class UI {
         <div class="set-row"><b>⏱️ 시간 속도</b><span>현실 1초 = 게임 ${g.timeSpeed}분 (서버 설정, 모든 플레이어 공통)</span></div>
         <div class="set-row"><label><input type="checkbox" id="set-shadow" ${settings.shadows ? 'checked' : ''}/> 그림자 (끄면 더 빨라요)</label></div>
         <div class="set-row"><label><input type="checkbox" id="set-bug" ${settings.bugMode ? 'checked' : ''}/> 🪳 바퀴 모드 (끄면 모두 🐻 곰돌이 젤리로 보여요)</label></div>
+        <div class="set-row"><b>🎯 조준점 색</b><div class="xh-row">${XH_COLORS.map((c) => `<button class="xh-sw" data-xh="${c}" style="background:${c}" title="${c}"></button>`).join('')}<input type="color" id="set-xh" value="${escapeHtml(settings.crosshairColor)}" title="직접 고르기"><span class="xh-prev" id="xh-prev">＋</span></div></div>
         <button class="btn" id="set-save">저장</button>
         <button class="btn ghost" id="set-reset">👥 캐릭터 선택 화면으로</button>`;
       $('set-save').onclick = () => {
@@ -766,6 +770,15 @@ export class UI {
         this.toast('⚙️ 설정을 저장했어요');
       };
       $('set-reset').onclick = () => g.resetSave();
+      // 조준점 색은 고르는 즉시 적용·저장
+      const pickXh = (c) => {
+        settings.crosshairColor = c; saveSettings(); this.applyCrosshair();
+        $('set-xh').value = c; $('xh-prev').style.color = c;
+        body.querySelectorAll('[data-xh]').forEach((b) => b.classList.toggle('on', b.dataset.xh === c));
+      };
+      body.querySelectorAll('[data-xh]').forEach((b) => { b.onclick = () => pickXh(b.dataset.xh); });
+      $('set-xh').oninput = (e) => pickXh(e.target.value);
+      pickXh(settings.crosshairColor);
     } else if (tab === 'help') {
       body.innerHTML = `<div class="profile-big">
         <h3>📘 젤리시티 생활 가이드</h3>
@@ -1271,6 +1284,10 @@ export class UI {
     if (n === null || n === undefined) { $('flip').classList.add('hidden'); return; }
     $('flip').classList.remove('hidden');
     $('flip-fill').style.width = `${(n / need) * 100}%`;
+  }
+  applyCrosshair() {
+    const c = /^#[0-9a-fA-F]{6}$/.test(settings.crosshairColor || '') ? settings.crosshairColor : '#ffffff';
+    $('crosshair').style.setProperty('--crosshair', c);
   }
   setScope(on) { if (this.scopeOn !== on) { this.scopeOn = on; $('scope').classList.toggle('hidden', !on); $('crosshair').style.opacity = on ? '0' : ''; } }
   drawMeter(k) {
