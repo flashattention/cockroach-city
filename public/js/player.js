@@ -285,11 +285,11 @@ export class Player {
     this.snap = false;
     const k = this.adsFP && !this.inCar ? this.aim * this.aim * (3 - 2 * this.aim) : 0; // smoothstep
     if (k > 0.001) {
-      // 3인칭은 위에서 내려다보므로, 조준 화면은 그만큼 들어 올려 수평에 가깝게
-      const ap = c.pitch - 0.3, cpa = Math.cos(ap);
-      const adsLook = new THREE.Vector3(head.x - Math.sin(c.yaw) * cpa, head.y - Math.sin(ap), head.z - Math.cos(c.yaw) * cpa);
+      // 조준하면서 화면 중앙이 가리키던 방향을 그대로 이어 본다 (시점을 들어 올리면 저격 줌에서 목표가 화면 밖으로 튄다)
+      const view3 = c.target.clone().sub(this.camPos).normalize();
+      const adsDir = headLook.sub(head);
       camera.position.copy(this.camPos).lerp(head, k);
-      camera.lookAt(c.target.clone().lerp(adsLook, k));
+      camera.lookAt(camera.position.clone().add(view3.lerp(adsDir, k)));
     } else {
       camera.position.copy(this.camPos);
       camera.lookAt(c.target);
