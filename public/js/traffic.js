@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GRID, roadC, LANE_OFF, ASPHALT_HALF, HALF } from './config.js';
+import { GRID, roadC, LANE_OFF, ASPHALT_HALF, HALF, signalPhase } from './config.js';
 import { WORLD_HALF, WATER_Y } from './terrain.js';
 import { toon, box, cyl, sph, RNG, angleLerp, signMesh } from './utils.js';
 
@@ -565,7 +565,8 @@ export class Traffic {
       const remain = seg.len - seg.s;
       const [ti, tj] = car.to;
       const hasLight = ti > 0 && ti < GRID && tj > 0 && tj < GRID;
-      const go = car.axis === 'ns' ? this.city.nsGo : this.city.ewGo;
+      const L = signalPhase();
+      const go = car.axis === 'ns' ? L.nsGreen || L.nsYellow : L.ewGreen || L.ewYellow;
       if (hasLight && !go && remain < 7) target = remain < 0.4 ? 0 : Math.min(target, remain * 1.2);
       else if (remain < 6) target = Math.min(target, 6);
     } else target = Math.min(target, 5.5);

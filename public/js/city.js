@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BLOCK, ROAD, GRID, CITY, HALF, ASPHALT_HALF, WALK_OFF, roadC, blockMin } from './config.js';
+import { BLOCK, ROAD, GRID, CITY, HALF, ASPHALT_HALF, WALK_OFF, roadC, blockMin, signalPhase } from './config.js';
 import { BUILDING_TYPES, CITY_PLAN, CATEGORY_COLORS, isSuburbBlock } from './data.js';
 import { toon, basic, box, cyl, sph, cone, G, signMesh, windowPlane, stripeMat, bakeStatic, RNG } from './utils.js';
 import { Roach } from './roach.js';
@@ -354,9 +354,8 @@ export function buildCity(scene, buildings, seed) {
     },
     update(dt, t, night) {
       lampMat.emissiveIntensity = night * 1.6;
-      // 신호등: 20초 주기
-      const ph = (t % 20);
-      const nsGreen = ph < 8, nsYellow = ph >= 8 && ph < 10, ewGreen = ph >= 10 && ph < 18, ewYellow = ph >= 18;
+      // 신호등: 서버의 차들과 같은 박자 (실제 시각 기준 20초 주기)
+      const { nsGreen, nsYellow, ewGreen, ewYellow } = signalPhase();
       const set = (m, on) => { m.emissiveIntensity = on ? 1.2 : 0; m.color.setScalar(on ? 1 : 0.35); };
       set(tl.ns.g, nsGreen); set(tl.ns.y, nsYellow); set(tl.ns.r, !nsGreen && !nsYellow);
       set(tl.ew.g, ewGreen); set(tl.ew.y, ewYellow); set(tl.ew.r, !ewGreen && !ewYellow);

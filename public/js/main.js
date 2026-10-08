@@ -801,8 +801,25 @@ window.addEventListener('mousemove', (e) => {
   c.pitch = clamp(c.pitch + dy * 0.0022 * sens, game.player.fp || game.player.aim > 0.5 ? -1.3 : -0.35, 1.25);
   game.mouseT = 1.5;
 });
+// 스코프 배율 (배그처럼 휠로 조절). 무기마다 고를 수 있는 배율과 처음 배율
+const SCOPES = { hunting_rifle: { steps: [2, 3, 4, 6], start: 4 }, sniper: { steps: [2, 3, 4, 6, 8], start: 6 }, barrett: { steps: [4, 6, 8, 12, 15], start: 8 } };
+game.scopeZoom = {};
+function scopeZoomOf(id) { const s = SCOPES[id]; return s ? game.scopeZoom[id] ?? s.start : null; }
 canvas.addEventListener('wheel', (e) => {
   if (!game.player) return;
+  // 스코프로 조준 중이면 휠 = 배율 (위로 굴리면 확대)
+  const sel = game.inv?.selected();
+  const sc = sel && SCOPES[sel.id];
+  if (sc && game.player.aim > 0.5 && !game.player.inCar) {
+    game.wheelAcc = (game.wheelAcc || 0) + e.deltaY;
+    if (Math.abs(game.wheelAcc) < 40) return; // 트랙패드는 조금씩 여러 번 온다
+    const cur = scopeZoomOf(sel.id), i = sc.steps.indexOf(cur);
+    const ni = Math.max(0, Math.min(sc.steps.length - 1, (i < 0 ? sc.steps.indexOf(sc.start) : i) + (game.wheelAcc < 0 ? 1 : -1)));
+    game.wheelAcc = 0;
+    if (sc.steps[ni] !== cur) { game.scopeZoom[sel.id] = sc.steps[ni]; sfx('scope'); }
+    return;
+  }
+  game.wheelAcc = 0;
   const c = game.player.cam;
   c.dist = clamp(c.dist * (e.deltaY > 0 ? 1.1 : 0.9), 3.2, 30);
 }, { passive: true });
@@ -2094,18 +2111,20 @@ function frame() {
   // 마나 재생
   if (game.maxMana) game.mana = Math.min(game.maxMana, (game.mana || 0) + dt * 7);
   // 우클릭 조준: 총·활·마법봉 줌 (저격총은 스코프)
-  const selD = game.inv.selected() ? itemDef(game.inv.selected().id) : null;
+  const selId = game.inv.selected()?.id || null; // 아이템 정의(selD)에는 id가 없다
+  const selD = selId ? itemDef(selId) : null;
   const canZoom = !p.inCar && selD?.zoom && !blocked;
   p.aim += ((canZoom && game.aimHeld ? 1 : 0) - p.aim) * Math.min(1, dt * 10);
   p.adsFP = !!selD && ['gun', 'launcher'].includes(selD.cat); // 총·활은 우클릭하면 1인칭 조준
-  game.zoomNow = 1 + ((selD?.zoom || 1) - 1) * p.aim;
+  const maxZoom = scopeZoomOf(selId) ?? selD?.zoom ?? 1;
+  game.zoomNow = 1 + (maxZoom - 1) * p.aim;
   const fov = 55 / game.zoomNow;
   if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = fov; camera.updateProjectionMatrix(); }
-  ui.setScope(selD?.zoom >= 4 && p.aim > 0.85);
+  ui.setScope(selD?.zoom >= 4 && p.aim > 0.85, SCOPES[selId] ? maxZoom : null);
   // 광선검을 들고 있으면 웅웅 (꺼내는 순간 치이잉)
-  const saber = !!selD?.id?.startsWith('saber_') && !p.inCar && !game.dead && !game.busy;
-  if (saber && game.heldSaber !== selD.id) sfx('saberOn');
-  game.heldSaber = saber ? selD.id : null;
+  const saber = !!selId?.startsWith('saber_') && !p.inCar && !game.dead && !game.busy;
+  if (saber && game.heldSaber !== selId) sfx('saberOn');
+  game.heldSaber = saber ? selId : null;
   loop('saber', saber ? 0.3 : 0);
   updateUnitSounds();
   updateMoveSounds(dt);

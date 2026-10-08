@@ -412,6 +412,7 @@ export function sfx(name, pos = null, arg = null, vol = 1) {
   else if (name === 'flap') flap(out, t, arg ?? 0.5);
   else if (name === 'splash') splash(out, t, !!arg);
   else if (name === 'stroke') { nz(out, t, 0.22, { f: 1100, f2: 700, q: 1.2, vol: 0.3, a: 0.04 }); osc(out, t + 0.1, 0.05, { f: 1200, curve: [[0.04, 2200]], vol: 0.06 }); }
+  else if (name === 'scope') { nz(out, t, 0.02, { type: 'highpass', f: 3000, vol: 0.4 }); osc(out, t, 0.04, { f: 2400, vol: 0.06, a: 0.001 }); } // 딸깍
   else if (name === 'saberOn') { osc(out, t, 0.6, { type: 'sawtooth', f: 40, curve: [[0.4, 110]], vol: 0.35, filter: { f: 1200, q: 4 } }); nz(out, t, 0.3, { type: 'highpass', f: 2500, vol: 0.2, curve: 'lin' }); }
 }
 

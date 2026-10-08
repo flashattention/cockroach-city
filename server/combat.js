@@ -89,6 +89,11 @@ export class Combat {
       this.w.wild.damage(a, dmg, p);
       // 불에 타는 동물 (드래곤은 불에 강하다)
       if (stats.element === 'fire' && stats.burn && !ANIMALS[a.kind]?.fly) { let n = 0; const iv = setInterval(() => { if (++n > 6 || a.dead) { clearInterval(iv); return; } this.w.wild.damage(a, stats.burn * 0.5, p); }, 500); }
+    } else if (msg.tt === 'occ') {
+      // AI 차·버스·오토바이에 탄 시민: 맞으면 비명 지르며 모두 뛰어내려 도망가고, 차는 그 자리에 선다
+      const car = this.w.traffic.cars[msg.id];
+      if (!car || car.mode !== 'ai' || car.occ <= 0 || p.loc !== -1 || car.pos.distanceTo(p.pos) > maxDist + 4) return;
+      this.hitOccupants(car, p, dmg, crit);
     } else if (msg.tt === 'car') {
       const car = this.w.traffic.cars[msg.id];
       if (car && p.loc < 0 && car.pos.distanceTo(p.pos) < maxDist + 4) this.damageCar(car, dmg * 0.5, p);
@@ -446,6 +451,13 @@ export class Combat {
     this.carHits(dt);
     // 바닥 아이템 소멸
     for (const [id, g] of this.ground) if (now > g.expire) { this.ground.delete(id); this.w.broadcast({ t: 'gpick', gid: id }); }
+    // 버려진 AI 차(빼앗겼다 내린 차, 탄 사람이 도망친 차): 1분 30초 동안 아무도 근처에 없으면 다시 도로로
+    for (const car of this.w.traffic.cars) {
+      if (car.id >= AI_CARS || car.mode !== 'parked') { car.idleT = 0; continue; }
+      const someone = [...this.w.players.values()].some((x) => x.loc === -1 && Math.hypot(x.pos.x - car.pos.x, x.pos.z - car.pos.z) < 60);
+      car.idleT = someone ? 0 : (car.idleT || 0) + dt;
+      if (car.idleT > 90) { car.idleT = 0; this.w.traffic.resetAI(car); }
+    }
     // 부서진 차
     for (const car of this.w.traffic.cars) {
       if (car.mode !== 'wreck') continue;
@@ -574,6 +586,18 @@ export class Combat {
     this.dropT = 15;
     const n = [...this.ground.values()].filter((g) => g.world).length;
     if (n < target) this.spawnWorldDrop();
+  }
+
+  hitOccupants(car, p, dmg, crit) {
+    const at = { x: car.pos.x, y: (car.pos.y || 0) + 1.2, z: car.pos.z };
+    this.w.broadcast({ t: 'fx', k: 'dmgnum', p: [at.x, at.y + 1, at.z], v: Math.round(Math.min(dmg, 999)), crit, loc: -1 });
+    this.scream(at, -1, `c${car.id}`);
+    this.w.broadcast({ t: 'eject', id: car.id, n: car.occ, x: car.pos.x, z: car.pos.z, h: car.heading });
+    car.bubble = { text: '으아악! 살려줘요!! 😱', t: 2.5 };
+    this.w.broadcast({ t: 'carSay', id: car.id, text: car.bubble.text });
+    car.occ = 0; car.mode = 'parked'; car.speed = 0; car.owner = null;
+    // 도망친 시민이 절반 확률로 112에 신고
+    if (this.rng.chance(0.5)) setTimeout(() => { if (this.w.players.has(p.id)) this.w.reportBy('차에 타고 있던 시민', { token: p.token, name: p.name, reason: '폭행' }); }, 5000);
   }
 
   // 차에 치이기: 속도가 빠를수록 크게 다친다

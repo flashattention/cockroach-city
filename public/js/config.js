@@ -21,6 +21,12 @@ export const DEFAULT_TIME_SPEED = 1.5;
 export const POPULATION = 180;
 export const SEED = 20261006;
 
+// 신호등: 실제 시각 기준 20초 주기. 서버의 AI 차와 모든 화면의 신호등이 같은 박자로 바뀐다
+export function signalPhase(ms = Date.now()) {
+  const ph = (ms / 1000) % 20;
+  return { nsGreen: ph < 8, nsYellow: ph >= 8 && ph < 10, ewGreen: ph >= 10 && ph < 18, ewYellow: ph >= 18 };
+}
+
 // 보행 라인 (x 고정 라인은 남북 이동, z 고정 라인은 동서 이동)
 export const X_LINES = [];
 export const Z_LINES = [];

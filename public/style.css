@@ -612,3 +612,6 @@ body.bug-mode .cute-bear { display: none !important; }
 .xh-sw.on { outline: 3px solid var(--accent); outline-offset: 1px; }
 .xh-row input[type=color] { width: 34px; height: 30px; border: 0; padding: 0; background: none; cursor: pointer; }
 .xh-prev { width: 44px; height: 44px; border-radius: 10px; background: #6d8a5a; display: grid; place-items: center; font-size: 26px; text-shadow: 0 0 3px #000; margin-left: auto; }
+
+/* 스코프 배율 표시 */
+#scope-zoom { position: absolute; left: 50%; top: calc(50% + 32vmin); transform: translateX(-50%); color: #fff; font-family: 'Jua'; font-size: 16px; text-shadow: 0 1px 3px #000; background: rgba(0,0,0,.45); padding: 3px 12px; border-radius: 10px; }

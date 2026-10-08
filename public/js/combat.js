@@ -463,8 +463,10 @@ export class Combat {
       out.push({ tt: 'npc', id: c.id, base: c.roach.root.position, r: 0.55, h: c.roach.height });
     }
     for (const p of g.players.list.values()) {
-      if (!p.visible || p.dead) continue;
-      out.push({ tt: 'player', id: p.id, base: p.roach.root.position, r: 0.55, h: p.roach.height });
+      if (p.dead) continue;
+      if (p.visible) out.push({ tt: 'player', id: p.id, base: p.roach.root.position, r: 0.55, h: p.roach.height });
+      // 차·오토바이에 탄 플레이어: 앉은 자리에서 맞는다
+      else if (p.car >= 0 && p.roach.root.visible && g.traffic.cars[p.car]?.kind !== 'tank') out.push({ tt: 'player', id: p.id, base: p.roach.root.position, r: 0.45, h: Math.max(0.6, p.roach.height * p.roach.root.scale.y * 1.6), occOf: p.car });
     }
     for (const u of g.units.list.values()) {
       if (!u.visible) continue;
@@ -480,6 +482,15 @@ export class Combat {
       if (car === g.player.inCar || car.mode === 'wreck' || car.mode === 'gone') continue;
       if (car.pos.distanceTo(g.player.pos) > 600) continue;
       out.push({ tt: 'car', id: car.id, base: car.mesh.g.position, r: car.kind === 'bus' || car.kind === 'tank' || car.kind === 'heli' ? 2.4 : 1.6, h: 2.2 });
+      // AI 차·버스·오토바이에 탄 시민 (보이는 사람만)
+      if (car.mode === 'ai' && car.occ > 0) {
+        const occ = car.mesh.occ || [];
+        for (let i = 0; i < Math.min(car.occ, occ.length); i++) {
+          if (!occ[i].visible) continue;
+          const b = occ[i].getWorldPosition(new THREE.Vector3()); b.y -= 0.3;
+          out.push({ tt: 'occ', id: car.id, seat: i, base: b, r: car.mesh.bike ? 0.45 : 0.4, h: 1.1, occOf: car.id });
+        }
+      }
     }
     return out;
   }
@@ -494,9 +505,16 @@ export class Combat {
 
   raycast(o, d, range, skipSelf = true) {
     let best = null, bt = range;
+    const occHits = [];
     for (const t of this.targets()) {
       const hit = rayCylinder(o, d, t.base, t.r, t.h);
+      if (hit !== null && t.occOf !== undefined && hit < range) occHits.push([t, hit]);
       if (hit !== null && hit < bt) { bt = hit; best = t; }
+    }
+    // 차 겉면에 먼저 닿아도, 그 차에 탄 사람에게 닿으면 사람을 맞힌다 (창문·오토바이 너머)
+    if (best?.tt === 'car') {
+      const o2 = occHits.filter(([t, h]) => t.occOf === best.id && h < bt + 5).sort((a, b) => a[1] - b[1])[0];
+      if (o2) { best = o2[0]; bt = o2[1]; }
     }
     // 건물·벽·땅에 막힘 → 맞은 면(normal)을 기억해 총알 자국을 남긴다
     let surf = null;
