@@ -68,17 +68,20 @@ export class Combat {
       if (!src || src.distanceTo(p.pos) > maxDist) return;
       this.damageNpc(c, dmg, p, crit, stats);
       this.elementOnNpc(c, stats, p);
+      if (stats.kind === 'hitscan') this.scream(src, this.locOf(c), `n${c.id}`);
     } else if (msg.tt === 'player') {
       const v = this.w.players.get(msg.id);
       if (!v || v === p || v.dead || v.loc !== p.loc || v.pos.distanceTo(p.pos) > maxDist) return;
       this.damagePlayer(v, head ? dmg : damageTaken(dmg, v.profile.def || 0, stats.pierce), p, p.pos, crit);
       this.elementOnPlayer(v, stats, p);
+      if (stats.kind === 'hitscan') this.scream(v.pos, v.loc, `p${v.id}`);
       this.lifesteal(p, dmg, stats);
     } else if (msg.tt === 'unit') {
       const u = this.units.find((x) => x.id === msg.id);
       if (!u || u.loc !== p.loc || u.pos.distanceTo(p.pos) > maxDist + 6) return;
       const big = u.kind === 'tank' || u.kind === 'heli';
       this.damageUnit(u, head && !big ? dmg : damageTaken(head ? stats.dmg * 3 : dmg, UNIT[u.kind].def, stats.pierce), p, crit);
+      if (stats.kind === 'hitscan' && !big) this.scream(u.pos, u.loc, `u${u.id}`);
       this.lifesteal(p, dmg, stats);
     } else if (msg.tt === 'animal') {
       const a = this.w.wild.list[msg.id];
@@ -199,6 +202,15 @@ export class Combat {
     return c.location && c.location.type !== 'park' && this.w.sim.active.has(c.location.id) && c.mode !== 'walk' && c.mode !== 'idle' ? c.location.id : -1;
   }
 
+  // 총에 맞은 사람의 비명 (귀여운 젤리 세계의 반전). 연사에 겹치지 않게 같은 대상은 0.7초에 한 번
+  scream(pos, loc, key) {
+    const now = Date.now();
+    this.screamAt ||= new Map();
+    if (now - (this.screamAt.get(key) || 0) < 700) return;
+    this.screamAt.set(key, now);
+    if (this.screamAt.size > 500) for (const [k, t] of this.screamAt) if (now - t > 5000) this.screamAt.delete(k);
+    this.w.broadcast({ t: 'fx', k: 'scream', p: [pos.x, pos.y + 1.5, pos.z], loc, s: Math.random() });
+  }
   damagePlayer(v, dmg, attacker, fromPos, crit = false) {
     if (v.dead || dmg <= 0) return;
     if (this.w.inSafeZone(v)) return; // 리스폰 존: 무적
@@ -499,7 +511,7 @@ export class Combat {
         this.explodeAt(aim, u.loc, info.radius, info.dmg, null, {}, p);
       } else {
         this.w.broadcast({ t: 'fx', k: 'tracer', a: [muzzle.x, muzzle.y, muzzle.z], b: [aim.x, aim.y, aim.z], c: '#fff59d', loc: u.loc });
-        if (hit) this.damagePlayer(p, damageTaken(info.dmg, p.profile.def || 0), { name: info.name }, muzzle);
+        if (hit) { this.damagePlayer(p, damageTaken(info.dmg, p.profile.def || 0), { name: info.name }, muzzle); this.scream(p.pos, p.loc, `p${p.id}`); }
       }
     }
   }

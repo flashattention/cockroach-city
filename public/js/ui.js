@@ -18,6 +18,7 @@ import { housePrice, freeUnits, homeLabel, isHomeType } from './world-setup.js';
 import { moodLabel, moodEmoji } from './citizens.js';
 import { Roach } from './roach.js';
 import { settings, saveSettings } from './settings.js';
+import { setMusic, applyVolumes } from './audio.js';
 import { fmtTime, DAYS, escapeHtml, cityText, setBrand } from './utils.js';
 
 const $ = (id) => document.getElementById(id);
@@ -111,6 +112,9 @@ export class UI {
     $('tb-badges').onclick = () => this.openBadges();
     $('tb-map').onclick = () => this.openWorldMap();
     $('tb-mode').onclick = () => this.setBugMode(!settings.bugMode);
+    const musicBtn = () => { $('tb-music').textContent = settings.music ? '🎵 음악 켬' : '🔇 음악 끔'; };
+    $('tb-music').onclick = () => { setMusic(!settings.music); musicBtn(); };
+    musicBtn();
     this.setBugMode(settings.bugMode, true);
     this.applyCrosshair();
     this.renderQuests();
@@ -759,6 +763,8 @@ export class UI {
         <div class="set-row"><b>⏱️ 시간 속도</b><span>현실 1초 = 게임 ${g.timeSpeed}분 (서버 설정, 모든 플레이어 공통)</span></div>
         <div class="set-row"><label><input type="checkbox" id="set-shadow" ${settings.shadows ? 'checked' : ''}/> 그림자 (끄면 더 빨라요)</label></div>
         <div class="set-row"><label><input type="checkbox" id="set-bug" ${settings.bugMode ? 'checked' : ''}/> 🪳 바퀴 모드 (끄면 모두 🐻 곰돌이 젤리로 보여요)</label></div>
+        <div class="set-row"><label><input type="checkbox" id="set-music" ${settings.music ? 'checked' : ''}/> 🎵 배경음악</label><input type="range" id="set-music-vol" min="0" max="1" step="0.05" value="${settings.musicVol}"></div>
+        <div class="set-row"><label><input type="checkbox" id="set-sfx" ${settings.sfx ? 'checked' : ''}/> 🔊 효과음 (총 맞은 사람 비명)</label><input type="range" id="set-sfx-vol" min="0" max="1" step="0.05" value="${settings.sfxVol}"></div>
         <div class="set-row"><b>🎯 조준점 색</b><div class="xh-row">${XH_COLORS.map((c) => `<button class="xh-sw" data-xh="${c}" style="background:${c}" title="${c}"></button>`).join('')}<input type="color" id="set-xh" value="${escapeHtml(settings.crosshairColor)}" title="직접 고르기"><span class="xh-prev" id="xh-prev">＋</span></div></div>
         <button class="btn" id="set-save">저장</button>
         <button class="btn ghost" id="set-reset">👥 캐릭터 선택 화면으로</button>`;
@@ -777,6 +783,13 @@ export class UI {
         body.querySelectorAll('[data-xh]').forEach((b) => b.classList.toggle('on', b.dataset.xh === c));
       };
       body.querySelectorAll('[data-xh]').forEach((b) => { b.onclick = () => pickXh(b.dataset.xh); });
+      // 소리: 바꾸는 즉시 적용·저장
+      const snd = () => {
+        Object.assign(settings, { music: $('set-music').checked, musicVol: +$('set-music-vol').value, sfx: $('set-sfx').checked, sfxVol: +$('set-sfx-vol').value });
+        saveSettings(); applyVolumes();
+        $('tb-music').textContent = settings.music ? '🎵 음악 켬' : '🔇 음악 끔';
+      };
+      for (const id of ['set-music', 'set-music-vol', 'set-sfx', 'set-sfx-vol']) $(id).oninput = snd;
       $('set-xh').oninput = (e) => pickXh(e.target.value);
       pickXh(settings.crosshairColor);
     } else if (tab === 'help') {

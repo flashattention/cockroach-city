@@ -4,6 +4,7 @@ import { itemDef, weaponStats, ammoName, ITEMS, SHOPS, rarityOf } from './items.
 import { G } from './utils.js';
 import { levelStats } from './level.js';
 import { mouthPos } from './animals.js';
+import { scream } from './audio.js';
 
 const ELEMENT_COLOR = { fire: '#ff5722', ice: '#4fc3f7', thunder: '#ffee58', wind: '#a5d6a7', poison: '#9ccc65', holy: '#fff59d', dark: '#7e57c2' };
 const BASE_SPREAD = { m4: 0.022, revolver: 0.012, deagle: 0.016, uzi: 0.05, mp5: 0.028, ak47: 0.035, scar: 0.02, m249: 0.045, barrett: 0.003, plasma_smg: 0.025, hunting_rifle: 0.006, pistol: 0.018, blaster: 0.015, rifle: 0.03, blaster_rifle: 0.026, minigun: 0.045, sniper: 0.012 };
@@ -1019,6 +1020,13 @@ export class Combat {
       // 야생 드래곤 불덩이: 날아가는 모습만 (피해는 서버가)
       const a = v3(m.p), b = v3(m.b), t = Math.max(0.3, +m.t || 1);
       this.spawnProj('rocket', a, b.clone().sub(a).divideScalar(t), { id: 'wild_fireball' }, false);
+    }
+    else if (m.k === 'scream' && Array.isArray(m.p)) {
+      // 총 맞은 사람 비명: 멀수록 작게, 왼쪽·오른쪽은 화면 기준으로
+      const cam = g.camera, rel = v3(m.p).sub(cam.position);
+      const vol = Math.max(0, 1 - rel.length() / 70) ** 1.5;
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion);
+      scream(vol, rel.length() > 1 ? rel.normalize().dot(right) * 0.8 : 0, +m.s || Math.random());
     }
     else if (m.k === 'sparkle') this.fx.sparkle(v3(m.p), m.c || '#fff59d', 20, 3);
     else if (m.k === 'cloud') this.fx.cloud(v3(m.p), m.c || '#e8f5e9');

@@ -24,6 +24,9 @@ import { buildWilds, renderWorldImage } from './wilds.js';
 import { AnimalsView, makeMount, mouthPos } from './animals.js';
 import { Roach } from './roach.js';
 import { buildPark } from './park.js';
+import { unlockAudio } from './audio.js';
+// 브라우저는 처음 누르거나 키를 칠 때부터 소리를 낼 수 있다
+for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, unlockAudio, true);
 initBrand(); // 화면의 '바퀴시티' → '젤리시티' (바퀴 모드면 그대로)
 import { ANIMALS, ANIMAL_KINDS } from './fauna.js';
 import { TVScreen, CHANNELS } from './tv.js';
