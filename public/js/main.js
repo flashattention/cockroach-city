@@ -364,7 +364,7 @@ function buildWorld(w) {
   game.units = new UnitsView(scene);
   game.ground = new GroundView(scene);
   for (const g of w.ground || []) game.ground.add(g);
-  game.runners = new Runners(scene);
+  game.runners = new Runners(scene, city.groundY);
   game.routeView = new RouteView(scene, city.groundY);
   game.minutes = w.minutes; game.timeSpeed = w.timeSpeed; game.weather = w.weather;
   game.combat = new Combat(game);
@@ -546,7 +546,10 @@ function setupNet() {
     const car = game.traffic.cars[m.id];
     if (car && m.text) { car.bubble = { text: m.text, t: 2.5 }; if (m.text.includes('빵빵') && game.loc() === -1) sfx('horn', car.pos, car.kind === 'bus' || car.kind === 'truck' ? 'big' : null); }
   });
-  net.on('eject', (m) => game.runners.spawn(m.x, m.z, m.h, m.n));
+  net.on('runners', (m) => game.runners.spawn(m.list || []));
+  net.on('rpos', (m) => game.runners.applyPos(m.a || []));
+  net.on('runnerDown', (m) => game.runners.down(m.id));
+  net.on('runnerGone', (m) => game.runners.gone(m.id));
   net.on('sleepers', (m) => { game.sleepers = m; ui.updateSleep(); });
   net.on('skip', (m) => {
     game.minutes = m.minutes;
@@ -1378,8 +1381,17 @@ async function goToJail(m) {
   if (game.mode === 'interior') await exitBuilding(true);
   // 경찰차에 태워 4초간 달린다
   const h = p.heading;
-  const car = makeCarMesh('police', '#ffffff');
+  const car = makeCarMesh('police', '#ffffff', ['#0f3c8c', '#0f3c8c']) // 젤리 모드에선 하늘색 젤리 경찰;
   const fake = { mesh: car, pos: p.pos.clone().add(new THREE.Vector3(Math.cos(h) * 2.5, 0, -Math.sin(h) * 2.5)), heading: h, kind: 'police' };
+  // 앞자리에 경찰 젤리 둘 (경찰 모자), 나는 뒷자리
+  const capMat = new THREE.MeshToonMaterial({ color: '#1a2f5c' }), badgeMat = new THREE.MeshToonMaterial({ color: '#ffd54f' });
+  for (const cop of car.occ.slice(0, 2)) {
+    cop.visible = true;
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.12, 12), capMat); cap.position.set(0, 0.6, 0.02); cop.add(cap);
+    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.03, 0.16), capMat); brim.position.set(0, 0.55, 0.2); cop.add(brim);
+    const badge = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.02), badgeMat); badge.position.set(0, 0.62, 0.22); cop.add(badge);
+  }
+  const backSeat = Math.min(3, car.seats.length - 1);
   fake.pos.y = game.city.groundY(fake.pos.x, fake.pos.z);
   scene.add(car.g);
   // 경광등만 번갈아 깜빡인다 (재질은 공유되므로 복사해서 바꾼다)
@@ -1394,7 +1406,7 @@ async function goToJail(m) {
       siren.forEach((o, i) => { o.material.emissiveIntensity = Math.floor(this.t * 6 + i) % 2 === 0 ? 1.4 : 0.08; });
       loop('siren', this.t < 3.6 ? 0.8 : 0);
       p.pos.copy(fake.pos);
-      seatRoach(p.roach, fake); p.roach.update(dt, 0, {});
+      seatRoach(p.roach, fake, backSeat); p.roach.update(dt, 0, {});
     },
   };
   await new Promise((r) => setTimeout(r, 4200));
@@ -2211,6 +2223,7 @@ function spectateFrame(dt, t) {
   tourFrame(dt, t);
   game.wild.update(camera.position);
   game.traffic.render(true, camera.position, dt);
+  game.runners?.update(dt);
   game.citizens.update(dt, camera.position, -1);
   game.players.update(dt, -1, game.traffic);
   game.units.update(dt, -1, game.city.groundY);

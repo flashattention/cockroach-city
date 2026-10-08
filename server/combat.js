@@ -89,6 +89,8 @@ export class Combat {
       this.w.wild.damage(a, dmg, p);
       // 불에 타는 동물 (드래곤은 불에 강하다)
       if (stats.element === 'fire' && stats.burn && !ANIMALS[a.kind]?.fly) { let n = 0; const iv = setInterval(() => { if (++n > 6 || a.dead) { clearInterval(iv); return; } this.w.wild.damage(a, stats.burn * 0.5, p); }, 500); }
+    } else if (msg.tt === 'runner') {
+      this.hitRunner(p, +msg.id, dmg, crit, maxDist, stats.kind === 'hitscan');
     } else if (msg.tt === 'occ') {
       // AI 차·버스·오토바이에 탄 시민: 맞으면 비명 지르며 모두 뛰어내려 도망가고, 차는 그 자리에 선다
       const car = this.w.traffic.cars[msg.id];
@@ -449,6 +451,7 @@ export class Combat {
     for (const u of [...this.units]) this.updateUnit(u, dt);
     this.tickDrops(dt);
     this.carHits(dt);
+    this.tickRunners(dt);
     // 바닥 아이템 소멸
     for (const [id, g] of this.ground) if (now > g.expire) { this.ground.delete(id); this.w.broadcast({ t: 'gpick', gid: id }); }
     // 버려진 AI 차(빼앗겼다 내린 차, 탄 사람이 도망친 차): 1분 30초 동안 아무도 근처에 없으면 다시 도로로
@@ -588,11 +591,66 @@ export class Combat {
     if (n < target) this.spawnWorldDrop();
   }
 
+  // ---------------- 차에서 뛰어내려 도망가는 시민 ----------------
+  // 차를 빼앗기거나 탄 차가 공격받으면 뛰어내려 달아난다. 서버가 움직이니 모두에게 같은 자리에 보이고, 맞힐 수 있다
+  spawnRunners(car, n, say) {
+    this.runners ||= []; this.runnerId ||= 1;
+    const sx = Math.cos(car.heading), sz = -Math.sin(car.heading);
+    const out = [];
+    for (let i = 0; i < Math.min(n, 8); i++) {
+      const s = i % 2 ? 1 : -1;
+      const r = { id: this.runnerId++, x: car.pos.x + sx * s * 1.8, z: car.pos.z + sz * s * 1.8, h: Math.atan2(sx * s, sz * s) + this.rng.range(-0.6, 0.6), hp: 60, t: 0, dead: false };
+      this.w.sim.pushOut(r, 0.4);
+      this.runners.push(r);
+      out.push({ id: r.id, x: r.x, z: r.z, h: r.h, c: i, say: i === 0 ? say : null });
+    }
+    this.w.broadcast({ t: 'runners', list: out });
+  }
+  tickRunners(dt) {
+    if (!this.runners?.length) return;
+    const outside = [...this.w.players.values()].filter((p) => p.loc === -1);
+    for (const r of [...this.runners]) {
+      r.t += dt;
+      const gone = r.dead ? r.t > 20 : (r.t > 15 && !outside.some((p) => Math.hypot(p.pos.x - r.x, p.pos.z - r.z) < 45)) || r.t > 60;
+      if (gone) { this.runners = this.runners.filter((x) => x !== r); this.w.broadcast({ t: 'runnerGone', id: r.id }); continue; }
+      if (r.dead) continue;
+      // 처음엔 전력으로, 지치면 조금 느리게. 건물에 막히면 옆으로 꺾는다
+      const sp = r.t < 8 ? 7 : 4.5, nx = r.x + Math.sin(r.h) * sp * dt, nz = r.z + Math.cos(r.h) * sp * dt;
+      const q = { x: nx, z: nz };
+      this.w.sim.pushOut(q, 0.4);
+      if (Math.hypot(q.x - nx, q.z - nz) > 0.01) r.h += (this.rng.chance(0.5) ? 1 : -1) * Math.PI / 2;
+      r.x = q.x; r.z = q.z;
+    }
+    this.runnerSendT = (this.runnerSendT || 0) - dt;
+    if (this.runnerSendT <= 0) {
+      this.runnerSendT = 0.2;
+      const a = [];
+      for (const r of this.runners) if (!r.dead) a.push(r.id, Math.round(r.x * 10), Math.round(r.z * 10), Math.round(r.h * 100));
+      if (a.length) this.w.broadcast({ t: 'rpos', a });
+    }
+  }
+  hitRunner(p, id, dmg, crit, maxDist, gun) {
+    const r = this.runners?.find((x) => x.id === id);
+    if (!r || r.dead || p.loc !== -1 || Math.hypot(r.x - p.pos.x, r.z - p.pos.z) > maxDist + 3) return;
+    r.hp -= dmg;
+    const y = 0;
+    this.w.broadcast({ t: 'fx', k: 'dmgnum', p: [r.x, y + 2.2, r.z], v: Math.round(Math.min(dmg, 999)), crit, loc: -1 });
+    if (gun || r.hp <= 0) this.scream({ x: r.x, y, z: r.z }, -1, `r${r.id}`);
+    if (r.hp > 0) {
+      if (this.rng.chance(0.25)) setTimeout(() => { if (this.w.players.has(p.id)) this.w.reportBy('도망치던 시민', { token: p.token, name: p.name, reason: '폭행' }); }, 4000);
+      return;
+    }
+    r.dead = true; r.t = 0;
+    this.w.broadcast({ t: 'runnerDown', id: r.id });
+    this.dropItem({ id: 'cash', n: 5 + Math.floor(this.rng.next() * 40) }, r.x, 0.3, r.z, -1, 60);
+    if (this.rng.chance(0.6)) setTimeout(() => { if (this.w.players.has(p.id)) this.w.reportBy('목격자', { token: p.token, name: p.name, reason: '살인' }); }, 4000);
+  }
+
   hitOccupants(car, p, dmg, crit) {
     const at = { x: car.pos.x, y: (car.pos.y || 0) + 1.2, z: car.pos.z };
     this.w.broadcast({ t: 'fx', k: 'dmgnum', p: [at.x, at.y + 1, at.z], v: Math.round(Math.min(dmg, 999)), crit, loc: -1 });
     this.scream(at, -1, `c${car.id}`);
-    this.w.broadcast({ t: 'eject', id: car.id, n: car.occ, x: car.pos.x, z: car.pos.z, h: car.heading });
+    this.spawnRunners(car, car.occ, '으아악! 살려줘요!! 😱');
     car.bubble = { text: '으아악! 살려줘요!! 😱', t: 2.5 };
     this.w.broadcast({ t: 'carSay', id: car.id, text: car.bubble.text });
     car.occ = 0; car.mode = 'parked'; car.speed = 0; car.owner = null;

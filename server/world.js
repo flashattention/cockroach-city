@@ -25,7 +25,7 @@ const MAX_CHARS = 4;
 // 건의함을 볼 수 있는 관리자 (쉼표로 여러 명)
 const ADMINS = (process.env.ADMIN_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 export const isAdmin = (user) => !!user?.email && ADMINS.includes(user.email.toLowerCase());
-const SPECTATOR_TYPES = new Set(['smash', 'unsmash', 'pjoin', 'pleave', 'pmeta', 'carSpawn', 'gdrop', 'gpick', 'homes', 'fx', 'eject', 'carSay', 'hearts']);
+const SPECTATOR_TYPES = new Set(['smash', 'unsmash', 'pjoin', 'pleave', 'pmeta', 'carSpawn', 'gdrop', 'gpick', 'homes', 'fx', 'runners', 'rpos', 'runnerDown', 'runnerGone', 'carSay', 'hearts']);
 
 export class World {
   constructor({ dataDir }) {
@@ -360,7 +360,7 @@ export class World {
         const car = this.traffic.cars[msg.id];
         if (!car || car.mode === 'player' || p.car >= 0) { this.send(p, { t: 'carDenied' }); break; }
         if (car.occ > 0) {
-          this.broadcast({ t: 'eject', id: car.id, n: car.occ, x: car.pos.x, z: car.pos.z, h: car.heading });
+          this.combat.spawnRunners(car, car.occ, ['으아악! 내 차!!', '살려줘요!!', '도둑이야!!'][Math.floor(Math.random() * 3)]);
           // 쫓겨난 운전자가 절반 확률로 112에 신고
           if (Math.random() < 0.5) setTimeout(() => { if (this.players.has(p.id)) this.reportBy('차 주인', { token: p.token, name: p.name, reason: '차량 탈취' }); }, 6000);
         }

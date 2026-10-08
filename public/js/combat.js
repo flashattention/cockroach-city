@@ -424,7 +424,7 @@ function segHits(a, b, t, pad) {
 }
 
 // 머리 판정: 사람(젤리곰·바퀴)·경찰·군인은 키의 위쪽 36%가 머리
-const HEAD_TT = new Set(['npc', 'player', 'unit']);
+const HEAD_TT = new Set(['npc', 'player', 'unit', 'runner']);
 function isHead(t, y) { return HEAD_TT.has(t.tt) && t.h < 2.9 && y > t.base.y + t.h * 0.64 && y < t.base.y + t.h * 1.08; }
 // 선분이 대상 기둥에 가장 가까워지는 곳의 높이 (화살 머리 판정용)
 function closestY(a, b, base) {
@@ -473,6 +473,8 @@ export class Combat {
       const big = u.kind === 'tank' || u.kind === 'heli';
       out.push({ tt: 'unit', id: u.id, base: u.obj.position, r: big ? 2.4 : 0.55, h: big ? 3 : 2 });
     }
+    // 차에서 뛰어내려 도망가는 시민
+    if (g.mode === 'city') for (const o of g.runners?.list.values() || []) if (!o.dead) out.push({ tt: 'runner', id: o.id, base: o.r.root.position, r: 0.55, h: o.r.height });
     if (g.mode === 'city') for (const a of g.animals?.list || []) {
       if (!a.visible || !a.alive || a.gone || a.def.livestock) continue;
       out.push({ tt: 'animal', id: a.id, base: a.pos, r: a.def.r * (a.mesh?.size || 1), h: a.def.h * (a.mesh?.size || 1) });

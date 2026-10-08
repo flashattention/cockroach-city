@@ -259,7 +259,7 @@ function makePlayerBeacon() {
 
 // ---------------- 차에 앉히기 ----------------
 const SEAT_SCALE = { tank: 0.55, heli: 0.45, bicycle: 0.46, scooter: 0.46, motorcycle: 0.46, chopper: 0.46, sportbike: 0.46 };
-export function seatRoach(roach, car) {
+export function seatRoach(roach, car, seat = 0) {
   const m = car.mesh;
   if (!m.seats?.length) return;
   roach.setSeated(true);
@@ -271,7 +271,7 @@ export function seatRoach(roach, car) {
   roach.riding = !!m.bike;
   roach.pedal = m.pedal ? Math.abs(car.speed || 0) : 0;
   m.body.updateMatrixWorld(true);
-  const p = m.seats[0].clone();
+  const p = (m.seats[seat] || m.seats[0]).clone();
   m.body.localToWorld(p);
   roach.root.position.copy(p);
   roach.root.rotation.set(0, car.heading, m.bike ? m.body.rotation.z : 0);
@@ -401,30 +401,34 @@ export class GroundView {
 }
 
 // ---------------- 차에서 뛰쳐나와 도망가는 사람들 ----------------
+// 차에서 뛰어내려 도망가는 시민: 서버가 움직이고(rpos), 맞으면 쓰러진다(runnerDown)
 export class Runners {
-  constructor(scene) { this.scene = scene; this.list = []; }
-  spawn(x, z, h, n) {
+  constructor(scene, groundY) { this.scene = scene; this.groundY = groundY; this.list = new Map(); }
+  spawn(arr) {
     const cols = ['#8a5634', '#9b6038', '#a86b3e', '#6e3f25', '#ff9fb2', '#7ec8a9'];
-    const side = new THREE.Vector3(Math.cos(h), 0, -Math.sin(h));
-    for (let i = 0; i < Math.min(n, 8); i++) {
-      const r = new Roach({ color: cols[i % cols.length], age: 30 });
-      const s = i % 2 ? 1 : -1;
-      r.root.position.set(x + side.x * s * 1.8, 0.05, z + side.z * s * 1.8);
-      const dir = side.clone().multiplyScalar(s).add(new THREE.Vector3((Math.random() - 0.5), 0, (Math.random() - 0.5))).normalize();
-      r.setEmotion('scared', 5);
+    for (const m of arr) {
+      if (this.list.has(m.id)) continue;
+      const r = new Roach({ color: cols[m.c % cols.length], age: 30, seed: 'runner' + m.id });
+      r.setEmotion('scared', 30);
+      r.root.position.set(m.x, this.groundY ? this.groundY(m.x, m.z) : 0.05, m.z);
+      r.root.rotation.y = m.h;
       this.scene.add(r.root);
-      this.list.push({ r, dir, t: 4 + Math.random(), bubble: i === 0 ? { text: ['으아악! 내 차!!', '살려줘요!!', '도둑이야!!'][Math.floor(Math.random() * 3)], t: 2.5 } : null });
+      this.list.set(m.id, { id: m.id, r, tx: m.x, tz: m.z, th: m.h, dead: false, bubble: m.say ? { text: m.say, t: 2.5 } : null });
     }
   }
+  applyPos(a) {
+    for (let i = 0; i < a.length; i += 4) { const o = this.list.get(a[i]); if (o) { o.tx = a[i + 1] / 10; o.tz = a[i + 2] / 10; o.th = a[i + 3] / 100; } }
+  }
+  down(id) { const o = this.list.get(id); if (!o) return; o.dead = true; o.r.setDead(true); o.bubble = null; }
+  gone(id) { const o = this.list.get(id); if (!o) return; this.scene.remove(o.r.root); this.list.delete(id); }
   update(dt) {
-    for (let i = this.list.length - 1; i >= 0; i--) {
-      const o = this.list[i];
-      o.t -= dt;
-      o.r.root.position.addScaledVector(o.dir, 8 * dt);
-      o.r.root.rotation.y = Math.atan2(o.dir.x, o.dir.z);
-      o.r.update(dt, 8, {});
+    const k = Math.min(1, dt * 8);
+    for (const o of this.list.values()) {
+      const P = o.r.root.position, px = P.x, pz = P.z;
+      if (!o.dead) { P.x += (o.tx - P.x) * k; P.z += (o.tz - P.z) * k; o.r.root.rotation.y = angleLerp(o.r.root.rotation.y, o.th, k); }
+      P.y = this.groundY ? this.groundY(P.x, P.z) : 0.05;
+      o.r.update(dt, o.dead ? 0 : Math.hypot(P.x - px, P.z - pz) / Math.max(dt, 1e-3), {});
       if (o.bubble) { o.bubble.t -= dt; if (o.bubble.t <= 0) o.bubble = null; }
-      if (o.t <= 0) { this.scene.remove(o.r.root); this.list.splice(i, 1); }
     }
   }
 }

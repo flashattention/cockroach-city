@@ -204,6 +204,7 @@ export class UI {
     $('clock-day').textContent = `${g.day() + 1}일차 · ${DAYS[g.day() % 7]}요일 · ${g.weather}`;
     this.renderOnlineBar();
     $('clock-time').textContent = fmtTime(g.minutes);
+    if (!$('phone').classList.contains('hidden')) this.updatePhoneClock();
     $('money').textContent = `₩${Math.floor(S.money)}`;
     const job = g.playerJob();
     $('job-label').textContent = job ? `${job.name}` : '무직';
@@ -676,16 +677,29 @@ export class UI {
     const icon = ([id, e, n, bg, badge]) => `<button class="app" data-app="${id}"><span class="ai" style="background:${bg}">${e}${badge ? `<i>${badge}</i>` : ''}</span><span class="an">${n}</span></button>`;
     $('ph-apps').innerHTML = apps.map(icon).join('');
     $('ph-dock').innerHTML = [['tinder', '🔥', '', 'linear-gradient(135deg,#ff6a3d,#ff2d6f)'], ['sms', '💬', '', '#2ecc71', unread], ['camera', '📷', '', '#455a64'], ['map', '🗺️', '', '#29b6f6']].map(icon).join('');
-    const hh = Math.floor(g.hour()), mm = Math.floor((g.hour() % 1) * 60);
-    $('ph-clock').innerHTML = `<b>${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}</b><small>${g.day() + 1}일차 · ${DAYS[g.day() % 7]}요일 · ${escapeHtml(g.weather)}</small>`;
+    this.phoneClockKey = null;
+    this.updatePhoneClock();
     $('phone').querySelectorAll('[data-app]').forEach((b) => { b.onclick = () => this.openPhone(b.dataset.app); });
+  }
+
+  // 휴대폰 시계: 상태 표시줄과 홈 화면 큰 시계 모두 게임 시각. 열려 있는 동안 계속 간다
+  updatePhoneClock() {
+    const g = this.game;
+    const m = Math.floor(g.minutes) % 1440, hh = Math.floor(m / 60), mm = m % 60; // HUD 시계(fmtTime)와 같은 계산
+    const key = `${hh}:${mm}|${g.day()}|${g.weather}`;
+    if (key === this.phoneClockKey) return;
+    this.phoneClockKey = key;
+    const hm = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+    $('ph-time').textContent = hm;
+    $('ph-clock').innerHTML = `<b>${hm}</b><small>${g.day() + 1}일차 · ${DAYS[g.day() % 7]}요일 · ${escapeHtml(g.weather)}</small>`;
   }
 
   openPhone(tab) {
     if (this.chatOpen()) this.closeChat();
     this.game.releaseMouse();
     $('phone').classList.remove('hidden');
-    const t = new Date(); $('ph-time').textContent = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')}`;
+    this.phoneClockKey = null;
+    this.updatePhoneClock();
     if (!tab || tab === 'citizens') { this.phoneHome(); return; }
     if (tab === 'online') { this.closePhone(); this.openOnline(); return; }
     if (tab === 'badges') { this.closePhone(); this.openBadges(); return; }
