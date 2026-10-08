@@ -316,12 +316,26 @@ export class Roach {
     else if (ns === 5) { const n = mesh(heartGeo(), toon('#ff6f91'), H, 0, -0.05, 0.47, 0.05, 0.05, 0.06); void n; }
     // 입 (그룹: 감정에 따라 뒤집힌다. 로컬 y는 화면에서 반대)
     const ms = look.mouth | 0;
+    this.mouthUpright = null;
     this.mouth = new THREE.Group();
     this.mouth.position.set(0, -0.15, 0.45);
     this.mouth.rotation.z = Math.PI;
     H.add(this.mouth);
     const M = this.mouth;
     if (ms === 1) { for (const s of [-1, 1]) mesh(smileGeo(), black, M, s * 0.04, 0, 0, 0.6, 0.6, 1); }
+    else if (ms === 2) {
+      // 토끼 입: 코 밑 인중선 + ω 입 + 입 아래로 살짝 나온 큰 앞니 두 개 (로컬 y는 화면에서 반대)
+      // 인중선·앞니는 슬플 때 입이 뒤집혀도 제자리에 있게 따로 묶는다 (setEmotion 에서 반대로 돌림)
+      const up = this.mouthUpright = new THREE.Group();
+      M.add(up);
+      mesh(G.box(), black, up, 0, -0.018, 0.004, 0.013, 0.036, 0.014);
+      for (const s of [-1, 1]) mesh(smileGeo(), black, M, s * 0.036, 0, 0.004, 0.52, 0.52, 0.8);
+      for (const s of [-1, 1]) {
+        mesh(rsph(), black, up, s * 0.023, 0.06, -0.008, 0.026, 0.045, 0.01);
+        mesh(rsph(), white, up, s * 0.023, 0.059, -0.003, 0.02, 0.039, 0.01);
+      }
+      if (this.gummy) M.position.z = 0.5; // 젤리 모드: 반투명 주둥이 안에 묻혀 흐려 보이지 않게 주둥이 겉면에 붙인다
+    }
     else if (ms === 4) mesh(G.box(), black, M, 0, 0.03, 0, 0.14, 0.02, 0.02);
     else if (ms === 6) {
       const half = new THREE.Mesh(geo('halfdisc', () => new THREE.CircleGeometry(0.1, 16, 0, Math.PI)), toon('#8e2b2b'));
@@ -329,7 +343,6 @@ export class Roach {
       mesh(G.sphereLow(), toon('#ff8a80'), M, 0, 0.06, 0.01, 0.045, 0.025, 0.01);
     } else if (ms === 7) mesh(rsph(), toon('#ffa726'), M, 0, 0.02, 0.03, 0.13, 0.05, 0.08);
     else mesh(smileGeo(), black, M, 0, 0, 0);
-    if (ms === 2) for (const s of [-1, 1]) mesh(G.box(), white, M, s * 0.022, 0.075, 0.005, 0.04, 0.05, 0.015);
     if (ms === 3) mesh(G.sphereLow(), toon('#ff6f91'), M, 0.02, 0.1, 0.01, 0.04, 0.05, 0.02);
     if (ms === 5) for (const s of [-1, 1]) { const f = mesh(G.cone(), white, M, s * 0.055, 0.03, 0.01, 0.018, 0.045, 0.018); f.rotation.z = Math.PI; }
     this.mouthO = mesh(G.sphereLow(), black, H, 0, -0.17, 0.45, 0.05, 0.06, 0.03);
@@ -863,6 +876,7 @@ export class Roach {
     for (const eye of this.eyes) eye.scale.set(1, happy ? 0.55 : e === 'surprised' || e === 'scared' ? 1.25 : 1, 1);
     for (const p of this.pupils) p.material = toon(e === 'love' ? '#ff4f81' : this.pupilColor);
     this.mouth.rotation.z = e === 'sad' || e === 'angry' ? 0 : Math.PI;
+    if (this.mouthUpright) this.mouthUpright.rotation.z = Math.PI - this.mouth.rotation.z;
     this.mouth.position.y = e === 'sad' || e === 'angry' ? -0.2 : -0.15;
     this.mouth.scale.y = e === 'sad' || e === 'angry' ? 0.8 : 1;
     this.mouth.visible = !(e === 'surprised' || e === 'scared');
