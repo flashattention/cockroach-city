@@ -558,7 +558,7 @@ export class Traffic {
     }
     if (obs) {
       car.blockedT += dt;
-      if (car.blockedT > 5) { car.ignoreT = 2.5; car.blockedT = 0; if (car.kind !== 'bus') car.bubble = { text: '빵빵~ 🚗', t: 1.5 }; }
+      if (car.blockedT > 5) { car.ignoreT = 2.5; car.blockedT = 0; if (car.kind !== 'bus') { car.bubble = { text: '빵빵~ 🚗', t: 1.5 }; car.honk = true; } }
     } else car.blockedT = 0;
     // 신호
     if (seg.type === 'straight') {

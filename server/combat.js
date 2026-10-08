@@ -594,6 +594,8 @@ export class Combat {
         const k = sp * 0.7;
         this.w.send(v, { t: 'knock', x: (dx / (d || 1)) * k, z: (dz / (d || 1)) * k, up: Math.min(9, 3 + sp * 0.3) });
         this.damagePlayer(v, dmg, driver ? { name: driver.name, token: driver.token, id: driver.id } : { name: '자동차' }, car.pos);
+        this.w.broadcast({ t: 'fx', k: 'carhit', p: [v.pos.x, v.pos.y + 1, v.pos.z], loc: -1 });
+        this.scream(v.pos, -1, `p${v.id}`);
       }
       // 플레이어가 모는 차에 치인 시민: 빠를수록 피하기 어렵다
       if (!driver) continue;
@@ -608,6 +610,8 @@ export class Combat {
           c.pos.x += (dx / (d || 1)) * 3; c.pos.z += (dz / (d || 1)) * 3;
           this.w.sim.pushOut(c.pos);
           this.damageNpc(c, dmg, driver, false, null, '교통사고');
+          this.w.broadcast({ t: 'fx', k: 'carhit', p: [c.pos.x, 1, c.pos.z], loc: -1 });
+          this.scream(c.pos, -1, `n${c.id}`);
         }
       }
     }

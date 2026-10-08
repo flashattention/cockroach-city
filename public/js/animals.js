@@ -262,6 +262,7 @@ export class AnimalsView {
       m.g.position.copy(a.pos); m.g.rotation.y = a.h;
       a.flying = a.ay > 0.8; a.climb = climb;
       animateAnimal(m, dt, a, a.kind);
+      this.sounds(a, dt, camPos);
       if (a.breathStart) { a.breathStart = false; const mp = mouthPos(m); if (mp && this.onBreath) this.onBreath(mp, a); }
       // 체력바 + 포획 안내 (가까이 있을 때만)
       const dMe = Math.hypot(a.pos.x - me.x, a.pos.z - me.z, (a.pos.y - me.y) * 0.5);
@@ -277,6 +278,20 @@ export class AnimalsView {
         bar.userData.hint.visible = capturable(a) && dMe < 18;
         bar.scale.setScalar(Math.max(1, dMe / 18));
       }
+    }
+  }
+  // 울음소리: 공격할 때 · 맞았을 때 · 쓰러질 때 · 가끔 저절로 (소리 내는 일은 main 의 onSound 가)
+  sounds(a, dt, camPos) {
+    if (!this.onSound) return;
+    const now = performance.now();
+    if (a.prevAlive && !a.alive) this.onSound(a, 'die');
+    else if (a.alive && a.attacking && !a.prevAtk) this.onSound(a, 'attack');
+    else if (a.alive && a.prevHp != null && a.hp < a.prevHp - 0.5 && now - (a.hurtSndT || 0) > 600) { a.hurtSndT = now; this.onSound(a, 'hurt'); }
+    a.prevAlive = a.alive; a.prevAtk = a.attacking; a.prevHp = a.hp;
+    a.callT = (a.callT ?? 4 + Math.random() * 20) - dt;
+    if (a.callT <= 0) {
+      a.callT = (a.def.livestock ? 10 : 8) + Math.random() * 18;
+      if (a.alive && a.pos.distanceTo(camPos) < 80 && Math.random() < 0.7) this.onSound(a, 'call');
     }
   }
   // 포획할 수 있는 가장 가까운 동물

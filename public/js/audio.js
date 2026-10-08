@@ -1,4 +1,5 @@
-// 소리: 귀엽고 통통 튀는 배경음악 + 총 맞은 사람 비명 (파일 없이 Web Audio로 합성)
+// 소리: 귀엽고 통통 튀는 배경음악 + 효과음(무기·차·문·경찰·동물·비명). 파일 없이 Web Audio로 합성
+import * as THREE from 'three';
 import { settings, saveSettings } from './settings.js';
 
 let ctx = null, musicBus = null, sfxBus = null, noiseBuf = null;
@@ -141,4 +142,275 @@ export function scream(vol = 1, pan = 0, seed = Math.random()) {
     ws.connect(bp); ng.connect(bp); bp.connect(bg).connect(out);
   }
   for (const s of [o, lfo, n]) { s.start(t); s.stop(t + dur + 0.05); }
+}
+
+// ================================================================
+// 효과음
+// ================================================================
+// 듣는 위치(카메라). 소리 위치가 있으면 거리로 작게, 화면 기준 좌우로 나눈다
+let listener = null;
+export function setListener(camera) { listener = camera; }
+const _v = new THREE.Vector3(), _r = new THREE.Vector3();
+function spatial(pos, maxDist) {
+  if (!pos || !listener) return { vol: 1, pan: 0 };
+  _v.set(pos.x ?? pos[0], pos.y ?? pos[1], pos.z ?? pos[2]).sub(listener.position);
+  const d = _v.length();
+  const vol = Math.max(0, 1 - d / maxDist) ** 1.6;
+  _r.set(1, 0, 0).applyQuaternion(listener.quaternion);
+  return { vol, pan: d > 1 ? (_v.dot(_r) / d) * 0.8 : 0 };
+}
+const ready = () => ctx && ctx.state === 'running' && settings.sfx;
+// 출력 노드: 크기 + 좌우
+function outNode(vol, pan) {
+  const g = ctx.createGain(); g.gain.value = vol;
+  if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); g.connect(p).connect(sfxBus); } else g.connect(sfxBus);
+  return g;
+}
+function env(g, t, a, peak, dur, curve = 'exp') {
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(peak, t + a);
+  if (curve === 'exp') g.gain.exponentialRampToValueAtTime(0.0001, t + dur); else g.gain.linearRampToValueAtTime(0, t + dur);
+}
+// 잡음 한 덩어리 (필터 + 주파수 스윕)
+function nz(out, t, dur, { type = 'bandpass', f = 1000, f2 = null, q = 1, vol = 1, a = 0.003, curve = 'exp' } = {}) {
+  const src = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), g = ctx.createGain();
+  src.buffer = noiseBuf; src.loop = true;
+  fl.type = type; fl.Q.value = q; fl.frequency.setValueAtTime(f, t);
+  if (f2) fl.frequency.exponentialRampToValueAtTime(f2, t + dur);
+  env(g, t, a, vol, dur, curve);
+  src.connect(fl).connect(g).connect(out);
+  src.start(t, Math.random() * 0.8); src.stop(t + dur + 0.05);
+  return fl;
+}
+// 발진기 한 음 (주파수 곡선 [[시간, 주파수], ...])
+function osc(out, t, dur, { type = 'sine', f = 440, curve = null, vol = 1, a = 0.005, vib = 0, vibF = 6, filter = null, shape = 'exp' } = {}) {
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  if (curve) for (const [dt, fr] of curve) o.frequency.exponentialRampToValueAtTime(Math.max(1, fr), t + dt);
+  let last = o;
+  if (vib) { const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = vibF; lg.gain.value = f * vib; l.connect(lg).connect(o.frequency); l.start(t); l.stop(t + dur + 0.05); }
+  if (filter) { const fl = ctx.createBiquadFilter(); Object.assign(fl, { type: filter.type || 'lowpass' }); fl.frequency.value = filter.f; fl.Q.value = filter.q || 1; last.connect(fl); last = fl; }
+  env(g, t, a, vol, dur, shape);
+  last.connect(g).connect(out);
+  o.start(t); o.stop(t + dur + 0.05);
+  return o;
+}
+// 짐승 목소리: 성대(톱니) → 찌그러뜨림 → 모음 공명, 으르렁 떨림(AM)
+function voice(out, t, dur, { f, curve, vol = 1, formants = [[600, 4, 1]], am = 0, amDepth = 0.6, breath = 0.15, drive = 2, vib = 0, vibF = 6, type = 'sawtooth', a = 0.04 }) {
+  const o = ctx.createOscillator();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  for (const [dt, fr] of curve || []) o.frequency.exponentialRampToValueAtTime(Math.max(1, fr), t + dt);
+  if (vib) { const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = vibF; lg.gain.value = f * vib; l.connect(lg).connect(o.frequency); l.start(t); l.stop(t + dur + 0.05); }
+  const ws = ctx.createWaveShaper(), c = new Float32Array(256);
+  for (let i = 0; i < 256; i++) c[i] = Math.tanh((i / 128 - 1) * drive);
+  ws.curve = c; o.connect(ws);
+  const mix = ctx.createGain(); mix.gain.value = 1;
+  if (breath) { const n = ctx.createBufferSource(), ng = ctx.createGain(); n.buffer = noiseBuf; n.loop = true; ng.gain.value = breath; n.connect(ng).connect(mix); n.start(t, Math.random()); n.stop(t + dur + 0.05); }
+  ws.connect(mix);
+  const g = ctx.createGain();
+  env(g, t, a, vol, dur, 'lin');
+  // 으르렁: 크기를 빠르게 떨게
+  if (am) { const l = ctx.createOscillator(), lg = ctx.createGain(), dc = ctx.createGain(); l.frequency.value = am; lg.gain.value = amDepth; dc.gain.value = 1 - amDepth; l.connect(lg).connect(dc.gain); mix.connect(dc); dc.connect(g); l.start(t); l.stop(t + dur + 0.05); }
+  else mix.connect(g);
+  for (const [ff, q, gain] of formants) { const bp = ctx.createBiquadFilter(), bg = ctx.createGain(); bp.type = 'bandpass'; bp.frequency.value = ff; bp.Q.value = q; bg.gain.value = gain; g.connect(bp); bp.connect(bg).connect(out); }
+  o.start(t); o.stop(t + dur + 0.05);
+}
+// 쇠붙이 울림 (비조화 배음)
+function metal(out, t, dur, base, vol = 1) {
+  for (const [k, v] of [[1, 1], [2.76, 0.6], [5.4, 0.4], [8.93, 0.25]]) osc(out, t, dur * (1.2 - k * 0.08), { f: base * k, vol: vol * v * 0.5, a: 0.001 });
+}
+
+// ---------------- 무기 ----------------
+const GUN = {
+  pistol: { f: 1500, len: 0.13, thump: 140, vol: 0.7 }, blaster: 'pew',
+  revolver: { f: 900, len: 0.28, thump: 100, vol: 0.9 }, deagle: { f: 800, len: 0.3, thump: 90, vol: 1 },
+  uzi: { f: 2600, len: 0.06, thump: 170, vol: 0.55 }, mp5: { f: 2200, len: 0.07, thump: 160, vol: 0.55 },
+  rifle: { f: 1300, len: 0.11, thump: 110, vol: 0.75, crack: 0.4 }, ak47: { f: 1100, len: 0.13, thump: 100, vol: 0.8, crack: 0.4 },
+  m4: { f: 1400, len: 0.1, thump: 120, vol: 0.75, crack: 0.4 }, scar: { f: 1000, len: 0.14, thump: 95, vol: 0.85, crack: 0.5 },
+  m249: { f: 1200, len: 0.1, thump: 100, vol: 0.75, crack: 0.3 }, minigun: { f: 1600, len: 0.06, thump: 130, vol: 0.5 },
+  shotgun: { f: 700, len: 0.4, thump: 70, vol: 1, low: 1 }, double_barrel: { f: 650, len: 0.45, thump: 65, vol: 1.05, low: 1 },
+  sniper: { f: 900, len: 0.55, thump: 80, vol: 1, crack: 1, tail: 1 }, hunting_rifle: { f: 1000, len: 0.45, thump: 90, vol: 0.9, crack: 0.8, tail: 1 },
+  barrett: { f: 600, len: 0.8, thump: 55, vol: 1.2, crack: 1, tail: 1, low: 1 },
+  plasma_smg: 'pew', blaster_rifle: 'pew',
+};
+function gunshot(out, t, id) {
+  const c = GUN[id] || GUN.rifle;
+  if (c === 'pew') {
+    // 광선총: 뾰옹
+    const hi = id === 'blaster_rifle' ? 1300 : id === 'plasma_smg' ? 2200 : 1700;
+    osc(out, t, 0.18, { type: 'square', f: hi, curve: [[0.16, hi * 0.18]], vol: 0.25, filter: { f: 3500 } });
+    osc(out, t, 0.14, { type: 'sawtooth', f: hi * 1.5, curve: [[0.12, hi * 0.3]], vol: 0.12 });
+    return;
+  }
+  nz(out, t, c.len, { f: c.f, f2: c.f * 0.4, q: 0.8, vol: c.vol });
+  osc(out, t, Math.min(0.25, c.len), { f: c.thump * 2, curve: [[0.08, c.thump * 0.6]], vol: c.vol * 0.9, a: 0.001 });
+  if (c.crack) nz(out, t, 0.04, { type: 'highpass', f: 3500, vol: c.vol * c.crack * 0.8 });
+  if (c.low) nz(out, t, c.len * 1.2, { type: 'lowpass', f: 500, f2: 120, vol: c.vol * 0.8 });
+  if (c.tail) nz(out, t + 0.05, c.len * 1.6, { type: 'lowpass', f: 900, f2: 150, vol: c.vol * 0.35, a: 0.05 });
+}
+function whoosh(out, t, dur, f1, f2, vol) { nz(out, t, dur, { f: f1, f2, q: 2.5, vol: vol * 3, a: dur * 0.35, curve: 'lin' }); } // 좁은 대역 잡음이라 3배
+function swing(out, t, id) {
+  if (id?.startsWith('saber_')) {
+    // 광선검: 위이잉
+    osc(out, t, 0.45, { type: 'sawtooth', f: 95, curve: [[0.15, 150], [0.45, 80]], vol: 0.35, filter: { f: 900, q: 3 }, a: 0.03 });
+    osc(out, t, 0.45, { type: 'sawtooth', f: 98, curve: [[0.15, 156], [0.45, 84]], vol: 0.25, filter: { f: 1400 }, a: 0.03 });
+    whoosh(out, t, 0.35, 500, 2000, 0.25);
+    return;
+  }
+  if (id === 'fist') { whoosh(out, t, 0.14, 300, 900, 0.35); return; }
+  const heavy = ['serpent_spear', 'halberd', 'dragon_glaive'].includes(id);
+  whoosh(out, t, heavy ? 0.32 : 0.22, heavy ? 250 : 450, heavy ? 1200 : 2200, heavy ? 0.6 : 0.5);
+  if (id !== 'wood_sword') osc(out, t + 0.02, 0.4, { f: 3200 + Math.random() * 600, vol: 0.06, a: 0.002 }); // 쇳소리 '샤앙'
+}
+const WAND = { wand_fire: 'fire', wand_ice: 'ice', wand_thunder: 'thunder', wand_wind: 'wind', wand_poison: 'poison', wand_holy: 'holy', wand_dark: 'dark' };
+function magic(out, t, id) {
+  const el = WAND[id] || 'holy';
+  if (el === 'fire') { nz(out, t, 0.5, { type: 'lowpass', f: 1800, f2: 400, vol: 0.6, a: 0.05 }); for (let i = 0; i < 6; i++) nz(out, t + Math.random() * 0.4, 0.02, { type: 'highpass', f: 3000, vol: 0.3 }); }
+  else if (el === 'ice') for (const [i, f] of [1568, 2093, 2637, 3136].entries()) osc(out, t + i * 0.04, 0.5, { type: 'triangle', f, vol: 0.12, a: 0.002 });
+  else if (el === 'thunder') { for (let i = 0; i < 5; i++) nz(out, t + i * 0.035, 0.05, { type: 'highpass', f: 1500, vol: 0.7 }); nz(out, t + 0.1, 0.8, { type: 'lowpass', f: 400, f2: 60, vol: 0.7 }); }
+  else if (el === 'wind') whoosh(out, t, 0.6, 300, 1500, 0.5);
+  else if (el === 'poison') for (let i = 0; i < 5; i++) osc(out, t + i * 0.07, 0.08, { type: 'sine', f: 300 + Math.random() * 300, curve: [[0.07, 900]], vol: 0.2 });
+  else if (el === 'dark') { osc(out, t, 0.7, { type: 'sawtooth', f: 110, curve: [[0.7, 55]], vol: 0.25, filter: { f: 500 } }); whoosh(out, t, 0.6, 200, 600, 0.3); }
+  else for (const [i, f] of [1047, 1319, 1568, 2093].entries()) osc(out, t + i * 0.05, 0.7, { type: 'sine', f, vol: 0.12, a: 0.002 });
+}
+function explosion(out, t, big) {
+  nz(out, t, big ? 1.6 : 0.9, { type: 'lowpass', f: 1600, f2: 60, vol: big ? 1.1 : 0.8, q: 0.7 });
+  osc(out, t, big ? 0.7 : 0.4, { f: 90, curve: [[0.5, 30]], vol: big ? 1 : 0.7, a: 0.002 });
+  nz(out, t, 0.08, { type: 'highpass', f: 2000, vol: 0.5 });
+}
+
+// ---------------- 차 · 거리 ----------------
+function horn(out, t, big) {
+  // 빵빵: 두 번
+  const [f1, f2] = big ? [220, 277] : [392, 494];
+  for (const st of [0, 0.22]) for (const f of [f1, f2]) osc(out, t + st, 0.18, { type: 'square', f, vol: 0.18, a: 0.01, filter: { f: 2200 }, shape: 'lin' });
+}
+function crash(out, t, hard = 1) {
+  osc(out, t, 0.3, { f: 120, curve: [[0.2, 45]], vol: 0.9 * hard, a: 0.001 });
+  nz(out, t, 0.35, { type: 'lowpass', f: 2500, f2: 300, vol: 0.8 * hard });
+  metal(out, t + 0.01, 0.6, 420 + Math.random() * 120, 0.5 * hard);
+  for (let i = 0; i < 4; i++) nz(out, t + 0.05 + Math.random() * 0.25, 0.04, { type: 'highpass', f: 4000, vol: 0.25 * hard }); // 유리 조각
+}
+function treeBreak(out, t) {
+  for (let i = 0; i < 6; i++) nz(out, t + i * 0.045 + Math.random() * 0.02, 0.05, { f: 1200 + Math.random() * 800, q: 3, vol: 0.6 }); // 우지끈
+  osc(out, t + 0.1, 0.5, { type: 'sawtooth', f: 180, curve: [[0.5, 90]], vol: 0.12, filter: { f: 700, q: 4 } }); // 삐걱
+  osc(out, t + 0.7, 0.35, { f: 90, curve: [[0.3, 40]], vol: 0.8, a: 0.002 }); // 쿵
+  nz(out, t + 0.7, 0.4, { type: 'lowpass', f: 800, f2: 200, vol: 0.5 });
+}
+function lampBreak(out, t) {
+  metal(out, t, 1.2, 310, 0.9);
+  nz(out, t, 0.12, { type: 'highpass', f: 3500, vol: 0.5 });
+  for (let i = 0; i < 6; i++) nz(out, t + 0.05 + Math.random() * 0.3, 0.03, { type: 'highpass', f: 5000, vol: 0.3 }); // 전구 깨짐
+  osc(out, t + 0.6, 0.3, { f: 110, curve: [[0.25, 50]], vol: 0.6, a: 0.002 });
+  metal(out, t + 0.6, 0.6, 520, 0.4);
+}
+function door(out, t, kind) {
+  if (kind === 'cell') { metal(out, t, 0.8, 140, 0.8); nz(out, t, 0.6, { f: 900, f2: 300, q: 4, vol: 0.25, a: 0.1, curve: 'lin' }); metal(out, t + 0.65, 0.9, 120, 1); return; }
+  nz(out, t, 0.03, { type: 'highpass', f: 2500, vol: 0.5 }); // 딸깍
+  osc(out, t + 0.05, 0.45, { type: 'sawtooth', f: 260, curve: [[0.2, 420], [0.45, 300]], vol: 0.07, filter: { f: 1200, q: 6 }, a: 0.05, shape: 'lin' }); // 끼익
+  osc(out, t + 0.5, 0.15, { f: 110, curve: [[0.12, 60]], vol: 0.35, a: 0.002 }); // 탁
+}
+function cuffs(out, t) {
+  // 철컥철컥 + 호루라기
+  for (let i = 0; i < 7; i++) nz(out, t + i * 0.035, 0.02, { f: 3500, q: 4, vol: 0.5 });
+  metal(out, t + 0.28, 0.25, 1800, 0.4);
+  osc(out, t + 0.45, 0.7, { f: 2900, vol: 0.18, vib: 0.04, vibF: 28, shape: 'lin' });
+}
+
+// ---------------- 동물 ----------------
+// type: call(평소) · attack(공격) · hurt(아파) · die(쓰러짐)
+const BEAST = {
+  tiger: { f: 120, dur: 1.4, curve: (f) => [[0.25, f * 1.5], [1.4, f * 0.6]], formants: [[450, 3, 1], [1100, 5, 0.4]], am: 28, drive: 4, vol: 1 },
+  jaguar: { f: 160, dur: 0.9, curve: (f) => [[0.15, f * 1.4], [0.9, f * 0.7]], formants: [[550, 3, 1], [1300, 5, 0.4]], am: 32, drive: 4, vol: 0.9 },
+  bear: { f: 75, dur: 1.2, curve: (f) => [[0.3, f * 1.3], [1.2, f * 0.7]], formants: [[350, 3, 1], [900, 5, 0.4]], am: 22, drive: 5, vol: 1 },
+  wolf: { f: 420, dur: 1.8, curve: (f) => [[0.5, f * 1.6], [1.4, f * 1.5], [1.8, f * 1.1]], formants: [[800, 4, 1]], type: 'triangle', breath: 0.03, drive: 1.2, vib: 0.02, vol: 1.5, a: 0.2 },
+  boar: { f: 180, dur: 0.25, curve: (f) => [[0.25, f * 0.8]], formants: [[700, 5, 1], [1500, 6, 0.5]], am: 40, drive: 3, vol: 0.7, repeat: 3 },
+  deer: { f: 850, dur: 0.4, curve: (f) => [[0.1, f * 1.2], [0.4, f * 0.8]], formants: [[1600, 5, 1]], type: 'triangle', drive: 1.5, vol: 1.3, breath: 0.05 },
+  rabbit: { f: 1800, dur: 0.12, curve: (f) => [[0.12, f * 1.3]], formants: [[2500, 3, 1]], type: 'triangle', drive: 1, vol: 0.8, breath: 0, repeat: 2 },
+  croc: 'hiss-low', anaconda: 'hiss',
+  cow: { f: 140, dur: 1.4, curve: (f) => [[0.3, f * 1.15], [1.4, f * 0.85]], formants: [[320, 4, 1], [850, 6, 0.4]], drive: 2, vol: 0.8, a: 0.15 },
+  sheep: { f: 320, dur: 0.8, curve: (f) => [[0.8, f * 0.9]], formants: [[800, 4, 1], [1300, 6, 0.5]], vib: 0.06, vibF: 9, drive: 2, vol: 0.6 },
+  horse: { f: 600, dur: 1.1, curve: (f) => [[0.2, f * 1.5], [1.1, f * 0.6]], formants: [[900, 4, 1], [1800, 6, 0.4]], vib: 0.12, vibF: 14, drive: 2.5, vol: 0.6 },
+  dragon: { f: 55, dur: 2.2, curve: (f) => [[0.4, f * 1.8], [2.2, f * 0.6]], formants: [[300, 2, 1], [700, 3, 0.7], [1500, 4, 0.3]], am: 18, drive: 6, vol: 1.3, breath: 0.4 },
+  baby_dragon: { f: 140, dur: 1.0, curve: (f) => [[0.2, f * 1.7], [1.0, f * 0.8]], formants: [[600, 3, 1], [1400, 4, 0.5]], am: 30, drive: 4, vol: 0.8, breath: 0.25 },
+};
+function beast(out, t, kind, type) {
+  const b = BEAST[kind];
+  if (!b) return;
+  if (b === 'hiss' || b === 'hiss-low') {
+    const dur = type === 'hurt' ? 0.3 : 0.9;
+    nz(out, t, dur, { type: 'highpass', f: 3000, vol: 0.5, a: 0.08, curve: 'lin' });
+    if (b === 'hiss-low') osc(out, t, dur, { type: 'sawtooth', f: 50, vol: 0.4, filter: { f: 200 }, a: 0.1 });
+    return;
+  }
+  const k = { call: [1, 1, 0.8], attack: [1, 1.1, 1], hurt: [1.5, 0.35, 0.8], die: [0.85, 1.3, 0.9] }[type] || [1, 1, 1];
+  const f = b.f * k[0] * (0.92 + Math.random() * 0.16), dur = b.dur * k[1];
+  let curve = b.curve(f).map(([dt, fr]) => [dt * k[1], fr]);
+  if (type === 'die') curve = [[dur * 0.2, f * 1.2], [dur, f * 0.45]];
+  for (let i = 0; i < (b.repeat || 1); i++) voice(out, t + i * (dur + 0.06), dur, { ...b, f, curve, vol: b.vol * k[2] });
+}
+
+// ---------------- 재생 ----------------
+// 한 번 울리는 소리. pos 가 없으면 바로 내 귀 앞에서
+const RANGE = { gun: 140, sniper: 260, boom: 260, beast: 90, dragon: 260, horn: 90, crash: 90, prop: 80, door: 30, swing: 40, magic: 60 };
+export function sfx(name, pos = null, arg = null, vol = 1) {
+  if (!ready()) return;
+  const range = name === 'gun' && ['sniper', 'barrett', 'hunting_rifle'].includes(arg) ? RANGE.sniper : name === 'beast' && (arg?.kind || '').includes('dragon') ? RANGE.dragon : RANGE[name] || 80;
+  const sp = spatial(pos, range);
+  if (sp.vol * vol < 0.01) return;
+  const out = outNode(sp.vol * vol, sp.pan), t = ctx.currentTime + 0.005;
+  if (name === 'gun') gunshot(out, t, arg);
+  else if (name === 'swing') swing(out, t, arg);
+  else if (name === 'magic') magic(out, t, arg);
+  else if (name === 'boom') explosion(out, t, !!arg);
+  else if (name === 'bow') { osc(out, t, 0.25, { type: 'triangle', f: 160, curve: [[0.2, 120]], vol: 0.5, a: 0.001 }); whoosh(out, t, 0.2, 1500, 4000, 0.2); }
+  else if (name === 'rocket') { nz(out, t, 1.0, { f: 400, f2: 2500, q: 1, vol: 0.7, a: 0.05 }); osc(out, t, 0.6, { type: 'sawtooth', f: 60, vol: 0.3, filter: { f: 300 } }); }
+  else if (name === 'ion') { osc(out, t, 0.6, { type: 'square', f: 200, curve: [[0.5, 1600]], vol: 0.2, filter: { f: 3000 } }); osc(out, t + 0.5, 0.4, { type: 'sawtooth', f: 1200, curve: [[0.35, 150]], vol: 0.3 }); }
+  else if (name === 'throw') whoosh(out, t, 0.25, 400, 1200, 0.35);
+  else if (name === 'cannon') { gunshot(out, t, 'barrett'); explosion(out, t, false); }
+  else if (name === 'breath') { nz(out, t, 0.8, { type: 'lowpass', f: 2200, f2: 500, vol: 0.9, a: 0.04 }); for (let i = 0; i < 8; i++) nz(out, t + Math.random() * 0.7, 0.02, { type: 'highpass', f: 3000, vol: 0.35 }); }
+  else if (name === 'horn') horn(out, t, arg === 'big');
+  else if (name === 'crash') crash(out, t, arg || 1);
+  else if (name === 'tree') treeBreak(out, t);
+  else if (name === 'lamp') lampBreak(out, t);
+  else if (name === 'door') door(out, t, arg);
+  else if (name === 'cuffs') cuffs(out, t);
+  else if (name === 'beast') beast(out, t, arg.kind, arg.type);
+  else if (name === 'saberOn') { osc(out, t, 0.6, { type: 'sawtooth', f: 40, curve: [[0.4, 110]], vol: 0.35, filter: { f: 1200, q: 4 } }); nz(out, t, 0.3, { type: 'highpass', f: 2500, vol: 0.2, curve: 'lin' }); }
+}
+
+// 계속 울리는 소리: 경찰 사이렌 · 헬기 · 광선검 웅웅. vol 0이면 조용히 끈다
+const loops = {};
+export function loop(name, vol = 0, pos = null, range = 150) {
+  if (!ctx) return;
+  const sp = pos ? spatial(pos, range) : { vol: 1, pan: 0 };
+  const v = settings.sfx && ctx.state === 'running' ? vol * sp.vol : 0;
+  let L = loops[name];
+  if (!L) {
+    if (v < 0.005) return;
+    L = loops[name] = makeLoop(name);
+  }
+  const t = ctx.currentTime;
+  L.g.gain.setTargetAtTime(v, t, 0.15);
+  if (L.p) L.p.pan.setTargetAtTime(Math.max(-1, Math.min(1, sp.pan)), t, 0.1);
+}
+function makeLoop(name) {
+  const g = ctx.createGain(); g.gain.value = 0;
+  const p = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+  if (p) g.connect(p).connect(sfxBus); else g.connect(sfxBus);
+  const src = [];
+  if (name === 'siren') {
+    // 위이잉 위이잉: 높낮이가 천천히 오르내린다
+    const o = ctx.createOscillator(), l = ctx.createOscillator(), lg = ctx.createGain(), fl = ctx.createBiquadFilter(), og = ctx.createGain();
+    o.type = 'square'; o.frequency.value = 950; l.frequency.value = 0.45; lg.gain.value = 330; fl.type = 'lowpass'; fl.frequency.value = 2500; og.gain.value = 0.18;
+    l.connect(lg).connect(o.frequency); o.connect(fl).connect(og).connect(g); src.push(o, l);
+  } else if (name === 'heli') {
+    const n = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), am = ctx.createGain(), l = ctx.createOscillator(), lg = ctx.createGain();
+    n.buffer = noiseBuf; n.loop = true; fl.type = 'lowpass'; fl.frequency.value = 350; l.frequency.value = 11; lg.gain.value = 0.7; am.gain.value = 0.3;
+    l.connect(lg).connect(am.gain); n.connect(fl).connect(am).connect(g); src.push(n, l);
+  } else if (name === 'saber') {
+    for (const f of [92, 95.5]) { const o = ctx.createOscillator(), fl = ctx.createBiquadFilter(), og = ctx.createGain(); o.type = 'sawtooth'; o.frequency.value = f; fl.type = 'lowpass'; fl.frequency.value = 600; og.gain.value = 0.15; o.connect(fl).connect(og).connect(g); src.push(o); }
+  }
+  for (const s of src) s.start();
+  return { g, p, src };
 }

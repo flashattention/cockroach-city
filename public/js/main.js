@@ -24,7 +24,7 @@ import { buildWilds, renderWorldImage } from './wilds.js';
 import { AnimalsView, makeMount, mouthPos } from './animals.js';
 import { Roach } from './roach.js';
 import { buildPark } from './park.js';
-import { unlockAudio } from './audio.js';
+import { unlockAudio, setListener, sfx, loop } from './audio.js';
 // 브라우저는 처음 누르거나 키를 칠 때부터 소리를 낼 수 있다
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, unlockAudio, true);
 initBrand(); // 화면의 '바퀴시티' → '젤리시티' (바퀴 모드면 그대로)
@@ -45,6 +45,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
+setListener(camera);
 camera.position.set(0, 30, 60);
 scene.fog = new THREE.Fog('#cfefff', 90, 320);
 
@@ -336,8 +337,10 @@ function buildWorld(w) {
   game.park = buildPark(scene);
   game.animals = new AnimalsView(scene, w.animals || [], city.groundY);
   // 야생 드래곤이 불을 뿜으면: 뿜는 동안(1.6초) 입을 따라 불길이 계속 나오고, 가까우면 화면이 흔들린다
+  game.animals.onSound = (a, type) => sfx('beast', a.pos, { kind: a.kind, type });
   game.animals.onBreath = (from0, a) => {
     const big = a.kind === 'dragon';
+    sfx('breath', from0); sfx('beast', from0, { kind: a.kind, type: 'attack' });
     const dirFn = () => {
       const from = mouthPos(a.mesh), me = game.player?.pos;
       if (!from) return null;
@@ -538,7 +541,10 @@ function setupNet() {
   net.on('carDenied', () => ui.toast('이 차는 지금 탈 수 없어요'));
   net.on('carGone', () => { ui.toast('💥 차가 폭발했어요!'); leaveCar(); });
   net.on('carSpawn', (m) => { if (m.id === game.traffic.cars.length) game.traffic.spawnParked(new THREE.Vector3(m.x, 0, m.z), m.h, m.kind || 'sedan', m.color); });
-  net.on('carSay', (m) => { const car = game.traffic.cars[m.id]; if (car && m.text) car.bubble = { text: m.text, t: 2.5 }; });
+  net.on('carSay', (m) => {
+    const car = game.traffic.cars[m.id];
+    if (car && m.text) { car.bubble = { text: m.text, t: 2.5 }; if (m.text.includes('빵빵') && game.loc() === -1) sfx('horn', car.pos, car.kind === 'bus' || car.kind === 'truck' ? 'big' : null); }
+  });
   net.on('eject', (m) => game.runners.spawn(m.x, m.z, m.h, m.n));
   net.on('sleepers', (m) => { game.sleepers = m; ui.updateSleep(); });
   net.on('skip', (m) => {
@@ -620,7 +626,7 @@ function setupNet() {
     ui.toast('🚗💥 차에 치여서 뒤집혔어요!');
   });
   net.on('xp', (m) => gainExp(m.v, m.reason));
-  net.on('smash', (m) => smashProp(m.key, m.dir, true));
+  net.on('smash', (m) => smashProp(m.key, m.dir, true, true));
   net.on('unsmash', (m) => smashProp(m.key, null, false));
   net.on('hunted', (m) => { game.stats.hunted = (game.stats.hunted || 0) + 1; game.questEvent('hunt'); });
   // 휴대폰
@@ -729,6 +735,7 @@ window.addEventListener('keydown', (e) => {
   // 지도: M으로 열고, 열려 있으면 M으로 닫기
   if (e.code === 'KeyM' && !e.repeat && ui.modalKind === 'map' && !document.getElementById('modal').classList.contains('hidden')) { ui.closeModal(); return; }
   // 조작법: H로 열고, 열려 있으면 H로 닫기
+  if (e.code === 'KeyH' && !e.repeat && game.player?.inCar && !ui.anyPanelOpen()) { honk(); return; }
   if (e.code === 'KeyH' && !e.repeat && (ui.modalKind === 'keys' && !document.getElementById('modal').classList.contains('hidden') || !ui.anyPanelOpen())) { ui.toggleHelp(); return; }
   if (ui.anyPanelOpen() || game.busy || game.dead) return;
   if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); clearKeys(); ui.focusPlayerChat(); return; }
@@ -933,6 +940,16 @@ function toggleCar() {
   game.net.send({ t: 'carEnter', id: focus.car.id });
 }
 
+// 차 안에서 H: 빵빵 (다른 사람에게도 들린다)
+function honk() {
+  const car = game.player.inCar;
+  if (!car || performance.now() - (game.honkT || 0) < 500) return;
+  game.honkT = performance.now();
+  const big = ['bus', 'truck', 'tank'].includes(car.kind);
+  sfx('horn', null, big ? 'big' : null);
+  car.bubble = { text: '빵빵! 🚗', t: 1.2 };
+  game.net.send({ t: 'fx', k: 'horn', p: [car.pos.x, (car.pos.y || 0) + 1, car.pos.z], big });
+}
 async function enterBuilding(b, opts = {}) {
   if (!opts.jail && b.type === 'club' && game.charm() < CLUB_CHARM) {
     const msg = `매력 ${CLUB_CHARM} 이상만 입장 가능합니다. 😎 (지금 ${game.charm()})`;
@@ -948,6 +965,7 @@ async function enterBuilding(b, opts = {}) {
     ui.toast(`🔒 ${b.name}이에요. 열쇠가 없으면 들어갈 수 없어요`);
     return;
   }
+  sfx('door', null, opts.jail ? 'cell' : null);
   await ui.flash();
   const isHome = mine.length > 0;
   // 여러 호수를 가졌으면 대표 집 호수를 우선
@@ -979,6 +997,7 @@ async function enterBuilding(b, opts = {}) {
 
 async function exitBuilding(silent) {
   const b = game.interior.building;
+  if (!game.jail) sfx('door');
   if (!silent) await ui.flash();
   if (game.sleeping) stopSleeping(false);
   if (game.course) endCourse(false, null);
@@ -1336,6 +1355,7 @@ async function goToJail(m) {
   if (p.inCar) leaveCar(true);
   p.flying = false; p.flipped = false; game.flip = null; ui.flipHud(null);
   ui.lootBanner('🚔 체포되었습니다!', `사유: ${m.reason} · 경찰차로 교도소에 이송 중...`, '#1e88e5', '');
+  sfx('cuffs');
   game.busy = true; clearKeys();
   if (game.mode === 'interior') await exitBuilding(true);
   // 경찰차에 태워 4초간 달린다
@@ -1354,6 +1374,7 @@ async function goToJail(m) {
       if (this.t > 1) { fake.pos.x += Math.sin(fake.heading) * sp * dt; fake.pos.z += Math.cos(fake.heading) * sp * dt; fake.pos.y = game.city.groundY(fake.pos.x, fake.pos.z); }
       car.g.position.copy(fake.pos); car.g.rotation.y = fake.heading;
       siren.forEach((o, i) => { o.material.emissiveIntensity = Math.floor(this.t * 6 + i) % 2 === 0 ? 1.4 : 0.08; });
+      loop('siren', this.t < 3.6 ? 0.8 : 0);
       p.pos.copy(fake.pos);
       seatRoach(p.roach, fake); p.roach.update(dt, 0, {});
     },
@@ -1407,9 +1428,25 @@ game.switchTV = switchTV;
 game.useSelected = (down) => useSelected(down); // 테스트용
 
 // 차로 들이받은 가로등·나무 (c: 도시, w: 야생)
-function smashProp(key, dir, broken) {
+// 수배 중이면 가까운 경찰·군인 쪽에서 사이렌, 헬기는 두두두
+function updateUnitSounds() {
+  if (game.cutscene) return;
+  let cop = null, cd = 1e9, heli = null, hd = 1e9;
+  const me = game.player.pos;
+  for (const u of game.units.list.values()) {
+    if (!u.visible) continue;
+    const d = u.pos.distanceTo(me);
+    if (u.kind === 'heli') { if (d < hd) { hd = d; heli = u; } } else if (d < cd) { cd = d; cop = u; }
+  }
+  loop('siren', game.stars > 0 && cop ? 0.7 : 0, cop?.pos, 170);
+  loop('heli', heli ? 0.9 : 0, heli?.pos, 200);
+}
+function smashProp(key, dir, broken, sound = false) {
   if (!key || !game.city) return;
   const props = key[0] === 'c' ? game.city.props : game.wild?.props;
+  const pr = props?.list[+key.slice(1)];
+  // 우지끈(나무) · 쨍그랑(가로등): 실제로 새로 부러질 때만
+  if (sound && broken && pr && !pr.broken) sfx(pr.type === 'lamp' ? 'lamp' : 'tree', pr);
   props?.setBroken(+key.slice(1), broken, dir || [1, 0]);
 }
 // 지금 위치 근처의 충돌 상자 (도시 + 숲 나무)
@@ -1965,9 +2002,9 @@ function frame() {
       const near = indoor ? [] : game.wild.near(car.pos.x, car.pos.z, 10);
       game.traffic.updatePlayer(car, dt, {
         input, city: game.city, colliders: near.length ? game.city.colliders.concat(near) : game.city.colliders, groundY: game.city.groundY,
-        onBump: () => ui.toast('쿵! 💥'),
+        onBump: () => { ui.toast('쿵! 💥'); sfx('crash', null, 0.5); },
         onWater: () => { if (performance.now() - (game.waterMsg || 0) > 3000) { game.waterMsg = performance.now(); ui.toast('🌊 차는 물에 못 들어가요! 대교로 건너세요'); } },
-        onSmash: (c, dir) => { smashProp(c.pkey, dir, true); game.net.send({ t: 'smash', key: c.pkey, dir }); game.shake(0.25); },
+        onSmash: (c, dir) => { smashProp(c.pkey, dir, true, true); game.net.send({ t: 'smash', key: c.pkey, dir }); game.shake(0.25); },
       });
       if (car.kind === 'tank') car.turret = angleLerp(car.turret || 0, (p.cam.yaw + Math.PI) - car.heading, Math.min(1, dt * 6));
       continue;
@@ -2024,6 +2061,12 @@ function frame() {
   const fov = 55 / game.zoomNow;
   if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = fov; camera.updateProjectionMatrix(); }
   ui.setScope(selD?.zoom >= 4 && p.aim > 0.85);
+  // 광선검을 들고 있으면 웅웅 (꺼내는 순간 치이잉)
+  const saber = !!selD?.id?.startsWith('saber_') && !p.inCar && !game.dead && !game.busy;
+  if (saber && game.heldSaber !== selD.id) sfx('saberOn');
+  game.heldSaber = saber ? selD.id : null;
+  loop('saber', saber ? 0.3 : 0);
+  updateUnitSounds();
   // 저격 조준 중에는 멀리 있는 시민·동물까지 그려서 맞힐 수 있게
   const far = game.zoomNow > 2.5;
   game.citizens.viewDist = far ? 130 * Math.min(4, game.zoomNow / 1.5) : 130;

@@ -4,7 +4,7 @@ import { itemDef, weaponStats, ammoName, ITEMS, SHOPS, rarityOf } from './items.
 import { G } from './utils.js';
 import { levelStats } from './level.js';
 import { mouthPos } from './animals.js';
-import { scream } from './audio.js';
+import { scream, sfx } from './audio.js';
 
 const ELEMENT_COLOR = { fire: '#ff5722', ice: '#4fc3f7', thunder: '#ffee58', wind: '#a5d6a7', poison: '#9ccc65', holy: '#fff59d', dark: '#7e57c2' };
 const BASE_SPREAD = { m4: 0.022, revolver: 0.012, deagle: 0.016, uzi: 0.05, mp5: 0.028, ak47: 0.035, scar: 0.02, m249: 0.045, barrett: 0.003, plasma_smg: 0.025, hunting_rifle: 0.006, pistol: 0.018, blaster: 0.015, rifle: 0.03, blaster_rifle: 0.026, minigun: 0.045, sniper: 0.012 };
@@ -631,6 +631,9 @@ export class Combat {
       if (shake) g.shake(shake * k);
       p.roach.kick = Math.min(1, (p.roach.kick || 0) + up * 8);
     }
+    // 내 무기 소리
+    const snd = { melee: 'swing', hitscan: 'gun', grenade: 'throw', arrow: 'bow', rocket: w.id === 'ion_cannon' ? 'ion' : 'rocket' }[s.kind];
+    if (snd) sfx(snd, null, w.id);
     if (s.kind === 'melee') return this.melee(w, s);
     if (s.kind === 'hitscan') return this.shoot(w, s, o, d);
     if (s.kind === 'grenade') return this.throwGrenade(w, s, d);
@@ -644,6 +647,7 @@ export class Combat {
     const g = this.g, p = g.player;
     if ((g.mana ?? 0) < s.mana) { this.cool = 0.3; g.ui.toast('💧 마나가 부족해요! 잠시 기다리거나 마나 물약을 마셔요'); return; }
     g.mana -= s.mana;
+    sfx('magic', null, w.id);
     g.questEvent?.('magic');
     p.roach.cast();
     const color = ELEMENT_COLOR[s.element];
@@ -753,6 +757,8 @@ export class Combat {
   // 드래곤 타고 왼쪽 클릭(누르고 있으면 계속): 화염방사. 0.3초마다 앞쪽 원뿔 안을 태운다
   dragonBreath(mt) {
     const g = this.g, p = g.player;
+    sfx('breath');
+    if (performance.now() - (this.roarT || 0) > 3500) { this.roarT = performance.now(); sfx('beast', null, { kind: mt.kind, type: 'attack' }, 0.7); }
     const wid = mt.kind === 'dragon' ? 'dragon_fire' : 'baby_dragon_fire';
     const s = weaponStats(wid, []);
     this.cool = s.rate;
@@ -777,6 +783,7 @@ export class Combat {
   }
   // 드래곤 타고 오른쪽 클릭: 불덩이 (터지면 넓게 불바다)
   dragonFireball(mt) {
+    sfx('rocket'); sfx('beast', null, { kind: mt.kind, type: 'attack' }, 0.7);
     const g = this.g;
     if ((this.fbCool || 0) > 0) return;
     const wid = mt.kind === 'dragon' ? 'dragon_fireball' : 'baby_fireball';
@@ -833,6 +840,7 @@ export class Combat {
   }
 
   vehicleFire(car) {
+    sfx(car.kind === 'heli' ? 'rocket' : 'cannon');
     const g = this.g;
     this.cool = car.kind === 'tank' ? 2.2 : 0.8;
     const { o, d } = this.aimRay();
@@ -992,6 +1000,35 @@ export class Combat {
   }
 
   // 화상 입은 대상에 불꽃 (나·다른 플레이어·시민)
+  // 다른 사람·경찰·동물이 낸 연출에 맞는 소리
+  remoteSound(m, v3) {
+    const at = (a) => (Array.isArray(a) ? v3(a) : null);
+    const pp = () => this.g.players.list.get(m.pid)?.pos || null;
+    if (m.k === 'tracer') {
+      // 산탄총은 알갱이마다 궤적이 와서, 같은 사람의 같은 총은 한 번만
+      const key = `${m.pid}|${m.w}`, now = performance.now();
+      if (now - (this.lastTr?.[key] || 0) < 45) return;
+      (this.lastTr ||= {})[key] = now;
+      if (typeof m.w === 'string') sfx('gun', at(m.a), m.w);
+      else if (typeof m.w === 'number') sfx('cannon', at(m.a)); // 전차·헬기
+      else sfx('gun', at(m.a), m.c === '#fff59d' ? 'rifle' : 'pistol'); // 경찰·군인
+    }
+    else if (m.k === 'proj') {
+      const p = at(m.p);
+      if (m.w === 'dragon_fireball' || m.w === 'baby_fireball') { sfx('rocket', p); sfx('beast', p, { kind: m.w === 'dragon_fireball' ? 'dragon' : 'baby_dragon', type: 'attack' }); }
+      else sfx({ ion: 'ion', grenade: 'throw', arrow: 'bow', shell: 'cannon' }[m.type] || 'rocket', p);
+    }
+    else if (m.k === 'swing') sfx('swing', pp(), m.w);
+    else if (m.k === 'bolt') sfx('magic', at(m.a), 'wand_thunder');
+    else if (m.k === 'sparkle') sfx('magic', at(m.p), 'wand_holy');
+    else if (m.k === 'cloud') sfx('magic', at(m.p), 'wand_wind');
+    else if (m.k === 'breath') sfx('breath', at(m.p));
+    else if (m.k === 'boom') sfx('boom', at(m.p), !m.small && (m.r || 5) >= 4);
+    else if (m.k === 'dball') { sfx('rocket', at(m.p)); sfx('beast', at(m.p), { kind: 'dragon', type: 'attack' }); }
+    else if (m.k === 'horn') sfx('horn', at(m.p), m.big ? 'big' : null);
+    else if (m.k === 'carhit') sfx('crash', at(m.p), 0.8);
+  }
+
   burnFx(m) {
     const g = this.g;
     let r = null;
@@ -1007,6 +1044,7 @@ export class Combat {
     const g = this.g;
     if (m.loc !== undefined && m.loc !== g.loc()) return;
     const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+    this.remoteSound(m, v3);
     if (m.k === 'tracer') {
       this.fx.tracer(v3(m.a), v3(m.b), m.c || '#fff59d', typeof m.w === 'number' ? m.w : 1);
       if (Array.isArray(m.n) && typeof m.w === 'string') this.fx.hole(v3(m.b), m.n.map(Number), m.w, m.c);

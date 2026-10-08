@@ -388,7 +388,7 @@ export class World {
       case 'fx': {
         // 다른 플레이어에게 보여줄 연출 (총알 궤적, 투사체, 휘두르기)
         const k = String(msg.k || '');
-        if (['tracer', 'proj', 'swing', 'muzzle', 'eat', 'bolt', 'sparkle', 'cloud', 'breath'].includes(k)) this.broadcast({ ...msg, t: 'fx', pid: p.id, loc: p.loc }, p.id);
+        if (['tracer', 'proj', 'swing', 'muzzle', 'eat', 'bolt', 'sparkle', 'cloud', 'breath', 'horn'].includes(k)) this.broadcast({ ...msg, t: 'fx', pid: p.id, loc: p.loc }, p.id);
         break;
       }
       case 'drop': {
@@ -969,6 +969,8 @@ export class World {
     const players = [...this.players.values()].map((p) => ({ id: p.id, name: p.name, pos: p.pos, loc: p.loc, car: p.car, dead: p.dead }));
     this.sim.update(dt, this.minutes, { players });
     this.traffic.update(dt, { players, sim: this.sim });
+    // 막혀서 빵빵거린 차: 말풍선과 경적 소리를 모두에게
+    for (const car of this.traffic.cars) if (car.honk) { car.honk = false; this.broadcast({ t: 'carSay', id: car.id, text: car.bubble?.text || '빵빵~ 🚗' }); }
     this.combat.tick(dt);
     this.wild.tick(dt);
     if (this.smashed.size) { const now = Date.now(); for (const [k, t] of this.smashed) if (now > t) { this.smashed.delete(k); this.broadcast({ t: 'unsmash', key: k }); } }
