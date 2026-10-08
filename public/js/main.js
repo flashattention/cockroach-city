@@ -1193,7 +1193,7 @@ function summonCar(it) {
 }
 
 // ------------------------------------------------------------------
-// 놀이기구 타기 (바퀴랜드)
+// 놀이기구 타기 (젤리랜드)
 // ------------------------------------------------------------------
 function startRide(ride) {
   const p = game.player;
@@ -2032,7 +2032,7 @@ function frame() {
     const r = indoor ? null : regionAt(p.pos.x, p.pos.z);
     if ((r?.id || null) !== (game.region || null)) {
       game.region = r?.id || null;
-      if (r) ui.lootBanner(`${r.emoji} ${r.name}`, { forest: '곰·늑대·사슴이 사는 숲 — 조심하세요!', swamp: '악어가 숨어 있어요 🐊', jungle: '호랑이 출몰 지역 🐯', amazon: '아나콘다와 재규어의 땅 🐍🐆', island: '대교 건너 평화로운 목장 마을', dragon: '🔥 불 뿜는 드래곤이 하늘을 지배하는 협곡! 체력을 절반 깎고 Z로 포획해 타 보세요', mountain: '바퀴산 — 정상은 눈으로 덮여 있어요', valley: '맑은 강이 흐르는 계곡', meadow: '사슴과 토끼가 뛰노는 들판', sea: '' }[r.id] || '', '#43a047', '');
+      if (r) ui.lootBanner(`${r.emoji} ${r.name}`, { forest: '곰·늑대·사슴이 사는 숲 — 조심하세요!', swamp: '악어가 숨어 있어요 🐊', jungle: '호랑이 출몰 지역 🐯', amazon: '아나콘다와 재규어의 땅 🐍🐆', island: '대교 건너 평화로운 목장 마을', dragon: '🔥 불 뿜는 드래곤이 하늘을 지배하는 협곡! 체력을 절반 깎고 Z로 포획해 타 보세요', mountain: '젤리산 — 정상은 눈으로 덮여 있어요', valley: '맑은 강이 흐르는 계곡', meadow: '사슴과 토끼가 뛰노는 들판', sea: '' }[r.id] || '', '#43a047', '');
     }
   }
   game.players.update(dt, game.loc(), game.traffic);

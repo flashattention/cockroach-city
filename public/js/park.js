@@ -1,4 +1,4 @@
-// 바퀴랜드 놀이공원: 롤러코스터 · 바이킹 · 관람차 · 회전목마 (브라우저)
+// 젤리랜드 놀이공원: 롤러코스터 · 바이킹 · 관람차 · 회전목마 (브라우저)
 // 모든 놀이기구는 "현재 시각"으로 움직임이 정해져서 모든 플레이어 화면에서 똑같이 돈다.
 import * as THREE from 'three';
 import { toon, box, cyl, sph, signMesh } from './utils.js';
@@ -225,7 +225,7 @@ function buildDecor(root) {
   const gate = new THREE.Group(); gate.position.set(PARK.x1 - 2, Y0, 75); gate.rotation.y = Math.PI / 2; root.add(gate);
   for (const s of [-1, 1]) { cyl(gate, 0.8, 9, s < 0 ? '#e91e63' : '#29b6f6', s * 8, 4.5, 0); sph(gate, 1.3, 1.3, 1.3, '#ffd54f', s * 8, 9.6, 0); }
   box(gate, 17, 2.2, 1, '#7e57c2', 0, 8.2, 0);
-  for (const ry of [0, Math.PI]) { const sg = signMesh('바퀴랜드', '🎢', 12, '#7e57c2', '#ffffff'); sg.position.set(0, 8.2, ry ? -0.55 : 0.55); sg.rotation.y = ry; gate.add(sg); }
+  for (const ry of [0, Math.PI]) { const sg = signMesh('젤리랜드', '🎢', 12, '#7e57c2', '#ffffff'); sg.position.set(0, 8.2, ry ? -0.55 : 0.55); sg.rotation.y = ry; gate.add(sg); }
   // 울타리
   const fence = toon('#ffccbc');
   const W = PARK.x1 - PARK.x0, D = PARK.z1 - PARK.z0;
