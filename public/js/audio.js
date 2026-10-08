@@ -350,9 +350,37 @@ function beast(out, t, kind, type) {
   for (let i = 0; i < (b.repeat || 1); i++) voice(out, t + i * (dur + 0.06), dur, { ...b, f, curve, vol: b.vol * k[2] });
 }
 
+// ---------------- 몸 움직임: 발소리 · 점프 · 착지 · 날기 · 수영 ----------------
+// 젤리 발소리 '뽀득': 말랑한 저음 블립 + 바닥 재질 소리
+function footstep(out, t, surface, run) {
+  const f = (run ? 300 : 240) * (0.9 + Math.random() * 0.2);
+  osc(out, t, run ? 0.07 : 0.09, { f, curve: [[0.06, f * 0.45]], vol: run ? 0.5 : 0.4, a: 0.002 });
+  if (surface === 'road') nz(out, t, 0.025, { type: 'highpass', f: 2500, vol: run ? 0.25 : 0.18 });
+  else if (surface === 'grass') nz(out, t, run ? 0.09 : 0.12, { f: 3200, q: 0.8, vol: 0.22, a: 0.01 });
+  else if (surface === 'floor') nz(out, t, 0.04, { f: 1100, q: 5, vol: run ? 0.5 : 0.4 });
+  else if (surface === 'snow') for (let i = 0; i < 4; i++) nz(out, t + i * 0.018, 0.03, { type: 'lowpass', f: 2200, vol: 0.25 });
+  else if (surface === 'water') nz(out, t, 0.16, { f: 1400, f2: 600, q: 1.5, vol: 0.45, a: 0.01 });
+}
+function jump(out, t, n) {
+  const f = n > 1 ? 620 : 420;
+  osc(out, t, 0.13, { f, curve: [[0.11, f * 2.1]], vol: 0.35, a: 0.003 }); // 뿅
+  if (n > 1) osc(out, t + 0.04, 0.2, { type: 'triangle', f: f * 3, curve: [[0.15, f * 4]], vol: 0.08 }); // 2단 점프는 반짝
+}
+function landing(out, t, k) {
+  const v = Math.min(1, 0.35 + k / 18);
+  osc(out, t, 0.18, { f: 190, curve: [[0.15, 65]], vol: v, a: 0.002 }); // 퉁
+  nz(out, t, 0.08, { type: 'lowpass', f: 900, vol: v * 0.6 });
+  osc(out, t + 0.02, 0.12, { f: 520, curve: [[0.1, 260]], vol: v * 0.2 }); // 말랑 출렁
+}
+function flap(out, t, k) { nz(out, t, 0.12, { type: 'lowpass', f: 700, f2: 300, vol: 0.25 + 0.3 * k, a: 0.03, curve: 'lin' }); }
+function splash(out, t, big) {
+  nz(out, t, big ? 0.6 : 0.3, { f: 1600, f2: 500, q: 0.9, vol: big ? 0.9 : 0.5, a: 0.005 });
+  for (let i = 0; i < (big ? 8 : 4); i++) osc(out, t + 0.05 + Math.random() * (big ? 0.4 : 0.2), 0.05, { f: 900 + Math.random() * 1400, curve: [[0.04, 1800 + Math.random() * 1500]], vol: 0.08 }); // 물방울
+}
+
 // ---------------- 재생 ----------------
 // 한 번 울리는 소리. pos 가 없으면 바로 내 귀 앞에서
-const RANGE = { gun: 140, sniper: 260, boom: 260, beast: 90, dragon: 260, horn: 90, crash: 90, prop: 80, door: 30, swing: 40, magic: 60 };
+const RANGE = { step: 25, land: 30, jump: 25, splash: 40, flap: 30, gun: 140, sniper: 260, boom: 260, beast: 90, dragon: 260, horn: 90, crash: 90, prop: 80, door: 30, swing: 40, magic: 60 };
 export function sfx(name, pos = null, arg = null, vol = 1) {
   if (!ready()) return;
   const range = name === 'gun' && ['sniper', 'barrett', 'hunting_rifle'].includes(arg) ? RANGE.sniper : name === 'beast' && (arg?.kind || '').includes('dragon') ? RANGE.dragon : RANGE[name] || 80;
@@ -376,6 +404,14 @@ export function sfx(name, pos = null, arg = null, vol = 1) {
   else if (name === 'door') door(out, t, arg);
   else if (name === 'cuffs') cuffs(out, t);
   else if (name === 'beast') beast(out, t, arg.kind, arg.type);
+  else if (name === 'step') footstep(out, t, arg?.surface, arg?.run);
+  else if (name === 'jump') jump(out, t, arg || 1);
+  else if (name === 'land') landing(out, t, arg || 6);
+  else if (name === 'dash') whoosh(out, t, 0.2, 500, 1800, 0.35);
+  else if (name === 'takeoff') { for (let i = 0; i < 3; i++) flap(out, t + i * 0.09, 1); whoosh(out, t, 0.4, 300, 1100, 0.3); }
+  else if (name === 'flap') flap(out, t, arg ?? 0.5);
+  else if (name === 'splash') splash(out, t, !!arg);
+  else if (name === 'stroke') { nz(out, t, 0.22, { f: 1100, f2: 700, q: 1.2, vol: 0.3, a: 0.04 }); osc(out, t + 0.1, 0.05, { f: 1200, curve: [[0.04, 2200]], vol: 0.06 }); }
   else if (name === 'saberOn') { osc(out, t, 0.6, { type: 'sawtooth', f: 40, curve: [[0.4, 110]], vol: 0.35, filter: { f: 1200, q: 4 } }); nz(out, t, 0.3, { type: 'highpass', f: 2500, vol: 0.2, curve: 'lin' }); }
 }
 
@@ -408,6 +444,12 @@ function makeLoop(name) {
     const n = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), am = ctx.createGain(), l = ctx.createOscillator(), lg = ctx.createGain();
     n.buffer = noiseBuf; n.loop = true; fl.type = 'lowpass'; fl.frequency.value = 350; l.frequency.value = 11; lg.gain.value = 0.7; am.gain.value = 0.3;
     l.connect(lg).connect(am.gain); n.connect(fl).connect(am).connect(g); src.push(n, l);
+  } else if (name === 'wind') {
+    // 날 때 바람: 빠를수록 크게 (크기는 loop 의 vol 로)
+    const n = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), ng = ctx.createGain(), l = ctx.createOscillator(), lg = ctx.createGain();
+    n.buffer = noiseBuf; n.loop = true; fl.type = 'bandpass'; fl.frequency.value = 650; fl.Q.value = 0.7; ng.gain.value = 0.5;
+    l.frequency.value = 0.3; lg.gain.value = 250; l.connect(lg).connect(fl.frequency);
+    n.connect(fl).connect(ng).connect(g); src.push(n, l);
   } else if (name === 'saber') {
     for (const f of [92, 95.5]) { const o = ctx.createOscillator(), fl = ctx.createBiquadFilter(), og = ctx.createGain(); o.type = 'sawtooth'; o.frequency.value = f; fl.type = 'lowpass'; fl.frequency.value = 600; og.gain.value = 0.15; o.connect(fl).connect(og).connect(g); src.push(o); }
   }

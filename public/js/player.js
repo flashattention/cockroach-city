@@ -93,6 +93,7 @@ export class Player {
     this.dashCool -= dt;
     if (input.enabled && input.dashPressed && this.canDash && this.dashCool <= 0 && !this.flipped) {
       this.dashT = 0.2; this.dashCool = 0.35;
+      this.onSfx?.('dash');
       this.dashDir = { x: Math.sin(this.heading), z: Math.cos(this.heading) };
       if (this.vy < 0) this.vy = 0;
       this.roach.jumpSquash = 1;
@@ -109,7 +110,9 @@ export class Player {
     // 점프 & 중력 (여러 단 점프)
     let gy = this.groundAt(world, this.pos.x, this.pos.z, this.pos.y);
     // 깊은 물에서는 헤엄친다
+    const wasSwim = this.swimming;
     this.swimming = world.water !== undefined && gy < world.water - 0.7 && !this.flying;
+    if (this.swimming && !wasSwim) this.onSfx?.('splash', this.vy < -6); // 풍덩 (높은 데서 떨어지면 크게)
     if (this.swimming) gy = world.water - 0.55;
     this.flyDist = 0;
     if (this.flying) {
@@ -122,8 +125,8 @@ export class Player {
       if (this.pos.y <= gy && this.vy <= 0) { this.pos.y = gy; this.land(); }
       this.onGround = false;
     } else if (input.enabled && input.jumpPressed && !this.flipped) {
-      if (this.onGround) { this.vy = this.mount ? this.mount.ride.jump : this.jumpV || 7.5; this.onGround = false; this.jumps = 1; this.roach.jumpSquash = 1; }
-      else if (this.jumps < (this.mount ? 1 : this.maxJumps)) { this.vy = (this.jumpV || 7.5) - 0.3; this.jumps++; this.roach.jumpSquash = 1; this.airJump = 0.3; }
+      if (this.onGround) { this.vy = this.mount ? this.mount.ride.jump : this.jumpV || 7.5; this.onGround = false; this.jumps = 1; this.roach.jumpSquash = 1; if (!this.swimming) this.onSfx?.('jump', 1); }
+      else if (this.jumps < (this.mount ? 1 : this.maxJumps)) { this.vy = (this.jumpV || 7.5) - 0.3; this.jumps++; this.roach.jumpSquash = 1; this.airJump = 0.3; this.onSfx?.('jump', this.jumps); }
     }
     if (!this.flying) {
     this.vy -= 22 * dt;
@@ -131,6 +134,7 @@ export class Player {
     }
     if (!this.flying && this.pos.y <= gy) {
       if (!this.onGround && this.vy < -4) this.roach.jumpSquash = 1;
+      if (!this.onGround && this.vy < -5 && !this.swimming) this.onSfx?.('land', -this.vy); // 퉁 (세게 떨어질수록 크게)
       this.pos.y = gy;
       this.vy = 0; this.onGround = true; this.jumps = 0;
     } else if (!this.flying && this.pos.y > gy + 0.05) this.onGround = false;
@@ -212,8 +216,8 @@ export class Player {
     root.visible = !this.fp;
   }
 
-  takeOff() { if (this.inCar || this.flipped) return false; this.flying = true; this.vy = 6; this.onGround = false; return true; }
-  land() { this.flying = false; this.vy = 0; this.onGround = true; this.jumps = 0; this.roach.jumpSquash = 1; }
+  takeOff() { if (this.inCar || this.flipped) return false; this.flying = true; this.vy = 6; this.onGround = false; this.onSfx?.('takeoff'); return true; }
+  land() { if (this.flying) this.onSfx?.('land', 8); this.flying = false; this.vy = 0; this.onGround = true; this.jumps = 0; this.roach.jumpSquash = 1; }
 
   collide(colliders, plat = false) {
     const r = this.radius;

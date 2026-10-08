@@ -86,6 +86,7 @@ export class Roach {
   static style = (() => { try { return JSON.parse(localStorage.getItem('roachcity.settings') || '{}').bugMode ? 'roach' : 'gummy'; } catch { return 'gummy'; } })();
   static all = [];
   static onHurt = null;
+  static onStep = null; // 발이 땅에 닿을 때 (발소리)
   /**
    * @param {object} o { color, age, gender, accessories:[], lashes, mustache, seed(젤리 색 고정용) }
    */
@@ -1103,6 +1104,12 @@ export class Roach {
     const k = Math.min(1, speed / 3.2);
     this.phase += dt * (3 + speed * 2.6);
     const sw = Math.sin(this.phase);
+    // 발소리: 다리가 한 번 엇갈릴 때마다(반 주기) 한 발. 소리를 낼지는 main 의 onStep 이 정한다
+    const half = Math.floor(this.phase / Math.PI);
+    if (half !== this.stepHalf) {
+      if (this.stepHalf !== undefined && speed > 1 && !this.flying && !this.seated && !this.dead && !this.flipped && !opts.airborne) Roach.onStep?.(this, speed);
+      this.stepHalf = half;
+    }
 
     // 다리
     this.legs[0].rotation.x = sw * 0.75 * k;

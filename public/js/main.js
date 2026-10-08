@@ -400,6 +400,7 @@ function enterGame(w) {
   }
   game.minutes = w.minutes;
   game.player = new Player(scene, game.profile);
+  game.player.onSfx = (name, arg) => sfx(name, null, arg);
   game.stats = Object.assign({
     money: 500, needs: { hunger: 80, energy: 85, fun: 70, social: 55, hygiene: 85 },
     jobId: null, workId: null, lastInterestDay: -1, workedDay: -1, workedToday: 0,
@@ -1428,6 +1429,46 @@ game.switchTV = switchTV;
 game.useSelected = (down) => useSelected(down); // 테스트용
 
 // 차로 들이받은 가로등·나무 (c: 도시, w: 야생)
+// 발 밑 재질: 실내 바닥 · 도시 길 · 들판 풀 · 산꼭대기 눈 · 얕은 물
+function surfaceAt(pos) {
+  if (game.mode === 'interior') return 'floor';
+  if (pos.y < WATER_Y + 0.35) return 'water';
+  if (Math.abs(pos.x) < HALF + 5 && Math.abs(pos.z) < HALF + 5) return 'road';
+  return regionAt(pos.x, pos.z)?.id === 'mountain' && pos.y > 28 ? 'snow' : 'grass';
+}
+// 발소리: 나는 또렷하게, 다른 플레이어·시민은 가까이(25m) 있을 때 작게 (한꺼번에 너무 많이 울리지 않게)
+const stepPos = new THREE.Vector3();
+Roach.onStep = (r, speed) => {
+  if (!game.started || !game.player) return;
+  const p = game.player;
+  if (r === p.roach) {
+    if (!p.onGround || p.swimming || p.flying || p.inCar || p.mount || p.climb) return;
+    sfx('step', null, { surface: surfaceAt(p.pos), run: speed > 7 }, 0.6);
+    return;
+  }
+  const now = performance.now();
+  if (now - (game.stepT || 0) < 70) return;
+  r.root.getWorldPosition(stepPos);
+  if (stepPos.distanceTo(p.pos) > 25) return;
+  game.stepT = now;
+  sfx('step', stepPos, { surface: surfaceAt(stepPos), run: speed > 7 }, 0.4);
+};
+// 날기(바람 + 날갯짓) · 헤엄(찰방)
+function updateMoveSounds(dt) {
+  const p = game.player;
+  const fly = p.flying && !p.inCar && !game.dead;
+  const sp = fly ? Math.min(1, (p.speed || 0) / 19) : 0;
+  loop('wind', fly ? 0.25 + 0.75 * sp : 0);
+  if (fly) {
+    game.flapT = (game.flapT || 0) - dt;
+    // 올라갈 때·빨리 날 때 더 자주 퍼덕인다
+    if (game.flapT <= 0) { game.flapT = p.vy > 1 ? 0.22 : 0.45 - sp * 0.15; sfx('flap', null, p.vy > 1 ? 1 : 0.4); }
+  }
+  if (p.swimming && (p.speed || 0) > 0.5 && !p.inCar) {
+    game.strokeT = (game.strokeT || 0) - dt;
+    if (game.strokeT <= 0) { game.strokeT = 0.55; sfx('stroke'); }
+  }
+}
 // 수배 중이면 가까운 경찰·군인 쪽에서 사이렌, 헬기는 두두두
 function updateUnitSounds() {
   if (game.cutscene) return;
@@ -2067,6 +2108,7 @@ function frame() {
   game.heldSaber = saber ? selD.id : null;
   loop('saber', saber ? 0.3 : 0);
   updateUnitSounds();
+  updateMoveSounds(dt);
   // 저격 조준 중에는 멀리 있는 시민·동물까지 그려서 맞힐 수 있게
   const far = game.zoomNow > 2.5;
   game.citizens.viewDist = far ? 130 * Math.min(4, game.zoomNow / 1.5) : 130;
